@@ -84,6 +84,65 @@ const DB = {
     { id: 'TSK009', projId: 'PRJ002', title: 'Content strategy plan', status: 'Done', priority: 'High', assignee: 'Divya Iyer', dueDate: '2026-07-05', tag: 'Strategy' },
     { id: 'TSK010', projId: 'PRJ002', title: 'Social media calendar', status: 'In Progress', priority: 'Medium', assignee: 'Divya Iyer', dueDate: '2026-07-10', tag: 'Social' },
   ],
+
+  // ---- ROLES & PERMISSIONS ----
+  roles: [
+    { id: 'ROLE1', name: 'SUPER_ADMIN', description: 'Full access' },
+    { id: 'ROLE2', name: 'HR_MANAGER', description: 'HR access' },
+    { id: 'ROLE3', name: 'EMPLOYEE', description: 'Standard employee access' }
+  ],
+  
+  permissions: [
+    { id: 'PERM1', module: 'HR', action: 'ALL', roleId: 'ROLE2' }
+  ],
+
+  // ---- DEPARTMENTS & DESIGNATIONS ----
+  departments: [
+    { id: 'DEPT1', name: 'Engineering' },
+    { id: 'DEPT2', name: 'HR' },
+    { id: 'DEPT3', name: 'Sales' }
+  ],
+  
+  designations: [
+    { id: 'DESG1', title: 'Senior Developer' },
+    { id: 'DESG2', title: 'HR Manager' }
+  ],
+
+  // ---- CRM MODULE (New) ----
+  leads: [
+    { id: 'LD001', name: 'Acme Corp', status: 'New' },
+    { id: 'LD002', name: 'Global Tech', status: 'Contacted' }
+  ],
+  
+  customers: [
+    { id: 'CUST001', name: 'TechSolutions Inc', email: 'contact@techsolutions.com', phone: '+1234567890' },
+    { id: 'CUST002', name: 'Innovate LLC', email: 'hello@innovate.com', phone: '+0987654321' }
+  ],
+
+  opportunities: [
+    { id: 'OPP001', customerId: 'CUST001', value: 50000, stage: 'Proposal', expectedCloseDate: '2026-07-15' },
+    { id: 'OPP002', customerId: 'CUST002', value: 120000, stage: 'Negotiation', expectedCloseDate: '2026-07-20' }
+  ],
+  
+  followUps: [
+    { id: 'FU001', customerId: 'CUST001', date: '2026-06-25', notes: 'Sent proposal, waiting for feedback', nextActionDate: '2026-07-02' }
+  ],
+
+  // ---- INVENTORY ADDITIONS ----
+  purchaseOrders: [
+    { id: 'PO001', supplierId: 'SUP001', productId: 'PRD001', quantity: 50, orderDate: '2026-06-20', status: 'Delivered' }
+  ],
+  
+  stockMovements: [
+    { id: 'SM001', productId: 'PRD001', changeAmount: 50, reason: 'Restock', date: '2026-06-22' },
+    { id: 'SM002', productId: 'PRD001', changeAmount: -5, reason: 'Sale', date: '2026-06-25' }
+  ],
+
+  // ---- PROJECTS ADDITIONS ----
+  milestones: [
+    { id: 'MS001', projectId: 'PRJ001', title: 'Phase 1 MVP', dueDate: '2026-06-30', status: 'Pending' },
+    { id: 'MS002', projectId: 'PRJ001', title: 'UAT Testing', dueDate: '2026-07-15', status: 'Pending' }
+  ]
 };
 
 // Lightweight persistence using localStorage
@@ -93,9 +152,29 @@ function loadData() {
   if (saved) {
     try {
       const parsed = JSON.parse(saved);
-      Object.assign(DB, parsed);
+      // Merge per-key so new default arrays (e.g. customers, leads) are not wiped
+      // by old cached data that doesn't have them
+      for (const key of Object.keys(parsed)) {
+        if (parsed[key] !== undefined) {
+          DB[key] = parsed[key];
+        }
+      }
     } catch(e) { /* use defaults */ }
   }
 }
+
+// Clear stale cache if it's missing new entities
+(function migrateCache() {
+  const saved = localStorage.getItem('erpDB');
+  if (saved) {
+    try {
+      const parsed = JSON.parse(saved);
+      // If cached data is missing new entities, clear cache so defaults load
+      if (!parsed.customers || !parsed.leads || !parsed.opportunities) {
+        localStorage.removeItem('erpDB');
+      }
+    } catch(e) { localStorage.removeItem('erpDB'); }
+  }
+})();
 
 loadData();

@@ -1,0 +1,280 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ==========================================
+// USERS & PERMISSIONS
+// ==========================================
+
+model User {
+  id               String       @id @default(uuid())
+  email            String       @unique
+  passwordHash     String
+  resetToken       String?      // Added for Sakshi's review
+  resetTokenExpiry DateTime?    // Added for Sakshi's review
+  roleId           String
+  role             Role         @relation(fields: [roleId], references: [id])
+  employee         Employee?
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+}
+
+// Normalized from Enum
+model Role {
+  id          String       @id @default(uuid())
+  name        String       @unique // e.g. SUPER_ADMIN, HR_MANAGER, SALES_MANAGER
+  description String?
+  users       User[]
+  permissions Permission[] // Mapping to permissions
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+}
+
+// New table to handle module-level access
+model Permission {
+  id          String   @id @default(uuid())
+  module      String   // e.g. HR, CRM, Inventory, Projects
+  action      String   // e.g. READ, WRITE, DELETE, ALL
+  roleId      String
+  role        Role     @relation(fields: [roleId], references: [id])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+
+// ==========================================
+// HR MODULE
+// ==========================================
+
+model Employee {
+  id            String       @id @default(uuid())
+  userId        String?      @unique
+  user          User?        @relation(fields: [userId], references: [id])
+  firstName     String
+  lastName      String
+  gender        String?
+  dob           DateTime?
+  contact       String?
+  address       String?
+  city          String?
+  state         String?
+  country       String?
+  joinDate      DateTime     @default(now())
+  empType       String       // Full-time, Part-time, Contract
+  status        String       // Active, Inactive
+  
+  departmentId  String
+  department    Department   @relation(fields: [departmentId], references: [id])
+  
+  designationId String
+  designation   Designation  @relation(fields: [designationId], references: [id])
+
+  attendances   Attendance[] // Added for Sakshi's review
+  leaves        Leave[]      // Added for Sakshi's review
+  
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+}
+
+// Normalized from plain text
+model Department {
+  id          String     @id @default(uuid())
+  name        String     @unique // e.g. Engineering, Sales, HR
+  description String?
+  employees   Employee[]
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+}
+
+// Normalized from plain text
+model Designation {
+  id          String     @id @default(uuid())
+  title       String     @unique // e.g. Senior Developer, HR Manager
+  description String?
+  employees   Employee[]
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+}
+
+// Added for Sakshi's review
+model Attendance {
+  id         String   @id @default(uuid())
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id])
+  date       DateTime
+  status     String   // Present, Absent, Half Day, Late
+  checkIn    DateTime?
+  checkOut   DateTime?
+  hoursWorked Float?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+// Added for Sakshi's review
+model Leave {
+  id         String   @id @default(uuid())
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id])
+  leaveType  String   // Sick Leave, Casual Leave, Annual Leave
+  startDate  DateTime
+  endDate    DateTime
+  status     String   // Pending, Approved, Rejected
+  reason     String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+
+// ==========================================
+// CRM MODULE
+// ==========================================
+
+model Lead {
+  id        String      @id @default(uuid())
+  name      String
+  email     String?
+  phone     String?
+  company   String?
+  status    String      // New, Contacted, Qualified, Converted, Lost
+  customer  Customer?   // Added for Sakshi's review (converted relation)
+  followUps FollowUp[]  // Added for Sakshi's review
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+}
+
+// Added for Sakshi's review
+model Customer {
+  id                 String        @id @default(uuid())
+  name               String
+  email              String?
+  phone              String?
+  company            String?
+  convertedFromLeadId String?      @unique
+  lead               Lead?         @relation(fields: [convertedFromLeadId], references: [id])
+  opportunities      Opportunity[]
+  followUps          FollowUp[]
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+}
+
+// Added for Sakshi's review
+model Opportunity {
+  id                String   @id @default(uuid())
+  customerId        String
+  customer          Customer @relation(fields: [customerId], references: [id])
+  value             Float
+  stage             String   // Discovery, Proposal, Negotiation, Closed Won, Closed Lost
+  expectedCloseDate DateTime?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
+
+// Added for Sakshi's review
+model FollowUp {
+  id            String    @id @default(uuid())
+  leadId        String?
+  lead          Lead?     @relation(fields: [leadId], references: [id])
+  customerId    String?
+  customer      Customer? @relation(fields: [customerId], references: [id])
+  date          DateTime
+  notes         String
+  nextActionDate DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+
+// ==========================================
+// INVENTORY MODULE
+// ==========================================
+
+model Product {
+  id             String          @id @default(uuid())
+  name           String
+  sku            String          @unique
+  category       String
+  price          Float
+  costPrice      Float?
+  stockLevel     Int             @default(0)
+  minStockLevel  Int             @default(0)
+  unit           String          // Piece, Kg, Box
+  status         String          // Active, Inactive
+  purchaseOrders PurchaseOrder[] // Added for Sakshi's review
+  stockMovements StockMovement[] // Added for Sakshi's review
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+}
+
+// Added for Sakshi's review
+model PurchaseOrder {
+  id         String   @id @default(uuid())
+  supplierId String   // Could be a separate Supplier table
+  productId  String
+  product    Product  @relation(fields: [productId], references: [id])
+  quantity   Int
+  orderDate  DateTime
+  status     String   // Ordered, Shipped, Delivered, Cancelled
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+// Added for Sakshi's review
+model StockMovement {
+  id           String   @id @default(uuid())
+  productId    String
+  product      Product  @relation(fields: [productId], references: [id])
+  changeAmount Int      // Positive for restock, negative for sale/loss
+  reason       String   // Sale, Restock, Adjustment, Return
+  date         DateTime @default(now())
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+
+// ==========================================
+// PROJECTS MODULE
+// ==========================================
+
+model Project {
+  id          String      @id @default(uuid())
+  name        String
+  description String?
+  status      String      // Not Started, In Progress, On Hold, Completed
+  priority    String      // Low, Medium, High, Critical
+  startDate   DateTime?
+  endDate     DateTime?
+  tasks       Task[]
+  milestones  Milestone[] // Added for Sakshi's review
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+}
+
+model Task {
+  id          String   @id @default(uuid())
+  projectId   String
+  project     Project  @relation(fields: [projectId], references: [id])
+  title       String
+  description String?
+  status      String   // Not Started, In Progress, Review, Done
+  priority    String   // Low, Medium, High, Critical
+  dueDate     DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// Added for Sakshi's review
+model Milestone {
+  id        String   @id @default(uuid())
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id])
+  title     String
+  dueDate   DateTime?
+  status    String   // Pending, Reached
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
