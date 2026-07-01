@@ -288,5 +288,97 @@ document.getElementById('globalSearch').addEventListener('input', function() {
   if (empMatch) { empSearch = q; navigate('employees'); }
 });
 
+// ======================== NOTIFICATIONS SYSTEM ========================
+let activeNotifs = [];
+
+function initNotifications() {
+  activeNotifs = [];
+  
+  // 1. Get low stock products
+  if (DB.products) {
+    DB.products.forEach(p => {
+      if (p.stock <= p.minStock && p.status === 'Active') {
+        activeNotifs.push({
+          id: `stock-${p.id}`,
+          title: `⚠️ Low Stock: ${p.name}`,
+          desc: `Only ${p.stock} units remaining (min: ${p.minStock})`,
+          time: 'Stock Alert',
+          page: 'stock-alerts'
+        });
+      }
+    });
+  }
+
+  // 2. Get pending leaves
+  if (DB.leaves) {
+    DB.leaves.forEach(l => {
+      if (l.status === 'Pending') {
+        activeNotifs.push({
+          id: `leave-${l.id}`,
+          title: `📅 Leave Requested`,
+          desc: `${l.empName} applied for ${l.type} (${l.days} days)`,
+          time: `Applied ${l.applied}`,
+          page: 'leaves'
+        });
+      }
+    });
+  }
+
+  renderNotifications();
+}
+
+function renderNotifications() {
+  const notifDot = document.getElementById('notifDot');
+  const notifList = document.getElementById('notifList');
+  
+  if (activeNotifs.length > 0) {
+    notifDot.style.display = 'block';
+    notifList.innerHTML = activeNotifs.map(n => `
+      <div class="notif-item" data-page="${n.page}">
+        <div class="notif-item-title">${n.title}</div>
+        <div class="notif-item-desc">${n.desc}</div>
+        <div class="notif-item-time">${n.time}</div>
+      </div>
+    `).join('');
+
+    // Bind click handlers to navigate to respective modules
+    notifList.querySelectorAll('.notif-item').forEach(el => {
+      el.addEventListener('click', () => {
+        document.getElementById('notifDropdown').classList.remove('show');
+        navigate(el.dataset.page);
+      });
+    });
+  } else {
+    notifDot.style.display = 'none';
+    notifList.innerHTML = `
+      <div class="notif-empty">
+        <p>No new notifications</p>
+      </div>
+    `;
+  }
+}
+
+// Bind dropdown toggles
+document.getElementById('notifBtn').addEventListener('click', (e) => {
+  e.stopPropagation();
+  document.getElementById('notifDropdown').classList.toggle('show');
+});
+
+document.getElementById('clearNotifsBtn').addEventListener('click', (e) => {
+  e.stopPropagation();
+  activeNotifs = [];
+  renderNotifications();
+  document.getElementById('notifDropdown').classList.remove('show');
+});
+
+// Close dropdown on click outside
+document.addEventListener('click', (e) => {
+  const dropdown = document.getElementById('notifDropdown');
+  if (dropdown && !dropdown.contains(e.target) && e.target.id !== 'notifBtn' && !e.target.closest('#notifBtn')) {
+    dropdown.classList.remove('show');
+  }
+});
+
 // ======================== INITIAL LOAD ========================
+initNotifications();
 navigate('dashboard');
