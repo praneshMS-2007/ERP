@@ -142,6 +142,21 @@ const DB = {
   milestones: [
     { id: 'MS001', projectId: 'PRJ001', title: 'Phase 1 MVP', dueDate: '2026-06-30', status: 'Pending' },
     { id: 'MS002', projectId: 'PRJ001', title: 'UAT Testing', dueDate: '2026-07-15', status: 'Pending' }
+  ],
+
+  // ---- NEW SAKSHI REVIEW ADDITIONS ----
+  authentications: [
+    { id: 'AUTH001', userId: 'USER001', token: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.dummy...', deviceInfo: 'Chrome on Windows', ipAddress: '127.0.0.1', isActive: true, expiresAt: '2026-07-10' }
+  ],
+
+  suppliers: [
+    { id: 'SUP001', name: 'TechSupply Co.', contactPerson: 'John Doe', email: 'john@techsupply.com', phone: '+91 99999 88888', address: '44 Innovation St', city: 'Bangalore', country: 'India', status: 'Active' },
+    { id: 'SUP002', name: 'GadgetHub', contactPerson: 'Jane Smith', email: 'jane@gadgethub.com', phone: '+91 77777 66666', address: '12 Commerce Rd', city: 'Mumbai', country: 'India', status: 'Active' }
+  ],
+
+  assignments: [
+    { id: 'ASG001', taskId: 'TSK001', projectId: 'PRJ001', employeeId: 'EMP007', role: 'Database Architect', assignedAt: '2026-06-11' },
+    { id: 'ASG002', taskId: 'TSK002', projectId: 'PRJ001', employeeId: 'EMP001', role: 'Lead Developer', assignedAt: '2026-06-12' }
   ]
 };
 
@@ -170,7 +185,7 @@ function loadData() {
     try {
       const parsed = JSON.parse(saved);
       // If cached data is missing new entities, clear cache so defaults load
-      if (!parsed.customers || !parsed.leads || !parsed.opportunities) {
+      if (!parsed.customers || !parsed.leads || !parsed.opportunities || !parsed.authentications || !parsed.suppliers || !parsed.assignments) {
         localStorage.removeItem('erpDB');
       }
     } catch(e) { localStorage.removeItem('erpDB'); }
