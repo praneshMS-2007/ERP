@@ -324,59 +324,57 @@ function initNotifications() {
     });
   }
 
-  renderNotifications();
+  const notifDot = document.getElementById('notifDot');
+  if (notifDot) {
+    notifDot.style.display = activeNotifs.length > 0 ? 'block' : 'none';
+  }
 }
 
-function renderNotifications() {
-  const notifDot = document.getElementById('notifDot');
-  const notifList = document.getElementById('notifList');
-  
+function openNotificationsModal() {
+  let bodyHTML = '';
   if (activeNotifs.length > 0) {
-    notifDot.style.display = 'block';
-    notifList.innerHTML = activeNotifs.map(n => `
-      <div class="notif-item" data-page="${n.page}">
-        <div class="notif-item-title">${n.title}</div>
-        <div class="notif-item-desc">${n.desc}</div>
-        <div class="notif-item-time">${n.time}</div>
+    bodyHTML = `
+      <div style="display:flex; flex-direction:column; gap:12px; max-height:400px; overflow-y:auto; padding:8px 0;">
+        ${activeNotifs.map(n => `
+          <div style="background:var(--bg-input); border:1px solid var(--border); padding:12px; border-radius:var(--radius-sm); display:flex; justify-content:space-between; align-items:center; gap:16px;">
+            <div style="flex:1;">
+              <div style="font-weight:600; font-size:13px; color:var(--text-pri); margin-bottom:4px; text-align:left;">${n.title}</div>
+              <div style="font-size:11px; color:var(--text-sec); text-align:left;">${n.desc}</div>
+              <div style="font-size:9px; color:var(--text-muted); margin-top:4px; text-align:left;">${n.time}</div>
+            </div>
+            <button class="btn btn-primary btn-sm" style="flex-shrink:0;" onclick="closeModal(); navigate('${n.page}')">Go</button>
+          </div>
+        `).join('')}
       </div>
-    `).join('');
-
-    // Bind click handlers to navigate to respective modules
-    notifList.querySelectorAll('.notif-item').forEach(el => {
-      el.addEventListener('click', () => {
-        document.getElementById('notifDropdown').classList.remove('show');
-        navigate(el.dataset.page);
-      });
-    });
+    `;
   } else {
-    notifDot.style.display = 'none';
-    notifList.innerHTML = `
-      <div class="notif-empty">
-        <p>No new notifications</p>
+    bodyHTML = `
+      <div style="padding:40px 20px; text-align:center; color:var(--text-muted);">
+        <p style="margin:0 0 8px 0; font-size:16px;">✨ All caught up!</p>
+        <p style="margin:0; font-size:12px;">No new alerts or pending tasks.</p>
       </div>
     `;
   }
+
+  const footerHTML = activeNotifs.length > 0 
+    ? `<button class="btn btn-secondary" onclick="clearAllNotifications()">Clear All</button>
+       <button class="btn btn-primary" onclick="closeModal()">Close</button>`
+    : `<button class="btn btn-primary" onclick="closeModal()">Close</button>`;
+
+  openModal('System Notifications', bodyHTML, footerHTML);
 }
 
-// Bind dropdown toggles
+function clearAllNotifications() {
+  activeNotifs = [];
+  const notifDot = document.getElementById('notifDot');
+  if (notifDot) notifDot.style.display = 'none';
+  openNotificationsModal();
+}
+
+// Bind button to open modal
 document.getElementById('notifBtn').addEventListener('click', (e) => {
   e.stopPropagation();
-  document.getElementById('notifDropdown').classList.toggle('show');
-});
-
-document.getElementById('clearNotifsBtn').addEventListener('click', (e) => {
-  e.stopPropagation();
-  activeNotifs = [];
-  renderNotifications();
-  document.getElementById('notifDropdown').classList.remove('show');
-});
-
-// Close dropdown on click outside
-document.addEventListener('click', (e) => {
-  const dropdown = document.getElementById('notifDropdown');
-  if (dropdown && !dropdown.contains(e.target) && e.target.id !== 'notifBtn' && !e.target.closest('#notifBtn')) {
-    dropdown.classList.remove('show');
-  }
+  openNotificationsModal();
 });
 
 // ======================== INITIAL LOAD ========================
