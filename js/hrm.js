@@ -776,9 +776,11 @@ function saveLeave() {
   const emp = DB.employees.find(e => e.id === empId);
   const from = document.getElementById('lv_from').value;
   const to = document.getElementById('lv_to').value;
+  const reason = document.getElementById('lv_reason').value.trim();
   if (!from || !to) { showToast('Please select dates', 'error'); return; }
+  if (!reason) { showToast('Please provide a reason for leave', 'error'); return; }
   const days = Math.ceil((new Date(to) - new Date(from)) / 86400000) + 1;
-  DB.leaves.push({ id: genId('LEA', DB.leaves), empId, empName: `${emp.firstName} ${emp.lastName}`, type: document.getElementById('lv_type').value, from, to, days, reason: document.getElementById('lv_reason').value, status: 'Pending', applied: new Date().toISOString().split('T')[0] });
+  DB.leaves.push({ id: genId('LEA', DB.leaves), empId, empName: `${emp.firstName} ${emp.lastName}`, type: document.getElementById('lv_type').value, from, to, days, reason, status: 'Pending', applied: new Date().toISOString().split('T')[0] });
   saveData();
   closeModal();
   showToast('Leave application submitted!');
