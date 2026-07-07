@@ -289,6 +289,9 @@ function openAddProductModal() {
 function saveNewProduct() {
   const data = getProdFormData();
   if (!data.name || !data.category) { showToast('Name and category are required', 'error'); return; }
+  if (data.price < 0 || data.costPrice < 0 || data.stock < 0 || data.minStock < 0) {
+    showToast('Price, cost, stock, and min stock cannot be negative', 'error'); return;
+  }
   DB.products.push({ ...data, id: genId('PRD', DB.products) });
   saveData();
   closeModal();
@@ -311,6 +314,9 @@ function saveEditProduct(id) {
   if (idx === -1) return;
   const data = getProdFormData();
   if (!data.name) { showToast('Product name is required', 'error'); return; }
+  if (data.price < 0 || data.costPrice < 0 || data.stock < 0 || data.minStock < 0) {
+    showToast('Price, cost, stock, and min stock cannot be negative', 'error'); return;
+  }
   DB.products[idx] = { ...DB.products[idx], ...data };
   saveData();
   closeModal();

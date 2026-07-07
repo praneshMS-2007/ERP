@@ -281,11 +281,35 @@ window.addEventListener('resize', () => {
 document.getElementById('globalSearch').addEventListener('input', function() {
   const q = this.value.toLowerCase().trim();
   if (!q) return;
-  // Simple: navigate to employees if matches
+  
+  // 1. Search Employees
   const empMatch = DB.employees.some(e =>
     `${e.firstName} ${e.lastName} ${e.email} ${e.id}`.toLowerCase().includes(q)
   );
-  if (empMatch) { empSearch = q; navigate('employees'); }
+  if (empMatch) { 
+    empSearch = q; 
+    navigate('employees'); 
+    return; 
+  }
+
+  // 2. Search Products
+  const prodMatch = DB.products.some(p =>
+    `${p.name} ${p.sku} ${p.category}`.toLowerCase().includes(q)
+  );
+  if (prodMatch) {
+    invSearch = q;
+    navigate('products');
+    return;
+  }
+
+  // 3. Search Projects
+  const projMatch = DB.projects.some(p =>
+    `${p.name} ${p.description || ''}`.toLowerCase().includes(q)
+  );
+  if (projMatch) {
+    navigate('projects');
+    return;
+  }
 });
 
 // ======================== NOTIFICATIONS SYSTEM ========================

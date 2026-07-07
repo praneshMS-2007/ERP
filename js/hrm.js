@@ -359,6 +359,14 @@ function saveNewEmployee() {
   if (!data.firstName || !data.lastName || !data.email || !data.department || !data.position) {
     showToast('Please fill all required fields', 'error'); return;
   }
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(data.email)) {
+    showToast('Please enter a valid email address', 'error'); return;
+  }
+  const emailExists = DB.employees.some(e => e.email.toLowerCase() === data.email.toLowerCase());
+  if (emailExists) {
+    showToast('An employee with this email already exists', 'error'); return;
+  }
   const newEmp = { ...data, id: genId('EMP', DB.employees), avatar: (data.firstName[0] + data.lastName[0]).toUpperCase(), performanceRating: 3 };
   DB.employees.push(newEmp);
   saveData();
@@ -382,6 +390,14 @@ function saveEditEmployee(id) {
   if (idx === -1) return;
   const data = getEmpFormData();
   if (!data.firstName || !data.lastName || !data.email) { showToast('Please fill required fields', 'error'); return; }
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(data.email)) {
+    showToast('Please enter a valid email address', 'error'); return;
+  }
+  const emailExists = DB.employees.some(e => e.email.toLowerCase() === data.email.toLowerCase() && e.id !== id);
+  if (emailExists) {
+    showToast('An employee with this email already exists', 'error'); return;
+  }
   data.avatar = (data.firstName[0] + data.lastName[0]).toUpperCase();
   DB.employees[idx] = { ...DB.employees[idx], ...data };
   saveData();
@@ -394,8 +410,14 @@ function deleteEmployee(id) {
   const emp = DB.employees.find(e => e.id === id);
   confirmAction(`Delete <strong>${emp.firstName} ${emp.lastName}</strong>? This cannot be undone.`, () => {
     DB.employees = DB.employees.filter(e => e.id !== id);
+    
+    // Cascade delete related records
+    if (DB.attendance) DB.attendance = DB.attendance.filter(a => a.empId !== id);
+    if (DB.leaves) DB.leaves = DB.leaves.filter(l => l.empId !== id);
+    if (DB.performance) DB.performance = DB.performance.filter(p => p.empId !== id);
+    
     saveData();
-    showToast('Employee deleted', 'warning');
+    showToast('Employee deleted and related records cascaded.', 'warning');
     refreshPage();
   });
 }
@@ -647,6 +669,14 @@ function saveAttendance() {
   const checkOut = document.getElementById('att_out').value;
   const status = document.getElementById('att_status').value;
   const date = document.getElementById('att_date').value;
+  
+  if (!date) { showToast('Please select a date', 'error'); return; }
+  const today = new Date();
+  const inputDate = new Date(date);
+  today.setHours(0,0,0,0);
+  inputDate.setHours(0,0,0,0);
+  if (inputDate > today) { showToast('Attendance cannot be marked for future dates', 'error'); return; }
+  
   const [h1, m1] = checkIn.split(':').map(Number);
   const [h2, m2] = checkOut.split(':').map(Number);
   const hours = Math.max(0, ((h2 * 60 + m2) - (h1 * 60 + m1)) / 60);
@@ -778,6 +808,7 @@ function saveLeave() {
   const to = document.getElementById('lv_to').value;
   const reason = document.getElementById('lv_reason').value.trim();
   if (!from || !to) { showToast('Please select dates', 'error'); return; }
+  if (new Date(to) < new Date(from)) { showToast('End date cannot be earlier than start date', 'error'); return; }
   if (!reason) { showToast('Please provide a reason for leave', 'error'); return; }
   const days = Math.ceil((new Date(to) - new Date(from)) / 86400000) + 1;
   DB.leaves.push({ id: genId('LEA', DB.leaves), empId, empName: `${emp.firstName} ${emp.lastName}`, type: document.getElementById('lv_type').value, from, to, days, reason, status: 'Pending', applied: new Date().toISOString().split('T')[0] });

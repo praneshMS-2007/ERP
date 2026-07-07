@@ -95,8 +95,8 @@ model Employee {
   state         String?
   country       String?
   joinDate      DateTime     @default(now())
-  empType       String       // Full-time, Part-time, Contract
-  status        String       // Active, Inactive
+  empType       EmpType
+  status        EmpStatus
   
   departmentId  String
   department    Department   @relation(fields: [departmentId], references: [id])
@@ -107,7 +107,8 @@ model Employee {
   attendances   Attendance[] // Added for Sakshi's review
   leaves        Leave[]      // Added for Sakshi's review
   assignments   Assignment[] // Added for Sakshi's review
-  performanceReviews PerformanceReview[] // Added for Sakshi's review
+  performanceReviews      PerformanceReview[] @relation(name: "EmployeeReviews") // Added for Sakshi's review
+  performanceReviewsGiven PerformanceReview[] @relation(name: "EmployeeReviewers") // Added for Sakshi's review
   
   createdAt     DateTime     @default(now())
   updatedAt     DateTime     @updatedAt
@@ -139,7 +140,7 @@ model Attendance {
   employeeId String
   employee   Employee @relation(fields: [employeeId], references: [id])
   date       DateTime
-  status     String   // Present, Absent, Half Day, Late
+  status     AttendanceStatus
   checkIn    DateTime?
   checkOut   DateTime?
   hoursWorked Float?
@@ -155,7 +156,7 @@ model Leave {
   leaveType  String   // Sick Leave, Casual Leave, Annual Leave
   startDate  DateTime
   endDate    DateTime
-  status     String   // Pending, Approved, Rejected
+  status     LeaveStatus
   reason     String   // Enforced required for frontend alignment
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
@@ -172,7 +173,7 @@ model Lead {
   email     String?
   phone     String?
   company   String?
-  status    String      // New, Contacted, Qualified, Converted, Lost
+  status    LeadStatus
   customer  Customer?   // Added for Sakshi's review (converted relation)
   followUps FollowUp[]  // Added for Sakshi's review
   createdAt DateTime    @default(now())
@@ -200,7 +201,7 @@ model Opportunity {
   customerId        String
   customer          Customer @relation(fields: [customerId], references: [id])
   value             Float
-  stage             String   // Discovery, Proposal, Negotiation, Closed Won, Closed Lost
+  stage             OpportunityStage
   expectedCloseDate DateTime?
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
@@ -268,7 +269,7 @@ model PurchaseOrder {
   product    Product  @relation(fields: [productId], references: [id])
   quantity   Int
   orderDate  DateTime
-  status     String   // Ordered, Shipped, Delivered, Cancelled
+  status     POStatus
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 }
@@ -321,6 +322,7 @@ model Task {
 
 // Assignment entity – Added for Sakshi's review
 // Tracks which employee is assigned to which task/project
+/// @validation: Enforce that at least one of taskId or projectId is provided
 model Assignment {
   id         String    @id @default(uuid())
   taskId     String?
@@ -342,7 +344,7 @@ model Milestone {
   project   Project  @relation(fields: [projectId], references: [id])
   title     String
   dueDate   DateTime?
-  status    String   // Pending, Reached
+  status    MilestoneStatus
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -351,12 +353,65 @@ model Milestone {
 model PerformanceReview {
   id          String   @id @default(uuid())
   employeeId  String
-  employee    Employee @relation(fields: [employeeId], references: [id])
+  employee    Employee @relation(name: "EmployeeReviews", fields: [employeeId], references: [id])
   quarter     String   // e.g. Q1, Q2, Q3, Q4
   rating      Int      // 1-5
   review      String
   goals       String?  // Optional goals
-  reviewer    String   // Reviewer name/role
+  reviewerId  String   // Added for Sakshi's review (relation to Employee)
+  reviewer    Employee @relation(name: "EmployeeReviewers", fields: [reviewerId], references: [id])
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+}
+
+enum EmpType {
+  FULL_TIME
+  PART_TIME
+  CONTRACT
+}
+
+enum EmpStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  HALF_DAY
+  LATE
+}
+
+enum LeaveStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum LeadStatus {
+  NEW
+  CONTACTED
+  QUALIFIED
+  CONVERTED
+  LOST
+}
+
+enum OpportunityStage {
+  DISCOVERY
+  PROPOSAL
+  NEGOTIATION
+  CLOSED_WON
+  CLOSED_LOST
+}
+
+enum POStatus {
+  ORDERED
+  SHIPPED
+  DELIVERED
+  CANCELLED
+}
+
+enum MilestoneStatus {
+  PENDING
+  REACHED
 }
