@@ -153,7 +153,7 @@ model Leave {
   id         String   @id @default(uuid())
   employeeId String
   employee   Employee @relation(fields: [employeeId], references: [id])
-  leaveType  String   // Sick Leave, Casual Leave, Annual Leave
+  leaveType  LeaveType
   startDate  DateTime
   endDate    DateTime
   status     LeaveStatus
@@ -237,7 +237,7 @@ model Product {
   stockLevel     Int             @default(0)
   minStockLevel  Int             @default(0)
   unit           String          // Piece, Kg, Box
-  status         String          // Active, Inactive
+  status         ProductStatus
   purchaseOrders PurchaseOrder[] // Added for Sakshi's review
   stockMovements StockMovement[] // Added for Sakshi's review
   createdAt      DateTime        @default(now())
@@ -254,7 +254,7 @@ model Supplier {
   address        String?
   city           String?
   country        String?
-  status         String          @default("Active") // Active, Inactive
+  status         SupplierStatus  @default(ACTIVE)
   purchaseOrders PurchaseOrder[]
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
@@ -280,7 +280,7 @@ model StockMovement {
   productId    String
   product      Product  @relation(fields: [productId], references: [id])
   changeAmount Int      // Positive for restock, negative for sale/loss
-  reason       String   // Sale, Restock, Adjustment, Return
+  reason       MovementReason
   date         DateTime // Set independently to represent actual movement date
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
@@ -295,8 +295,8 @@ model Project {
   id          String      @id @default(uuid())
   name        String
   description String?
-  status      String      // Not Started, In Progress, On Hold, Completed
-  priority    String      // Low, Medium, High, Critical
+  status      ProjectStatus
+  priority    Priority
   startDate   DateTime?
   endDate     DateTime?
   tasks       Task[]
@@ -312,8 +312,8 @@ model Task {
   project     Project      @relation(fields: [projectId], references: [id])
   title       String
   description String?
-  status      String       // Not Started, In Progress, Review, Done
-  priority    String       // Low, Medium, High, Critical
+  status      TaskStatus
+  priority    Priority
   dueDate     DateTime?
   assignments Assignment[] // Added for Sakshi's review
   createdAt   DateTime     @default(now())
@@ -414,4 +414,50 @@ enum POStatus {
 enum MilestoneStatus {
   PENDING
   REACHED
+}
+
+enum ProductStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum SupplierStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum ProjectStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  ON_HOLD
+  COMPLETED
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum TaskStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  REVIEW
+  DONE
+}
+
+enum LeaveType {
+  SICK_LEAVE
+  CASUAL_LEAVE
+  ANNUAL_LEAVE
+  MATERNITY_LEAVE
+  PATERNITY_LEAVE
+}
+
+enum MovementReason {
+  SALE
+  RESTOCK
+  ADJUSTMENT
+  RETURN
 }
