@@ -11,7 +11,10 @@ let sidebarMobile = window.innerWidth <= 900;
 // ---- ROUTER ----
 const pageConfig = {
   dashboard:      { title: 'Dashboard',          breadcrumb: 'Dashboard' },
-  crm:            { title: 'CRM Dashboard',       breadcrumb: 'CRM / Dashboard' },
+  crm:              { title: 'CRM Dashboard',       breadcrumb: 'CRM / Dashboard' },
+  'crm-customers':  { title: 'Customers',           breadcrumb: 'CRM / Customers' },
+  'crm-leads':      { title: 'Leads',               breadcrumb: 'CRM / Leads' },
+  'crm-opportunities': { title: 'Opportunities',    breadcrumb: 'CRM / Opportunities' },
   hrm:            { title: 'HR Dashboard',        breadcrumb: 'HRM / Dashboard' },
   employees:      { title: 'Employees',           breadcrumb: 'HRM / Employees' },
   profile:        { title: 'Employee Profile',    breadcrumb: 'HRM / Employee Profile' },
@@ -60,6 +63,9 @@ function renderPage() {
   switch (currentPage) {
     case 'dashboard':     html = renderMainDashboard(); break;
     case 'crm':           html = renderCRMModule(); break;
+    case 'crm-customers': html = renderCRMCustomers(); break;
+    case 'crm-leads':     html = renderCRMLeads(); break;
+    case 'crm-opportunities': html = renderCRMOpportunities(); break;
     case 'hrm':           html = renderHRDashboard(); break;
     case 'employees':     html = renderEmployeeList(); break;
     case 'profile':       html = renderEmployeeProfile(currentParams.id); break;
@@ -80,7 +86,7 @@ function renderPage() {
   // Init charts after render
   requestAnimationFrame(() => {
     switch (currentPage) {
-      case 'crm':        if (typeof populateCRMData === 'function') populateCRMData(); break;
+      case 'crm':        if (typeof initCRMCharts === 'function') initCRMCharts(); break;
       case 'hrm':        initHRDashboardCharts(); break;
       case 'employees':  initEmpPagination(); break;
       case 'attendance': initAttPagination(); break;

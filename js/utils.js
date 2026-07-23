@@ -55,6 +55,9 @@ function badge(text, cls) {
     'Approved': 'approved', 'Pending': 'pending', 'Rejected': 'rejected',
     'In Progress': 'in-progress', 'Not Started': 'not-started', 'Completed': 'completed', 'On Hold': 'on-hold', 'Done': 'done', 'Review': 'review', 'Cancelled': 'cancelled',
     'Low': 'low', 'Medium': 'medium', 'High': 'high', 'Critical': 'critical',
+    // CRM statuses
+    'New': 'pending', 'Contacted': 'in-progress', 'Qualified': 'approved', 'Converted': 'completed', 'Lost': 'rejected',
+    'Discovery': 'pending', 'Proposal': 'in-progress', 'Negotiation': 'halfday', 'Closed Won': 'approved', 'Closed Lost': 'rejected',
   };
   const c = cls || map[text] || 'pending';
   return `<span class="badge badge-${c}"><span class="badge-dot"></span>${text}</span>`;
@@ -101,8 +104,10 @@ function filterList(arr, query, fields) {
 
 // ---- PAGINATE ----
 function paginate(arr, page, perPage = 8) {
-  const start = (page - 1) * perPage;
-  return { items: arr.slice(start, start + perPage), total: arr.length, pages: Math.ceil(arr.length / perPage) };
+  const totalPages = Math.ceil(arr.length / perPage);
+  const safePage = Math.max(1, Math.min(page, totalPages || 1));
+  const start = (safePage - 1) * perPage;
+  return { items: arr.slice(start, start + perPage), total: arr.length, pages: totalPages, totalPages, page: safePage };
 }
 
 // ---- RENDER PAGINATION ----

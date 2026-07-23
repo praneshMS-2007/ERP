@@ -108,24 +108,44 @@ const DB = {
     { id: 'DESG2', title: 'HR Manager' }
   ],
 
-  // ---- CRM MODULE (New) ----
+  // ---- CRM MODULE ----
   leads: [
-    { id: 'LD001', name: 'Acme Corp', status: 'New' },
-    { id: 'LD002', name: 'Global Tech', status: 'Contacted' }
+    { id: 'LD001', name: 'Acme Corp', email: 'info@acmecorp.com', phone: '+91 98765 11111', company: 'Acme Corporation', source: 'Website', status: 'New' },
+    { id: 'LD002', name: 'Global Tech', email: 'sales@globaltech.io', phone: '+91 98765 22222', company: 'Global Tech Solutions', source: 'Referral', status: 'Contacted' },
+    { id: 'LD003', name: 'Pinnacle Systems', email: 'lead@pinnacle.in', phone: '+91 98765 33333', company: 'Pinnacle Systems Pvt Ltd', source: 'LinkedIn', status: 'Qualified' },
+    { id: 'LD004', name: 'CloudNine Labs', email: 'biz@cloudnine.dev', phone: '+91 98765 44444', company: 'CloudNine Labs', source: 'Cold Outreach', status: 'New' },
+    { id: 'LD005', name: 'Vertex Analytics', email: 'hello@vertex.ai', phone: '+91 98765 55555', company: 'Vertex Analytics Inc', source: 'Trade Show', status: 'Converted' },
+    { id: 'LD006', name: 'NovaTech', email: 'contact@novatech.com', phone: '+91 98765 66666', company: 'NovaTech Industries', source: 'Website', status: 'Lost' },
+    { id: 'LD007', name: 'Skyline Ventures', email: 'partnerships@skyline.vc', phone: '+91 98765 77777', company: 'Skyline Venture Capital', source: 'Referral', status: 'Contacted' },
+    { id: 'LD008', name: 'Quantum Software', email: 'info@quantumsw.com', phone: '+91 98765 88888', company: 'Quantum Software Pvt Ltd', source: 'LinkedIn', status: 'Qualified' },
   ],
   
   customers: [
-    { id: 'CUST001', name: 'TechSolutions Inc', email: 'contact@techsolutions.com', phone: '+1234567890' },
-    { id: 'CUST002', name: 'Innovate LLC', email: 'hello@innovate.com', phone: '+0987654321' }
+    { id: 'CUST001', name: 'TechSolutions Inc', email: 'contact@techsolutions.com', phone: '+91 12345 67890', company: 'TechSolutions Inc', convertedFromLeadId: null, totalDeals: 3, totalValue: 250000 },
+    { id: 'CUST002', name: 'Innovate LLC', email: 'hello@innovate.com', phone: '+91 09876 54321', company: 'Innovate LLC', convertedFromLeadId: null, totalDeals: 2, totalValue: 180000 },
+    { id: 'CUST003', name: 'Vertex Analytics Inc', email: 'hello@vertex.ai', phone: '+91 98765 55555', company: 'Vertex Analytics Inc', convertedFromLeadId: 'LD005', totalDeals: 1, totalValue: 95000 },
+    { id: 'CUST004', name: 'DataForge Systems', email: 'sales@dataforge.io', phone: '+91 88888 99999', company: 'DataForge Systems', convertedFromLeadId: null, totalDeals: 4, totalValue: 420000 },
+    { id: 'CUST005', name: 'BrightPath Digital', email: 'info@brightpath.co', phone: '+91 77777 11111', company: 'BrightPath Digital', convertedFromLeadId: null, totalDeals: 1, totalValue: 65000 },
+    { id: 'CUST006', name: 'Atlas Engineering', email: 'contact@atlaseng.in', phone: '+91 66666 22222', company: 'Atlas Engineering Pvt Ltd', convertedFromLeadId: null, totalDeals: 2, totalValue: 310000 },
   ],
 
   opportunities: [
-    { id: 'OPP001', customerId: 'CUST001', value: 50000, stage: 'Proposal', expectedCloseDate: '2026-07-15' },
-    { id: 'OPP002', customerId: 'CUST002', value: 120000, stage: 'Negotiation', expectedCloseDate: '2026-07-20' }
+    { id: 'OPP001', customerId: 'CUST001', value: 50000, stage: 'Proposal', expectedCloseDate: '2026-07-15', description: 'CRM integration package' },
+    { id: 'OPP002', customerId: 'CUST002', value: 120000, stage: 'Negotiation', expectedCloseDate: '2026-07-20', description: 'Enterprise license renewal' },
+    { id: 'OPP003', customerId: 'CUST004', value: 200000, stage: 'Discovery', expectedCloseDate: '2026-08-10', description: 'Data warehouse migration' },
+    { id: 'OPP004', customerId: 'CUST003', value: 95000, stage: 'Closed Won', expectedCloseDate: '2026-06-30', description: 'AI analytics platform' },
+    { id: 'OPP005', customerId: 'CUST006', value: 180000, stage: 'Proposal', expectedCloseDate: '2026-08-01', description: 'Infrastructure modernization' },
+    { id: 'OPP006', customerId: 'CUST001', value: 75000, stage: 'Closed Lost', expectedCloseDate: '2026-06-15', description: 'Mobile app development' },
+    { id: 'OPP007', customerId: 'CUST005', value: 65000, stage: 'Negotiation', expectedCloseDate: '2026-07-25', description: 'Digital marketing automation' },
+    { id: 'OPP008', customerId: 'CUST004', value: 150000, stage: 'Closed Won', expectedCloseDate: '2026-06-20', description: 'Cloud migration phase 2' },
   ],
   
   followUps: [
-    { id: 'FU001', customerId: 'CUST001', date: '2026-06-25', notes: 'Sent proposal, waiting for feedback', nextActionDate: '2026-07-02' }
+    { id: 'FU001', customerId: 'CUST001', leadId: null, date: '2026-06-25', notes: 'Sent proposal, waiting for feedback on pricing tier', nextActionDate: '2026-07-02' },
+    { id: 'FU002', leadId: 'LD002', customerId: null, date: '2026-06-28', notes: 'Initial discovery call completed — strong interest in CRM tools', nextActionDate: '2026-07-05' },
+    { id: 'FU003', customerId: 'CUST004', leadId: null, date: '2026-07-01', notes: 'Demo scheduled for data warehouse solution', nextActionDate: '2026-07-08' },
+    { id: 'FU004', leadId: 'LD007', customerId: null, date: '2026-07-03', notes: 'Follow-up email sent after trade show meeting', nextActionDate: '2026-07-10' },
+    { id: 'FU005', customerId: 'CUST006', leadId: null, date: '2026-07-05', notes: 'Contract review in progress with legal team', nextActionDate: '2026-07-12' },
   ],
 
   // ---- INVENTORY ADDITIONS ----
@@ -178,14 +198,18 @@ function loadData() {
   }
 }
 
-// Clear stale cache if it's missing new entities
+// Clear stale cache if it's missing new entities or CRM data is old format
 (function migrateCache() {
   const saved = localStorage.getItem('erpDB');
   if (saved) {
     try {
       const parsed = JSON.parse(saved);
-      // If cached data is missing new entities, clear cache so defaults load
-      if (!parsed.customers || !parsed.leads || !parsed.opportunities || !parsed.authentications || !parsed.suppliers || !parsed.assignments) {
+      // If cached data is missing new entities or CRM data lacks expanded fields, clear cache
+      const needsMigration = !parsed.customers || !parsed.leads || !parsed.opportunities || 
+        !parsed.authentications || !parsed.suppliers || !parsed.assignments ||
+        (parsed.leads && parsed.leads.length > 0 && !parsed.leads[0].company) ||
+        (parsed.customers && parsed.customers.length > 0 && parsed.customers[0].totalValue === undefined);
+      if (needsMigration) {
         localStorage.removeItem('erpDB');
       }
     } catch(e) { localStorage.removeItem('erpDB'); }
