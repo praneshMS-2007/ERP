@@ -140,7 +140,7 @@ function renderMainDashboard() {
           <div class="kpi-icon" style="background:rgba(245,158,11,0.12)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--amber)"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></div>
           <span class="kpi-badge ${pendingLeaves > 3 ? 'down' : 'up'}">${pendingLeaves} pending</span>
         </div>
-        <div class="kpi-value" style="color:var(--amber)">${pendingLeaves}</div>
+        <div class="kpi-value">${pendingLeaves}</div>
         <div class="kpi-label">Leave Requests</div>
       </div>
       <div class="kpi-card" style="cursor:pointer;" onclick="navigate('inventory')">
@@ -148,7 +148,7 @@ function renderMainDashboard() {
           <div class="kpi-icon" style="background:rgba(20,184,166,0.12)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--teal)"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg></div>
           <span class="kpi-badge ${lowStock > 0 ? 'down' : 'up'}">${lowStock} low stock</span>
         </div>
-        <div class="kpi-value" style="color:var(--teal)">${totalProd}</div>
+        <div class="kpi-value">${totalProd}</div>
         <div class="kpi-label">Inventory Items</div>
       </div>
       <div class="kpi-card" style="cursor:pointer;" onclick="navigate('projects')">
@@ -156,7 +156,7 @@ function renderMainDashboard() {
           <div class="kpi-icon" style="background:rgba(34,197,94,0.12)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--green)"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></div>
           <span class="kpi-badge up">${activeProj} active</span>
         </div>
-        <div class="kpi-value" style="color:var(--green)">${DB.projects.length}</div>
+        <div class="kpi-value">${DB.projects.length}</div>
         <div class="kpi-label">Projects</div>
       </div>
     </div>
