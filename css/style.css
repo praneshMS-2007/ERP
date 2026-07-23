@@ -6,45 +6,45 @@
 
 /* ---- CSS VARIABLES ---- */
 :root {
-  /* Spatial Backgrounds */
-  --bg-base: #020617;
-  --bg-surface: rgba(15, 23, 42, 0.65);
-  --bg-card: rgba(15, 23, 42, 0.75);
-  --bg-card-hover: rgba(30, 41, 59, 0.85);
-  --bg-input: rgba(15, 23, 42, 0.5);
+  /* Premium Light Backgrounds */
+  --bg-base: #f8fafc;
+  --bg-surface: rgba(255, 255, 255, 0.85);
+  --bg-card: rgba(255, 255, 255, 0.90);
+  --bg-card-hover: rgba(255, 255, 255, 1);
+  --bg-input: rgba(255, 255, 255, 0.7);
   
-  /* Sidebar Floating Panels */
-  --bg-sidebar: rgba(15, 23, 42, 0.85);
-  --sidebar-border: rgba(255, 255, 255, 0.15);
-  --sidebar-hover: rgba(0, 240, 255, 0.08);
+  /* Sidebar High-Contrast (Deep Charcoal/Navy) */
+  --bg-sidebar: #0f172a;
+  --sidebar-border: #1e293b;
+  --sidebar-hover: rgba(255, 255, 255, 0.08);
 
-  /* Vibrant Accents */
-  --accent: #00f0ff; /* High-Tech Cyan */
-  --accent-glow: rgba(0, 240, 255, 0.25);
-  --accent-light: #7dd3fc;
-  --accent-dark: #0284c7;
+  /* Premium Accents (Electric Indigo) */
+  --accent: #4f46e5;
+  --accent-glow: rgba(79, 70, 229, 0.25);
+  --accent-light: #6366f1;
+  --accent-dark: #3730a3;
   
   /* Status Colors */
-  --purple: #818cf8;
-  --teal: #2dd4bf;
-  --green: #34d399;
-  --amber: #fbbf24;
-  --red: #f87171;
-  --orange: #fb923c;
+  --purple: #8b5cf6;
+  --teal: #0d9488;
+  --green: #059669;
+  --amber: #d97706;
+  --red: #dc2626;
+  --orange: #ea580c;
 
-  /* Typography */
-  --text-pri: #f8fafc;
-  --text-sec: #cbd5e1;
-  --text-muted: #94a3b8;
-  --text-disabled: #475569;
+  /* Typography (Dark on light cards) */
+  --text-pri: #0f172a;
+  --text-sec: #334155;
+  --text-muted: #64748b;
+  --text-disabled: #94a3b8;
   
-  /* Sidebar Typography */
+  /* Sidebar Typography (Light on dark sidebar) */
   --text-sidebar: #f8fafc;
   --text-sidebar-muted: #94a3b8;
 
   /* Borders */
-  --border: rgba(255, 255, 255, 0.15);
-  --border-strong: rgba(255, 255, 255, 0.3);
+  --border: rgba(0, 0, 0, 0.08);
+  --border-strong: rgba(0, 0, 0, 0.15);
 
   /* Dimensions */
   --sidebar-w: 260px;
@@ -56,10 +56,10 @@
   --radius-lg: 24px;
   --radius-xl: 32px;
 
-  /* Diffuse Spatial Shadows */
-  --shadow-sm: 0 4px 12px rgba(0,0,0,0.2);
-  --shadow-md: 0 8px 24px rgba(0,0,0,0.4), 0 2px 8px rgba(0,0,0,0.2);
-  --shadow-lg: 0 16px 40px rgba(0,0,0,0.5), 0 4px 12px rgba(0,0,0,0.3);
+  /* Diffuse Spatial Shadows (Very soft dark shadows for white cards) */
+  --shadow-sm: 0 4px 12px rgba(0,0,0,0.03);
+  --shadow-md: 0 8px 24px rgba(0,0,0,0.05), 0 2px 8px rgba(0,0,0,0.02);
+  --shadow-lg: 0 16px 40px rgba(0,0,0,0.08), 0 4px 12px rgba(0,0,0,0.03);
   --shadow-glow: 0 0 24px var(--accent-glow);
 
   /* Transitions */
@@ -74,7 +74,7 @@ html { scroll-behavior: smooth; }
 body {
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
   background-color: var(--bg-base);
-  background-image: url('../img/bg-cyber.png');
+  background-image: url('../img/bg-premium.png');
   background-size: cover;
   background-position: center;
   background-attachment: fixed;
@@ -1245,14 +1245,12 @@ body {
   box-shadow: var(--shadow-md);
 }
 
-/* ---- Glassmorphism welcome banner ---- */
-/* ---- Corporate welcome banner ---- */
+/* ---- Premium Gradient Welcome Banner ---- */
 .welcome-banner {
-  background: var(--bg-card);
-  border: 1px solid var(--border);
+  background: linear-gradient(135deg, var(--accent), var(--purple));
+  color: #ffffff;
+  border: none;
   border-radius: var(--radius-lg);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
   padding: 28px 32px;
   margin-bottom: 24px;
   display: flex;
@@ -1262,7 +1260,7 @@ body {
   gap: 16px;
   position: relative;
   overflow: hidden;
-  box-shadow: var(--shadow-sm);
+  box-shadow: var(--shadow-md);
 }
 
 .welcome-banner::after {
@@ -1270,12 +1268,12 @@ body {
   position: absolute;
   right: -50px; top: -50px;
   width: 300px; height: 300px;
-  background: radial-gradient(circle, rgba(30,58,138,0.04), transparent 70%);
+  background: radial-gradient(circle, rgba(255,255,255,0.15), transparent 70%);
   pointer-events: none;
 }
 
 .welcome-title { font-size: 22px; font-weight: 700; position: relative; z-index: 1; }
-.welcome-sub { font-size: 13px; color: var(--text-sec); margin-top: 6px; position: relative; z-index: 1; }
+.welcome-sub { font-size: 13px; color: rgba(255,255,255,0.85); margin-top: 6px; position: relative; z-index: 1; }
 
 /* ---- Table row hover glow ---- */
 /* ---- Table row hover clean ---- */
