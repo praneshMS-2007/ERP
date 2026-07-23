@@ -6,45 +6,63 @@
 
 /* ---- CSS VARIABLES ---- */
 :root {
-  --bg-base: #0d0f14;
-  --bg-surface: #13161e;
-  --bg-card: #181c27;
-  --bg-card-hover: #1e2233;
-  --bg-input: #1a1e2a;
-  --bg-sidebar: #0f1119;
+  /* Main Backgrounds */
+  --bg-base: #f8fafc;
+  --bg-surface: #ffffff;
+  --bg-card: #ffffff;
+  --bg-card-hover: #f1f5f9;
+  --bg-input: #ffffff;
+  
+  /* Sidebar Backgrounds (Dark Navy) */
+  --bg-sidebar: #0f172a;
+  --sidebar-border: #1e293b;
+  --sidebar-hover: rgba(255,255,255,0.06);
 
-  --accent: #6366f1;
-  --accent-glow: rgba(99,102,241,0.25);
-  --accent-light: #818cf8;
-  --accent-dark: #4f46e5;
-  --purple: #8b5cf6;
-  --teal: #14b8a6;
-  --green: #22c55e;
-  --amber: #f59e0b;
-  --red: #ef4444;
-  --orange: #f97316;
+  /* Corporate Accents */
+  --accent: #1e3a8a; /* Deep Navy Blue */
+  --accent-glow: rgba(30,58,138,0.15);
+  --accent-light: #3b82f6; /* Blue */
+  --accent-dark: #1e40af;
+  
+  /* Status Colors */
+  --purple: #6366f1;
+  --teal: #0f766e;
+  --green: #059669;
+  --amber: #d97706;
+  --red: #dc2626;
+  --orange: #ea580c;
 
-  --text-pri: #f1f5f9;
-  --text-sec: #94a3b8;
-  --text-muted: #475569;
-  --text-disabled: #334155;
+  /* Typography (Light Theme) */
+  --text-pri: #0f172a; /* Slate 900 */
+  --text-sec: #475569; /* Slate 600 */
+  --text-muted: #64748b; /* Slate 500 */
+  --text-disabled: #94a3b8; /* Slate 400 */
+  
+  /* Sidebar Typography (Dark Theme) */
+  --text-sidebar: #f8fafc;
+  --text-sidebar-muted: #94a3b8;
 
-  --border: rgba(255,255,255,0.07);
-  --border-strong: rgba(255,255,255,0.12);
+  /* Borders */
+  --border: #e2e8f0;
+  --border-strong: #cbd5e1;
 
+  /* Dimensions */
   --sidebar-w: 256px;
   --topbar-h: 60px;
 
+  /* Radii */
   --radius: 12px;
   --radius-sm: 8px;
   --radius-lg: 16px;
   --radius-xl: 20px;
 
-  --shadow-sm: 0 1px 3px rgba(0,0,0,0.4);
-  --shadow-md: 0 4px 16px rgba(0,0,0,0.5);
-  --shadow-lg: 0 8px 32px rgba(0,0,0,0.6);
-  --shadow-glow: 0 0 24px var(--accent-glow);
+  /* Soft Corporate Shadows */
+  --shadow-sm: 0 1px 2px 0 rgba(0,0,0,0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.08), 0 2px 4px -2px rgba(0,0,0,0.04);
+  --shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.08), 0 4px 6px -4px rgba(0,0,0,0.04);
+  --shadow-glow: 0 0 12px var(--accent-glow);
 
+  /* Transitions */
   --transition: 0.2s ease;
   --transition-slow: 0.35s ease;
 }
@@ -76,7 +94,7 @@ body {
   width: var(--sidebar-w);
   min-height: 100vh;
   background: var(--bg-sidebar);
-  border-right: 1px solid var(--border);
+  border-right: 1px solid var(--sidebar-border);
   display: flex;
   flex-direction: column;
   position: fixed;
@@ -94,7 +112,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--sidebar-border);
   min-height: 68px;
 }
 
@@ -115,7 +133,7 @@ body {
   transition: opacity var(--transition), width var(--transition);
 }
 
-.logo-name { font-size: 15px; font-weight: 700; color: var(--text-pri); }
+.logo-name { font-size: 15px; font-weight: 700; color: var(--text-sidebar); }
 .logo-sub { font-size: 10px; font-weight: 500; color: var(--accent-light); text-transform: uppercase; letter-spacing: 0.08em; }
 
 .sidebar.collapsed .logo-text { opacity: 0; width: 0; }
@@ -123,7 +141,7 @@ body {
 .sidebar-toggle, .topbar-toggle {
   background: none;
   border: none;
-  color: var(--text-sec);
+  color: var(--text-sidebar-muted);
   cursor: pointer;
   padding: 6px;
   border-radius: var(--radius-sm);
@@ -152,7 +170,7 @@ body {
   font-size: 9px;
   font-weight: 700;
   letter-spacing: 0.15em;
-  color: var(--text-muted);
+  color: var(--text-sidebar-muted);
   padding: 8px 12px 4px;
   white-space: nowrap;
   overflow: hidden;
@@ -167,7 +185,7 @@ body {
   gap: 10px;
   padding: 9px 12px;
   border-radius: var(--radius-sm);
-  color: var(--text-sec);
+  color: var(--text-sidebar-muted);
   text-decoration: none;
   font-size: 13.5px;
   font-weight: 500;
@@ -177,7 +195,7 @@ body {
   margin-bottom: 2px;
 }
 
-.nav-item:hover { background: var(--bg-card); color: var(--text-pri); }
+.nav-item:hover { background: var(--sidebar-hover); color: var(--text-sidebar); }
 
 .nav-item.active {
   background: linear-gradient(135deg, var(--accent-glow), rgba(139,92,246,0.15));
@@ -259,9 +277,7 @@ body {
    ============================================================ */
 .topbar {
   height: var(--topbar-h);
-  background: rgba(19, 22, 30, 0.75);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
+  background: var(--bg-surface);
   border-bottom: 1px solid var(--border);
   display: flex;
   align-items: center;
@@ -593,15 +609,18 @@ body {
 
 .data-table { width: 100%; border-collapse: collapse; }
 
-.data-table thead tr { border-bottom: 1px solid var(--border); }
+.data-table thead tr { 
+  border-bottom: 1px solid var(--border); 
+  background: var(--bg-card-hover);
+}
 .data-table th {
-  padding: 11px 16px;
+  padding: 12px 16px;
   text-align: left;
-  font-size: 11px;
+  font-size: 11.5px;
   font-weight: 700;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.05em;
   text-transform: uppercase;
-  color: var(--text-muted);
+  color: var(--text-sec);
   white-space: nowrap;
 }
 
@@ -1192,30 +1211,23 @@ body {
   background-clip: padding-box;
 }
 
-.kpi-card::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: var(--radius);
-  padding: 1px;
-  background: linear-gradient(135deg, transparent, transparent);
-  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-  -webkit-mask-composite: xor;
-  mask-composite: exclude;
-  opacity: 0;
-  transition: opacity 0.4s ease;
-  pointer-events: none;
+/* ---- Subtle shadow on KPI cards ---- */
+.kpi-card {
+  position: relative;
+  background: var(--bg-card);
+  transition: transform var(--transition), box-shadow var(--transition);
 }
 
-.kpi-card:hover::after {
-  background: linear-gradient(135deg, var(--accent), var(--purple), var(--teal));
-  opacity: 1;
+.kpi-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
 }
 
 /* ---- Glassmorphism welcome banner ---- */
+/* ---- Corporate welcome banner ---- */
 .welcome-banner {
-  background: linear-gradient(135deg, rgba(99,102,241,0.15), rgba(139,92,246,0.1), rgba(20,184,166,0.08));
-  border: 1px solid rgba(99,102,241,0.25);
+  background: var(--bg-card);
+  border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   padding: 28px 32px;
   margin-bottom: 24px;
@@ -1226,51 +1238,29 @@ body {
   gap: 16px;
   position: relative;
   overflow: hidden;
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  box-shadow: var(--shadow-sm);
 }
-
-.welcome-banner::before {
-  content: '';
-  position: absolute;
-  top: -50%; left: -50%;
-  width: 200%; height: 200%;
-  background: conic-gradient(from 0deg at 50% 50%, 
-    rgba(99,102,241,0.1) 0deg, 
-    rgba(139,92,246,0.05) 90deg, 
-    rgba(20,184,166,0.08) 180deg, 
-    rgba(99,102,241,0.1) 360deg);
-  animation: rotateBg 20s linear infinite;
-  pointer-events: none;
-}
-
-@keyframes rotateBg { to { transform: rotate(360deg); } }
 
 .welcome-banner::after {
   content: '';
   position: absolute;
-  right: -30px; top: -30px;
-  width: 240px; height: 240px;
-  background: radial-gradient(circle, rgba(99,102,241,0.2), transparent 70%);
+  right: -50px; top: -50px;
+  width: 300px; height: 300px;
+  background: radial-gradient(circle, rgba(30,58,138,0.04), transparent 70%);
   pointer-events: none;
-  animation: pulse 4s ease-in-out infinite;
 }
-
-@keyframes pulse { 0%, 100% { opacity: 0.5; transform: scale(1); } 50% { opacity: 1; transform: scale(1.1); } }
 
 .welcome-title { font-size: 22px; font-weight: 700; position: relative; z-index: 1; }
 .welcome-sub { font-size: 13px; color: var(--text-sec); margin-top: 6px; position: relative; z-index: 1; }
 
 /* ---- Table row hover glow ---- */
+/* ---- Table row hover clean ---- */
 .data-table tbody tr {
-  transition: background var(--transition), box-shadow var(--transition);
-  border-left: 3px solid transparent;
+  transition: background var(--transition);
 }
 
 .data-table tbody tr:hover {
   background: var(--bg-card-hover);
-  border-left-color: var(--accent);
-  box-shadow: inset 4px 0 0 0 var(--accent-glow);
 }
 
 /* ---- Chart card hover lift ---- */
@@ -1320,23 +1310,26 @@ body {
 }
 
 /* ---- Sidebar nav item active glow ---- */
+/* ---- Sidebar nav item active flat ---- */
 .nav-item.active {
-  box-shadow: inset 0 0 0 1px rgba(99,102,241,0.2), 0 0 12px rgba(99,102,241,0.1);
+  background: rgba(255,255,255,0.1);
+  color: var(--text-sidebar);
 }
 
 /* ---- Modal glassmorphism ---- */
+/* ---- Modal light glassmorphism ---- */
 .modal {
-  background: rgba(19, 22, 30, 0.92);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: var(--shadow-lg);
+  border: 1px solid var(--border);
 }
 
 /* ---- Page header text gradient ---- */
+/* ---- Page header text corporate ---- */
 .page-header-left h1 {
-  background: linear-gradient(135deg, var(--text-pri) 30%, var(--accent-light) 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  color: var(--text-pri);
 }
 
 /* ---- Project card animated border ---- */
@@ -1349,7 +1342,7 @@ body {
   position: absolute;
   top: 0; left: 0; right: 0;
   height: 3px;
-  background: linear-gradient(90deg, var(--accent), var(--purple), var(--teal));
+  background: var(--accent);
   border-radius: var(--radius) var(--radius) 0 0;
   opacity: 0;
   transition: opacity 0.3s ease;
