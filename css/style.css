@@ -6,55 +6,60 @@
 
 /* ---- CSS VARIABLES ---- */
 :root {
-  /* Modern Startup Pastel Backgrounds */
-  --bg-base: #d4ebd9; /* Mint Green */
-  --bg-surface: #ffffff; /* Pure White */
-  --bg-card: #ffffff;
+  /* Deep Purple & Light Gray Theme */
+  --bg-base: #f4f5f7; /* Light Gray */
+  --bg-surface: #ffffff;
+  --bg-card: #ffffff; /* Light Cards */
+  --bg-card-dark: #1e1b3e; /* Deep Purple */
   --bg-card-hover: #f8fafc;
   --bg-input: #ffffff;
   
-  /* Sidebar High-Contrast (Clean White) */
-  --bg-sidebar: #ffffff;
-  --sidebar-border: #e2e8f0;
-  --sidebar-hover: rgba(30, 136, 229, 0.08);
+  /* Sidebar High-Contrast */
+  --bg-sidebar: #1e1b3e;
+  --sidebar-border: #2a2552;
+  --sidebar-hover: rgba(255, 255, 255, 0.05);
 
-  /* Premium Accents (Vibrant Blue) */
-  --accent: #1e88e5;
-  --accent-glow: rgba(30, 136, 229, 0.2);
-  --accent-light: #42a5f5;
-  --accent-dark: #1565c0;
+  /* Accents (Lime Green) */
+  --accent: #a3e635;
+  --accent-glow: rgba(163, 230, 53, 0.2);
+  --accent-light: #bef264;
+  --accent-dark: #65a30d;
   
   /* Status Colors */
   --purple: #8b5cf6;
-  --teal: #0d9488;
-  --green: #059669;
-  --amber: #d97706;
-  --red: #dc2626;
-  --orange: #ea580c;
+  --teal: #14b8a6;
+  --green: #22c55e;
+  --amber: #f59e0b;
+  --red: #ef4444;
+  --orange: #f97316;
 
-  /* Typography (Deep Navy) */
-  --text-pri: #0a0826;
-  --text-sec: #64748b;
-  --text-muted: #94a3b8;
-  --text-disabled: #cbd5e1;
+  /* Typography (Dark text for white cards) */
+  --text-pri: #111827;
+  --text-sec: #6b7280;
+  --text-muted: #9ca3af;
+  --text-disabled: #d1d5db;
   
+  /* Typography for Dark Panels */
+  --text-dark-panel: #ffffff;
+  --text-dark-panel-muted: #9ca3af;
+
   /* Sidebar Typography */
-  --text-sidebar: #0a0826;
-  --text-sidebar-muted: #64748b;
+  --text-sidebar: #ffffff;
+  --text-sidebar-muted: #9ca3af;
 
   /* Borders */
-  --border: #e2e8f0;
-  --border-strong: #cbd5e1;
+  --border: #e5e7eb;
+  --border-strong: #d1d5db;
 
   /* Dimensions */
   --sidebar-w: 260px;
   --topbar-h: 70px;
 
   /* Modern Flat Radii */
-  --radius: 12px;
-  --radius-sm: 8px;
-  --radius-lg: 16px;
-  --radius-xl: 24px;
+  --radius: 8px;
+  --radius-sm: 4px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
 
   /* Soft Clean Shadows */
   --shadow-sm: 0 2px 4px rgba(0,0,0,0.02);
@@ -242,7 +247,8 @@ body {
   gap: 10px;
   padding: 10px;
   border-radius: var(--radius-sm);
-  background: var(--bg-card);
+  background: transparent;
+  color: var(--text-sidebar);
   overflow: hidden;
 }
 
@@ -284,23 +290,34 @@ body {
    ============================================================ */
 .topbar {
   height: var(--topbar-h);
-  background: var(--bg-surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-xl);
-  margin: 20px 20px 20px 20px;
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
-  box-shadow: var(--shadow-md);
+  background: var(--bg-card-dark);
+  color: var(--text-dark-panel);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 24px;
+  padding: 0 32px;
   position: sticky;
   top: 0;
-  z-index: 100;
+  z-index: 40;
+  margin: 16px 24px;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  transition: padding var(--transition);
 }
 
 .topbar-left { display: flex; align-items: center; gap: 12px; }
+.topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.topbar-right .btn-icon {
+  color: var(--text-dark-panel);
+}
+.topbar-right .btn-icon:hover {
+  background: rgba(255,255,255,0.1);
+}
 .topbar-right { display: flex; align-items: center; gap: 10px; }
 
 .breadcrumb {
@@ -460,30 +477,35 @@ body {
 
 /* ============================================================
    KPI CARDS
-   ============================================================ */
+   ============================================================/* ---- KPI Grid ---- */
 .kpi-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 24px;
   margin-bottom: 24px;
 }
 
 .kpi-card {
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 18px 20px;
+  background: var(--bg-card-dark);
+  color: var(--text-dark-panel);
+  border-radius: var(--radius-lg);
+  padding: 24px;
   position: relative;
   overflow: hidden;
-  transition: all var(--transition);
-  animation: slideUp 0.4s ease backwards;
+  box-shadow: var(--shadow-sm);
+  transition: transform var(--transition), box-shadow var(--transition);
 }
 
 .kpi-card:hover {
-  border-color: var(--border-strong);
   transform: translateY(-2px);
   box-shadow: var(--shadow-md);
 }
+
+.kpi-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px; }
+.kpi-icon { width: 44px; height: 44px; border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.05); }
+.kpi-icon svg { width: 22px; height: 22px; color: var(--text-dark-panel); }
+.kpi-value { font-size: 32px; font-weight: 700; color: var(--text-dark-panel); letter-spacing: -0.5px; }
+.kpi-label { font-size: 13px; color: var(--text-dark-panel-muted); margin-top: 4px; font-weight: 500; }
 
 .kpi-card::before {
   content: '';
@@ -1220,34 +1242,13 @@ body {
    PREMIUM POLISH – Animated & Glassmorphism Effects
    ============================================================ */
 
-/* ---- Animated gradient border on KPI cards ---- */
-.kpi-card {
-  position: relative;
-  background: var(--bg-card);
-  background-clip: padding-box;
-}
+/* (Redundant KPI styling removed) */
 
-/* ---- Subtle shadow on KPI cards ---- */
-.kpi-card {
-  position: relative;
-  background: var(--bg-card);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  transition: transform var(--transition), box-shadow var(--transition);
-}
-
-.kpi-card:hover {
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-md);
-}
-
-/* ---- Flat Pastel Welcome Banner ---- */
+/* ---- Deep Purple Welcome Banner ---- */
 .welcome-banner {
-  background: #eadecd; /* Pale Beige */
-  color: var(--text-pri);
-  border: 1px solid var(--border);
+  background: var(--bg-card-dark);
+  color: var(--text-dark-panel);
+  border: none;
   border-radius: var(--radius-lg);
   padding: 28px 32px;
   margin-bottom: 24px;
@@ -1266,12 +1267,12 @@ body {
   position: absolute;
   right: -50px; top: -50px;
   width: 300px; height: 300px;
-  background: radial-gradient(circle, rgba(255,255,255,0.4), transparent 70%);
+  background: radial-gradient(circle, rgba(255,255,255,0.05), transparent 70%);
   pointer-events: none;
 }
 
-.welcome-title { font-size: 22px; font-weight: 700; position: relative; z-index: 1; color: var(--text-pri); }
-.welcome-sub { font-size: 13px; color: var(--text-sec); margin-top: 6px; position: relative; z-index: 1; }
+.welcome-title { font-size: 22px; font-weight: 700; position: relative; z-index: 1; color: var(--text-dark-panel); }
+.welcome-sub { font-size: 13px; color: var(--text-dark-panel-muted); margin-top: 6px; position: relative; z-index: 1; }
 
 /* ---- Table row hover glow ---- */
 /* ---- Table row hover clean ---- */
