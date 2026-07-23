@@ -3,7 +3,7 @@
 // ============================================================
 
 const CHART_DEFAULTS = {
-  color: '#f1f5f9',
+  color: '#cbd5e1',
   gridColor: 'rgba(255,255,255,0.05)',
   font: 'Inter',
 };

@@ -7,44 +7,44 @@
 /* ---- CSS VARIABLES ---- */
 :root {
   /* Spatial Backgrounds */
-  --bg-base: #f1f5f9;
-  --bg-surface: rgba(255, 255, 255, 0.65);
-  --bg-card: rgba(255, 255, 255, 0.75);
-  --bg-card-hover: rgba(255, 255, 255, 0.95);
-  --bg-input: rgba(255, 255, 255, 0.5);
+  --bg-base: #020617;
+  --bg-surface: rgba(15, 23, 42, 0.65);
+  --bg-card: rgba(15, 23, 42, 0.75);
+  --bg-card-hover: rgba(30, 41, 59, 0.85);
+  --bg-input: rgba(15, 23, 42, 0.5);
   
   /* Sidebar Floating Panels */
-  --bg-sidebar: rgba(255, 255, 255, 0.85);
-  --sidebar-border: rgba(255, 255, 255, 0.4);
-  --sidebar-hover: rgba(255, 107, 0, 0.08);
+  --bg-sidebar: rgba(15, 23, 42, 0.85);
+  --sidebar-border: rgba(255, 255, 255, 0.15);
+  --sidebar-hover: rgba(0, 240, 255, 0.08);
 
   /* Vibrant Accents */
-  --accent: #ff6b00; /* Vibrant Orange */
-  --accent-glow: rgba(255, 107, 0, 0.25);
-  --accent-light: #ff8c33;
-  --accent-dark: #cc5600;
+  --accent: #00f0ff; /* High-Tech Cyan */
+  --accent-glow: rgba(0, 240, 255, 0.25);
+  --accent-light: #7dd3fc;
+  --accent-dark: #0284c7;
   
   /* Status Colors */
-  --purple: #6366f1;
-  --teal: #14b8a6;
-  --green: #10b981;
-  --amber: #f59e0b;
-  --red: #ef4444;
-  --orange: #f97316;
+  --purple: #818cf8;
+  --teal: #2dd4bf;
+  --green: #34d399;
+  --amber: #fbbf24;
+  --red: #f87171;
+  --orange: #fb923c;
 
   /* Typography */
-  --text-pri: #1e293b;
-  --text-sec: #475569;
-  --text-muted: #64748b;
-  --text-disabled: #94a3b8;
+  --text-pri: #f8fafc;
+  --text-sec: #cbd5e1;
+  --text-muted: #94a3b8;
+  --text-disabled: #475569;
   
-  /* Sidebar Typography (Light in spatial) */
-  --text-sidebar: #0f172a;
-  --text-sidebar-muted: #64748b;
+  /* Sidebar Typography */
+  --text-sidebar: #f8fafc;
+  --text-sidebar-muted: #94a3b8;
 
   /* Borders */
-  --border: rgba(255, 255, 255, 0.6);
-  --border-strong: rgba(255, 255, 255, 0.9);
+  --border: rgba(255, 255, 255, 0.15);
+  --border-strong: rgba(255, 255, 255, 0.3);
 
   /* Dimensions */
   --sidebar-w: 260px;
@@ -57,9 +57,9 @@
   --radius-xl: 32px;
 
   /* Diffuse Spatial Shadows */
-  --shadow-sm: 0 4px 12px rgba(0,0,0,0.03);
-  --shadow-md: 0 8px 24px rgba(0,0,0,0.06), 0 2px 8px rgba(0,0,0,0.04);
-  --shadow-lg: 0 16px 40px rgba(0,0,0,0.08), 0 4px 12px rgba(0,0,0,0.04);
+  --shadow-sm: 0 4px 12px rgba(0,0,0,0.2);
+  --shadow-md: 0 8px 24px rgba(0,0,0,0.4), 0 2px 8px rgba(0,0,0,0.2);
+  --shadow-lg: 0 16px 40px rgba(0,0,0,0.5), 0 4px 12px rgba(0,0,0,0.3);
   --shadow-glow: 0 0 24px var(--accent-glow);
 
   /* Transitions */
@@ -74,7 +74,7 @@ html { scroll-behavior: smooth; }
 body {
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
   background-color: var(--bg-base);
-  background-image: url('../img/bg-3d.png');
+  background-image: url('../img/bg-cyber.png');
   background-size: cover;
   background-position: center;
   background-attachment: fixed;
