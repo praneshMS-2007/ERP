@@ -1,4 +1,5 @@
 'use client';
+// Shuroq ERP Enterprise Platform - Production Build
 
 import { useEffect, useState } from 'react';
 import {
