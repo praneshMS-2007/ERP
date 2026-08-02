@@ -1,8 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { Mail, Lock, Eye, EyeOff, ArrowRight, ShieldCheck, BarChart3, Building2 } from 'lucide-react';
+import { Mail, Lock, Eye, EyeOff, ArrowRight, ShieldCheck, BarChart3, Building2, Zap, X } from 'lucide-react';
+
+const SAVED_CREDS_KEY = 'erp_saved_credentials';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -10,7 +12,27 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [rememberMe, setRememberMe] = useState(false);
+  const [hasSavedCreds, setHasSavedCreds] = useState(false);
   const { login } = useAuth();
+
+  // Load saved credentials on mount
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(SAVED_CREDS_KEY);
+      if (saved) {
+        const { email: savedEmail, password: savedPassword } = JSON.parse(saved);
+        if (savedEmail && savedPassword) {
+          setEmail(savedEmail);
+          setPassword(savedPassword);
+          setRememberMe(true);
+          setHasSavedCreds(true);
+        }
+      }
+    } catch {
+      // ignore parse errors
+    }
+  }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -18,12 +40,45 @@ export default function LoginPage() {
     setError('');
 
     try {
-      await login(email || 'admin@shuroq.com', password || 'password123');
+      if (!email || !password) {
+        setError('Please enter both email and password');
+        return;
+      }
+      await login(email, password);
+
+      // Save credentials on successful login if "Remember me" is checked
+      if (rememberMe) {
+        localStorage.setItem(SAVED_CREDS_KEY, JSON.stringify({ email, password }));
+      } else {
+        localStorage.removeItem(SAVED_CREDS_KEY);
+      }
     } catch (err: any) {
       setError(err.message || 'Invalid email or password');
     } finally {
       setLoading(false);
     }
+  };
+
+  // Quick login with saved credentials
+  const handleQuickLogin = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      await login(email, password);
+    } catch (err: any) {
+      setError(err.message || 'Saved credentials failed. Please re-enter.');
+      handleClearSaved();
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleClearSaved = () => {
+    localStorage.removeItem(SAVED_CREDS_KEY);
+    setEmail('');
+    setPassword('');
+    setRememberMe(false);
+    setHasSavedCreds(false);
   };
 
   return (
@@ -52,6 +107,51 @@ export default function LoginPage() {
           <p style={{ fontSize: '14px', color: '#6b7280', marginBottom: '32px', lineHeight: 1.4 }}>
             Enter your credentials to access the operational dashboard.
           </p>
+
+          {/* Quick Login Banner — shown when saved credentials exist */}
+          {hasSavedCreds && (
+            <div style={{
+              padding: '14px 16px', marginBottom: '20px', borderRadius: '10px',
+              background: 'linear-gradient(135deg, #eff6ff 0%, #f0fdf4 100%)',
+              border: '1px solid #bfdbfe',
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1 }}>
+                <Zap size={18} style={{ color: '#2563eb', flexShrink: 0 }} />
+                <div>
+                  <div style={{ fontSize: '13px', fontWeight: 700, color: '#1e40af' }}>Quick Login</div>
+                  <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '1px' }}>{email}</div>
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                <button
+                  type="button"
+                  onClick={handleQuickLogin}
+                  disabled={loading}
+                  style={{
+                    padding: '7px 16px', background: '#2563eb', color: '#fff', border: 'none',
+                    borderRadius: '6px', fontSize: '12px', fontWeight: 700, cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', gap: '5px',
+                    opacity: loading ? 0.7 : 1
+                  }}
+                >
+                  <Zap size={13} /> {loading ? 'Signing in...' : 'Sign In'}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleClearSaved}
+                  title="Clear saved credentials"
+                  style={{
+                    padding: '5px', background: 'none', border: '1px solid #d1d5db',
+                    borderRadius: '6px', cursor: 'pointer', color: '#9ca3af',
+                    display: 'flex', alignItems: 'center'
+                  }}
+                >
+                  <X size={14} />
+                </button>
+              </div>
+            </div>
+          )}
 
           <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
             {error && (
@@ -111,11 +211,16 @@ export default function LoginPage() {
               </div>
             </div>
 
-            {/* Checkbox & Forgot Password Row */}
+            {/* Remember Me & Forgot Password Row */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '-2px' }}>
               <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '13px', color: '#6b7280' }}>
-                <input type="checkbox" style={{ borderRadius: '4px', border: '1px solid #d1d5db', width: '16px', height: '16px' }} />
-                <span>Remember this device</span>
+                <input
+                  type="checkbox"
+                  checked={rememberMe}
+                  onChange={(e) => setRememberMe(e.target.checked)}
+                  style={{ borderRadius: '4px', border: '1px solid #d1d5db', width: '16px', height: '16px' }}
+                />
+                <span>Remember credentials</span>
               </label>
               <button
                 type="button"

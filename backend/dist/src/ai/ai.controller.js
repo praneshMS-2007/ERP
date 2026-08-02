@@ -23,6 +23,18 @@ let AiController = class AiController {
     async chat(body) {
         return this.aiService.chatCompletion(body.messages);
     }
+    async getSalesInsights() {
+        return this.aiService.getSalesInsights();
+    }
+    async getHrInsights() {
+        return this.aiService.getHrInsights();
+    }
+    async getInventoryInsights() {
+        return this.aiService.getInventoryInsights();
+    }
+    async getExecutiveSummary() {
+        return this.aiService.getExecutiveSummary();
+    }
 };
 exports.AiController = AiController;
 __decorate([
@@ -32,6 +44,30 @@ __decorate([
     __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", Promise)
 ], AiController.prototype, "chat", null);
+__decorate([
+    (0, common_1.Get)('sales-insights'),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", []),
+    __metadata("design:returntype", Promise)
+], AiController.prototype, "getSalesInsights", null);
+__decorate([
+    (0, common_1.Get)('hr-insights'),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", []),
+    __metadata("design:returntype", Promise)
+], AiController.prototype, "getHrInsights", null);
+__decorate([
+    (0, common_1.Get)('inventory-insights'),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", []),
+    __metadata("design:returntype", Promise)
+], AiController.prototype, "getInventoryInsights", null);
+__decorate([
+    (0, common_1.Get)('executive-summary'),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", []),
+    __metadata("design:returntype", Promise)
+], AiController.prototype, "getExecutiveSummary", null);
 exports.AiController = AiController = __decorate([
     (0, common_1.Controller)('ai'),
     __metadata("design:paramtypes", [ai_service_1.AiService])

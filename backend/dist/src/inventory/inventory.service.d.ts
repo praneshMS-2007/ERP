@@ -4,28 +4,68 @@ export declare class InventoryService {
     private prisma;
     private readonly logger;
     constructor(prisma: PrismaService);
-    getProducts(category?: string, status?: any): Promise<{
+    getCategories(): Promise<({
+        _count: {
+            products: number;
+        };
+    } & {
+        id: string;
+        name: string;
+        description: string | null;
+        createdAt: Date;
+        updatedAt: Date;
+    })[]>;
+    createCategory(data: {
+        name: string;
+        description?: string;
+    }): Promise<{
+        id: string;
+        name: string;
+        description: string | null;
+        createdAt: Date;
+        updatedAt: Date;
+    }>;
+    getProducts(category?: string, status?: any): Promise<({
+        categoryRel: {
+            id: string;
+            name: string;
+            description: string | null;
+            createdAt: Date;
+            updatedAt: Date;
+        } | null;
+    } & {
         id: string;
         name: string;
         createdAt: Date;
         updatedAt: Date;
         status: import(".prisma/client").$Enums.ProductStatus;
-        sku: string;
         category: string;
+        sku: string;
+        categoryId: string | null;
         price: number;
         costPrice: number | null;
         stockLevel: number;
         minStockLevel: number;
         unit: string;
+    })[]>;
+    getStockAlerts(): Promise<{
+        id: string;
+        sku: string;
+        name: string;
+        category: string;
+        stockLevel: number;
+        minStockLevel: number;
+        unit: string;
+        severity: string;
     }[]>;
     getProduct(id: string): Promise<{
         stockMovements: {
             id: string;
             createdAt: Date;
             updatedAt: Date;
+            productId: string;
             date: Date;
             reason: import(".prisma/client").$Enums.MovementReason;
-            productId: string;
             changeAmount: number;
         }[];
     } & {
@@ -34,36 +74,39 @@ export declare class InventoryService {
         createdAt: Date;
         updatedAt: Date;
         status: import(".prisma/client").$Enums.ProductStatus;
-        sku: string;
         category: string;
+        sku: string;
+        categoryId: string | null;
         price: number;
         costPrice: number | null;
         stockLevel: number;
         minStockLevel: number;
         unit: string;
     }>;
-    createProduct(data: Prisma.ProductCreateInput): Promise<{
+    createProduct(data: Prisma.ProductUncheckedCreateInput): Promise<{
         id: string;
         name: string;
         createdAt: Date;
         updatedAt: Date;
         status: import(".prisma/client").$Enums.ProductStatus;
-        sku: string;
         category: string;
+        sku: string;
+        categoryId: string | null;
         price: number;
         costPrice: number | null;
         stockLevel: number;
         minStockLevel: number;
         unit: string;
     }>;
-    updateProduct(id: string, data: Prisma.ProductUpdateInput): Promise<{
+    updateProduct(id: string, data: Prisma.ProductUncheckedUpdateInput): Promise<{
         id: string;
         name: string;
         createdAt: Date;
         updatedAt: Date;
         status: import(".prisma/client").$Enums.ProductStatus;
-        sku: string;
         category: string;
+        sku: string;
+        categoryId: string | null;
         price: number;
         costPrice: number | null;
         stockLevel: number;
@@ -86,7 +129,7 @@ export declare class InventoryService {
         phone: string | null;
         contactPerson: string | null;
     }[]>;
-    createSupplier(data: Prisma.SupplierCreateInput): Promise<{
+    createSupplier(data: Prisma.SupplierUncheckedCreateInput): Promise<{
         id: string;
         name: string;
         createdAt: Date;
@@ -100,19 +143,21 @@ export declare class InventoryService {
         contactPerson: string | null;
     }>;
     getPurchaseOrders(): Promise<({
+        supplier: {
+            name: string;
+        };
         product: {
             name: string;
             sku: string;
-        };
-        supplier: {
-            name: string;
         };
     } & {
         id: string;
         createdAt: Date;
         updatedAt: Date;
         status: import(".prisma/client").$Enums.POStatus;
+        orderNumber: string | null;
         quantity: number;
+        totalAmount: number;
         orderDate: Date;
         supplierId: string;
         productId: string;
@@ -122,7 +167,9 @@ export declare class InventoryService {
         createdAt: Date;
         updatedAt: Date;
         status: import(".prisma/client").$Enums.POStatus;
+        orderNumber: string | null;
         quantity: number;
+        totalAmount: number;
         orderDate: Date;
         supplierId: string;
         productId: string;
@@ -132,7 +179,9 @@ export declare class InventoryService {
         createdAt: Date;
         updatedAt: Date;
         status: import(".prisma/client").$Enums.POStatus;
+        orderNumber: string | null;
         quantity: number;
+        totalAmount: number;
         orderDate: Date;
         supplierId: string;
         productId: string;
@@ -165,26 +214,26 @@ export declare class InventoryService {
         createdAt: Date;
         updatedAt: Date;
         status: import(".prisma/client").$Enums.OrderStatus;
+        totalAmount: number;
         customerId: string;
         orderNo: string;
-        totalAmount: number;
     })[]>;
     createSalesOrder(data: Prisma.SalesOrderUncheckedCreateInput): Promise<{
         id: string;
         createdAt: Date;
         updatedAt: Date;
         status: import(".prisma/client").$Enums.OrderStatus;
+        totalAmount: number;
         customerId: string;
         orderNo: string;
-        totalAmount: number;
     }>;
     updateSalesOrderStatus(id: string, status: any): Promise<{
         id: string;
         createdAt: Date;
         updatedAt: Date;
         status: import(".prisma/client").$Enums.OrderStatus;
+        totalAmount: number;
         customerId: string;
         orderNo: string;
-        totalAmount: number;
     }>;
 }

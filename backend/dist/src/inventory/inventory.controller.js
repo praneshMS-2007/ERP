@@ -22,6 +22,15 @@ let InventoryController = class InventoryController {
     constructor(inventoryService) {
         this.inventoryService = inventoryService;
     }
+    getStockAlerts() {
+        return this.inventoryService.getStockAlerts();
+    }
+    getCategories() {
+        return this.inventoryService.getCategories();
+    }
+    createCategory(data) {
+        return this.inventoryService.createCategory(data);
+    }
     getProducts(category, status) {
         return this.inventoryService.getProducts(category, status);
     }
@@ -69,6 +78,28 @@ let InventoryController = class InventoryController {
     }
 };
 exports.InventoryController = InventoryController;
+__decorate([
+    (0, common_1.Get)('stock-alerts'),
+    (0, decorators_1.RequirePermission)('INVENTORY', 'READ'),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", []),
+    __metadata("design:returntype", void 0)
+], InventoryController.prototype, "getStockAlerts", null);
+__decorate([
+    (0, common_1.Get)('categories'),
+    (0, decorators_1.RequirePermission)('INVENTORY', 'READ'),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", []),
+    __metadata("design:returntype", void 0)
+], InventoryController.prototype, "getCategories", null);
+__decorate([
+    (0, common_1.Post)('categories'),
+    (0, decorators_1.RequirePermission)('INVENTORY', 'WRITE'),
+    __param(0, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", void 0)
+], InventoryController.prototype, "createCategory", null);
 __decorate([
     (0, common_1.Get)('products'),
     (0, decorators_1.RequirePermission)('INVENTORY', 'READ'),

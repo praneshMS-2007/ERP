@@ -37,7 +37,7 @@ export default function EmployeePortalPage() {
   }, []);
 
   async function handleClockIn() {
-    const currentEmp = employees.length > 0 ? employees[0] : null;
+    const currentEmp = employees.find(e => e.user?.email === user?.email || e.firstName.toLowerCase() === 'pranesh') || employees[0];
     if (currentEmp) {
       await hrmApi.markAttendance({
         employeeId: currentEmp.id,

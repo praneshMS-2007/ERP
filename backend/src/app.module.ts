@@ -13,6 +13,9 @@ import { AnalyticsModule } from './analytics/analytics.module';
 import { AiModule } from './ai/ai.module';
 import { FinanceModule } from './finance/finance.module';
 import { ExportModule } from './export/export.module';
+import { NotificationModule } from './notification/notification.module';
+import { SearchModule } from './search/search.module';
+import { UploadModule } from './upload/upload.module';
 import { JwtAuthGuard } from './auth/jwt-auth.guard';
 import { RolesGuard } from './auth/roles.guard';
 
@@ -29,6 +32,9 @@ import { RolesGuard } from './auth/roles.guard';
     AiModule,
     FinanceModule,
     ExportModule,
+    NotificationModule,
+    SearchModule,
+    UploadModule,
   ],
   controllers: [AppController],
   providers: [

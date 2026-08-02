@@ -6,29 +6,31 @@ export declare class HrmService {
     constructor(prisma: PrismaService);
     getEmployees(departmentId?: string, status?: any): Promise<({
         user: {
-            email: string;
             role: {
                 name: string;
             };
+            email: string;
         } | null;
         department: {
             id: string;
-            createdAt: Date;
-            updatedAt: Date;
             name: string;
             description: string | null;
+            createdAt: Date;
+            updatedAt: Date;
         };
         designation: {
             id: string;
+            description: string | null;
             createdAt: Date;
             updatedAt: Date;
-            description: string | null;
             title: string;
         };
     } & {
         id: string;
-        empCode: string | null;
+        createdAt: Date;
+        updatedAt: Date;
         userId: string | null;
+        empCode: string | null;
         firstName: string;
         lastName: string;
         gender: string | null;
@@ -43,29 +45,27 @@ export declare class HrmService {
         status: import(".prisma/client").$Enums.EmpStatus;
         departmentId: string;
         designationId: string;
-        createdAt: Date;
-        updatedAt: Date;
     })[]>;
     getEmployeeById(id: string): Promise<{
         department: {
             id: string;
-            createdAt: Date;
-            updatedAt: Date;
             name: string;
             description: string | null;
+            createdAt: Date;
+            updatedAt: Date;
         };
         designation: {
             id: string;
+            description: string | null;
             createdAt: Date;
             updatedAt: Date;
-            description: string | null;
             title: string;
         };
         attendances: {
             id: string;
-            status: import(".prisma/client").$Enums.AttendanceStatus;
             createdAt: Date;
             updatedAt: Date;
+            status: import(".prisma/client").$Enums.AttendanceStatus;
             date: Date;
             employeeId: string;
             checkIn: Date | null;
@@ -74,19 +74,21 @@ export declare class HrmService {
         }[];
         leaves: {
             id: string;
-            status: import(".prisma/client").$Enums.LeaveStatus;
             createdAt: Date;
             updatedAt: Date;
+            status: import(".prisma/client").$Enums.LeaveStatus;
             startDate: Date;
+            endDate: Date;
             employeeId: string;
             leaveType: import(".prisma/client").$Enums.LeaveType;
-            endDate: Date;
             reason: string;
         }[];
     } & {
         id: string;
-        empCode: string | null;
+        createdAt: Date;
+        updatedAt: Date;
         userId: string | null;
+        empCode: string | null;
         firstName: string;
         lastName: string;
         gender: string | null;
@@ -101,13 +103,13 @@ export declare class HrmService {
         status: import(".prisma/client").$Enums.EmpStatus;
         departmentId: string;
         designationId: string;
-        createdAt: Date;
-        updatedAt: Date;
     }>;
     createEmployee(data: Prisma.EmployeeUncheckedCreateInput): Promise<{
         id: string;
-        empCode: string | null;
+        createdAt: Date;
+        updatedAt: Date;
         userId: string | null;
+        empCode: string | null;
         firstName: string;
         lastName: string;
         gender: string | null;
@@ -122,13 +124,13 @@ export declare class HrmService {
         status: import(".prisma/client").$Enums.EmpStatus;
         departmentId: string;
         designationId: string;
-        createdAt: Date;
-        updatedAt: Date;
     }>;
     updateEmployee(id: string, data: Prisma.EmployeeUncheckedUpdateInput): Promise<{
         id: string;
-        empCode: string | null;
+        createdAt: Date;
+        updatedAt: Date;
         userId: string | null;
+        empCode: string | null;
         firstName: string;
         lastName: string;
         gender: string | null;
@@ -143,8 +145,6 @@ export declare class HrmService {
         status: import(".prisma/client").$Enums.EmpStatus;
         departmentId: string;
         designationId: string;
-        createdAt: Date;
-        updatedAt: Date;
     }>;
     deleteEmployee(id: string): Promise<{
         message: string;
@@ -156,9 +156,9 @@ export declare class HrmService {
         };
     } & {
         id: string;
-        status: import(".prisma/client").$Enums.AttendanceStatus;
         createdAt: Date;
         updatedAt: Date;
+        status: import(".prisma/client").$Enums.AttendanceStatus;
         date: Date;
         employeeId: string;
         checkIn: Date | null;
@@ -167,9 +167,9 @@ export declare class HrmService {
     })[]>;
     markAttendance(data: Prisma.AttendanceUncheckedCreateInput): Promise<{
         id: string;
-        status: import(".prisma/client").$Enums.AttendanceStatus;
         createdAt: Date;
         updatedAt: Date;
+        status: import(".prisma/client").$Enums.AttendanceStatus;
         date: Date;
         employeeId: string;
         checkIn: Date | null;
@@ -178,62 +178,62 @@ export declare class HrmService {
     }>;
     getLeaves(status?: any): Promise<({
         employee: {
-            firstName: string;
-            lastName: string;
             department: {
                 id: string;
-                createdAt: Date;
-                updatedAt: Date;
                 name: string;
                 description: string | null;
+                createdAt: Date;
+                updatedAt: Date;
             };
+            firstName: string;
+            lastName: string;
         };
     } & {
         id: string;
-        status: import(".prisma/client").$Enums.LeaveStatus;
         createdAt: Date;
         updatedAt: Date;
+        status: import(".prisma/client").$Enums.LeaveStatus;
         startDate: Date;
+        endDate: Date;
         employeeId: string;
         leaveType: import(".prisma/client").$Enums.LeaveType;
-        endDate: Date;
         reason: string;
     })[]>;
     requestLeave(data: Prisma.LeaveUncheckedCreateInput): Promise<{
         id: string;
-        status: import(".prisma/client").$Enums.LeaveStatus;
         createdAt: Date;
         updatedAt: Date;
+        status: import(".prisma/client").$Enums.LeaveStatus;
         startDate: Date;
+        endDate: Date;
         employeeId: string;
         leaveType: import(".prisma/client").$Enums.LeaveType;
-        endDate: Date;
         reason: string;
     }>;
     updateLeaveStatus(id: string, status: any): Promise<{
         id: string;
-        status: import(".prisma/client").$Enums.LeaveStatus;
         createdAt: Date;
         updatedAt: Date;
+        status: import(".prisma/client").$Enums.LeaveStatus;
         startDate: Date;
+        endDate: Date;
         employeeId: string;
         leaveType: import(".prisma/client").$Enums.LeaveType;
-        endDate: Date;
         reason: string;
     }>;
     getPayrolls(): Promise<({
         employee: {
-            firstName: string;
-            lastName: string;
             designation: {
                 title: string;
             };
+            firstName: string;
+            lastName: string;
         };
     } & {
         id: string;
-        status: import(".prisma/client").$Enums.PayrollStatus;
         createdAt: Date;
         updatedAt: Date;
+        status: import(".prisma/client").$Enums.PayrollStatus;
         employeeId: string;
         baseSalary: number;
         bonus: number;
@@ -244,9 +244,9 @@ export declare class HrmService {
     })[]>;
     createPayroll(data: Prisma.PayrollUncheckedCreateInput): Promise<{
         id: string;
-        status: import(".prisma/client").$Enums.PayrollStatus;
         createdAt: Date;
         updatedAt: Date;
+        status: import(".prisma/client").$Enums.PayrollStatus;
         employeeId: string;
         baseSalary: number;
         bonus: number;
@@ -257,9 +257,9 @@ export declare class HrmService {
     }>;
     updatePayrollStatus(id: string, status: any): Promise<{
         id: string;
-        status: import(".prisma/client").$Enums.PayrollStatus;
         createdAt: Date;
         updatedAt: Date;
+        status: import(".prisma/client").$Enums.PayrollStatus;
         employeeId: string;
         baseSalary: number;
         bonus: number;
@@ -274,25 +274,25 @@ export declare class HrmService {
         };
     } & {
         id: string;
-        status: import(".prisma/client").$Enums.JobStatus;
+        description: string;
         createdAt: Date;
         updatedAt: Date;
         department: string;
-        description: string;
         title: string;
-        location: string;
+        status: import(".prisma/client").$Enums.JobStatus;
         priority: import(".prisma/client").$Enums.Priority;
+        location: string;
     })[]>;
     createJobPosting(data: Prisma.JobPostingUncheckedCreateInput): Promise<{
         id: string;
-        status: import(".prisma/client").$Enums.JobStatus;
+        description: string;
         createdAt: Date;
         updatedAt: Date;
         department: string;
-        description: string;
         title: string;
-        location: string;
+        status: import(".prisma/client").$Enums.JobStatus;
         priority: import(".prisma/client").$Enums.Priority;
+        location: string;
     }>;
     getApplicants(): Promise<({
         job: {
@@ -301,48 +301,48 @@ export declare class HrmService {
         };
     } & {
         id: string;
-        status: import(".prisma/client").$Enums.ApplicantStatus;
+        name: string;
         updatedAt: Date;
         email: string;
-        name: string;
-        jobId: string;
+        status: import(".prisma/client").$Enums.ApplicantStatus;
         phone: string | null;
+        jobId: string;
         resumeUrl: string | null;
         appliedAt: Date;
     })[]>;
     createApplicant(data: Prisma.ApplicantUncheckedCreateInput): Promise<{
         id: string;
-        status: import(".prisma/client").$Enums.ApplicantStatus;
+        name: string;
         updatedAt: Date;
         email: string;
-        name: string;
-        jobId: string;
+        status: import(".prisma/client").$Enums.ApplicantStatus;
         phone: string | null;
+        jobId: string;
         resumeUrl: string | null;
         appliedAt: Date;
     }>;
     updateApplicantStatus(id: string, status: any): Promise<{
         id: string;
-        status: import(".prisma/client").$Enums.ApplicantStatus;
+        name: string;
         updatedAt: Date;
         email: string;
-        name: string;
-        jobId: string;
+        status: import(".prisma/client").$Enums.ApplicantStatus;
         phone: string | null;
+        jobId: string;
         resumeUrl: string | null;
         appliedAt: Date;
     }>;
     getPerformanceReviews(): Promise<({
         employee: {
-            firstName: string;
-            lastName: string;
             department: {
                 id: string;
-                createdAt: Date;
-                updatedAt: Date;
                 name: string;
                 description: string | null;
+                createdAt: Date;
+                updatedAt: Date;
             };
+            firstName: string;
+            lastName: string;
         };
     } & {
         id: string;

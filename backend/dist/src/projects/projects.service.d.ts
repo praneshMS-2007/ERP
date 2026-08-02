@@ -32,6 +32,7 @@ export declare class ProjectsService {
         updatedAt: Date;
         status: import(".prisma/client").$Enums.ProjectStatus;
         priority: import(".prisma/client").$Enums.Priority;
+        progress: number;
         startDate: Date | null;
         endDate: Date | null;
     })[]>;
@@ -51,7 +52,12 @@ export declare class ProjectsService {
             taskId: string | null;
             assignedAt: Date;
         })[];
-        tasks: {
+        tasks: ({
+            assignedEmployee: {
+                firstName: string;
+                lastName: string;
+            } | null;
+        } & {
             id: string;
             description: string | null;
             createdAt: Date;
@@ -60,8 +66,9 @@ export declare class ProjectsService {
             status: import(".prisma/client").$Enums.TaskStatus;
             priority: import(".prisma/client").$Enums.Priority;
             projectId: string;
+            assignedEmployeeId: string | null;
             dueDate: Date | null;
-        }[];
+        })[];
         milestones: {
             id: string;
             createdAt: Date;
@@ -79,6 +86,7 @@ export declare class ProjectsService {
         updatedAt: Date;
         status: import(".prisma/client").$Enums.ProjectStatus;
         priority: import(".prisma/client").$Enums.Priority;
+        progress: number;
         startDate: Date | null;
         endDate: Date | null;
     }>;
@@ -90,6 +98,7 @@ export declare class ProjectsService {
         updatedAt: Date;
         status: import(".prisma/client").$Enums.ProjectStatus;
         priority: import(".prisma/client").$Enums.Priority;
+        progress: number;
         startDate: Date | null;
         endDate: Date | null;
     }>;
@@ -101,6 +110,7 @@ export declare class ProjectsService {
         updatedAt: Date;
         status: import(".prisma/client").$Enums.ProjectStatus;
         priority: import(".prisma/client").$Enums.Priority;
+        progress: number;
         startDate: Date | null;
         endDate: Date | null;
     }>;
@@ -126,6 +136,10 @@ export declare class ProjectsService {
         project: {
             name: string;
         };
+        assignedEmployee: {
+            firstName: string;
+            lastName: string;
+        } | null;
     } & {
         id: string;
         description: string | null;
@@ -135,6 +149,7 @@ export declare class ProjectsService {
         status: import(".prisma/client").$Enums.TaskStatus;
         priority: import(".prisma/client").$Enums.Priority;
         projectId: string;
+        assignedEmployeeId: string | null;
         dueDate: Date | null;
     })[]>;
     createTask(data: Prisma.TaskUncheckedCreateInput): Promise<{
@@ -146,6 +161,7 @@ export declare class ProjectsService {
         status: import(".prisma/client").$Enums.TaskStatus;
         priority: import(".prisma/client").$Enums.Priority;
         projectId: string;
+        assignedEmployeeId: string | null;
         dueDate: Date | null;
     }>;
     updateTaskStatus(id: string, status: any): Promise<{
@@ -157,8 +173,10 @@ export declare class ProjectsService {
         status: import(".prisma/client").$Enums.TaskStatus;
         priority: import(".prisma/client").$Enums.Priority;
         projectId: string;
+        assignedEmployeeId: string | null;
         dueDate: Date | null;
     }>;
+    private recalculateProjectProgress;
     getMilestones(projectId: string): Promise<{
         id: string;
         createdAt: Date;

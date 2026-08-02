@@ -13,54 +13,67 @@ datasource db {
 // ==========================================
 
 model User {
-  id               String           @id @default(uuid())
-  email            String           @unique
-  passwordHash     String
-  resetToken       String?          // Added for Sakshi's review
-  resetTokenExpiry DateTime?        // Added for Sakshi's review
-  roleId           String
-  role             Role             @relation(fields: [roleId], references: [id])
-  employee         Employee?
-  authSessions     Authentication[] // Added for Sakshi's review
-  createdAt        DateTime         @default(now())
-  updatedAt        DateTime         @updatedAt
+  id                   String           @id @default(uuid())
+  email                String           @unique
+  passwordHash         String           @map("password_hash")
+  resetToken           String?          @map("reset_token")
+  resetTokenExpiry     DateTime?        @map("reset_token_expiry")
+  roleId               String           @map("role_id")
+  role                 Role             @relation(fields: [roleId], references: [id])
+  employee             Employee?
+  authSessions         Authentication[]
+  auditLogs            AuditLog[]
+  notifications        Notification[]
+  
+  // User Preferences
+  theme                String           @default("light")
+  language             String           @default("English (US)")
+  twoFactorEnabled     Boolean          @default(false) @map("two_factor_enabled")
+  emailNotifications   Boolean          @default(true) @map("email_notifications")
+
+  createdAt            DateTime         @default(now()) @map("created_at")
+  updatedAt            DateTime         @updatedAt @map("updated_at")
+
+  @@map("users")
 }
 
-// Authentication entity – Added for Sakshi's review
-// Tracks active sessions, refresh tokens, and login history
 model Authentication {
   id           String   @id @default(uuid())
-  userId       String
+  userId       String   @map("user_id")
   user         User     @relation(fields: [userId], references: [id])
-  token        String   @unique // JWT refresh token or session token
-  deviceInfo   String?  // e.g. "Chrome on Windows"
-  ipAddress    String?
-  isActive     Boolean  @default(true)
-  expiresAt    DateTime
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  token        String   @unique
+  deviceInfo   String?  @map("device_info")
+  ipAddress    String?  @map("ip_address")
+  isActive     Boolean  @default(true) @map("is_active")
+  expiresAt    DateTime @map("expires_at")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@map("authentications")
 }
 
-// Normalized from Enum
 model Role {
   id          String       @id @default(uuid())
-  name        String       @unique // e.g. SUPER_ADMIN, HR_MANAGER, SALES_MANAGER
+  name        String       @unique
   description String?
   users       User[]
-  permissions Permission[] // Mapping to permissions
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
+  permissions Permission[]
+  createdAt   DateTime     @default(now()) @map("created_at")
+  updatedAt   DateTime     @updatedAt @map("updated_at")
+
+  @@map("roles")
 }
 
-// New table to handle module-level access
 model Permission {
-  id          String   @id @default(uuid())
-  module      Module
-  action      Action
-  roleId      String
-  role        Role     @relation(fields: [roleId], references: [id])
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id        String   @id @default(uuid())
+  module    Module
+  action    Action
+  roleId    String   @map("role_id")
+  role      Role     @relation(fields: [roleId], references: [id])
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("permissions")
 }
 
 enum Module {
@@ -80,18 +93,17 @@ enum Action {
   ALL
 }
 
-
 // ==========================================
 // HR MODULE
 // ==========================================
 
 model Employee {
   id            String       @id @default(uuid())
-  empCode       String?      @unique  // Auto-generated ERP-XXXX code
-  userId        String?      @unique
+  empCode       String?      @unique @map("emp_code")
+  userId        String?      @unique @map("user_id")
   user          User?        @relation(fields: [userId], references: [id])
-  firstName     String
-  lastName      String
+  firstName     String       @map("first_name")
+  lastName      String       @map("last_name")
   gender        String?
   dob           DateTime?
   contact       String?
@@ -99,76 +111,82 @@ model Employee {
   city          String?
   state         String?
   country       String?
-  joinDate      DateTime     @default(now())
-  empType       EmpType
+  joinDate      DateTime     @default(now()) @map("join_date")
+  empType       EmpType      @map("emp_type")
   status        EmpStatus
   
-  departmentId  String
+  departmentId  String       @map("department_id")
   department    Department   @relation(fields: [departmentId], references: [id])
   
-  designationId String
+  designationId String       @map("designation_id")
   designation   Designation  @relation(fields: [designationId], references: [id])
 
-  attendances   Attendance[] // Added for Sakshi's review
-  leaves        Leave[]      // Added for Sakshi's review
-  assignments   Assignment[] // Added for Sakshi's review
-  performanceReviews      PerformanceReview[] @relation(name: "EmployeeReviews") // Added for Sakshi's review
-  performanceReviewsGiven PerformanceReview[] @relation(name: "EmployeeReviewers") // Added for Sakshi's review
-  payrolls      Payroll[]
-  timeLogs      TimeLog[]
+  attendances             Attendance[]
+  leaves                  Leave[]
+  assignments             Assignment[]
+  assignedTasks           Task[]              @relation(name: "AssignedTasks")
+  performanceReviews      PerformanceReview[] @relation(name: "EmployeeReviews")
+  performanceReviewsGiven PerformanceReview[] @relation(name: "EmployeeReviewers")
+  payrolls                Payroll[]
+  timeLogs                TimeLog[]
   
-  createdAt     DateTime     @default(now())
-  updatedAt     DateTime     @updatedAt
+  createdAt     DateTime     @default(now()) @map("created_at")
+  updatedAt     DateTime     @updatedAt @map("updated_at")
+
+  @@map("employees")
 }
 
-// Normalized from plain text
 model Department {
   id          String     @id @default(uuid())
-  name        String     @unique // e.g. Engineering, Sales, HR
+  name        String     @unique
   description String?
   employees   Employee[]
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
+  createdAt   DateTime   @default(now()) @map("created_at")
+  updatedAt   DateTime   @updatedAt @map("updated_at")
+
+  @@map("departments")
 }
 
-// Normalized from plain text
 model Designation {
   id          String     @id @default(uuid())
-  title       String     @unique // e.g. Senior Developer, HR Manager
+  title       String     @unique
   description String?
   employees   Employee[]
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
+  createdAt   DateTime   @default(now()) @map("created_at")
+  updatedAt   DateTime   @updatedAt @map("updated_at")
+
+  @@map("designations")
 }
 
-// Added for Sakshi's review
 model Attendance {
-  id         String   @id @default(uuid())
-  employeeId String
-  employee   Employee @relation(fields: [employeeId], references: [id])
-  date       DateTime
-  status     AttendanceStatus
-  checkIn    DateTime?
-  checkOut   DateTime?
-  hoursWorked Float?
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id          String           @id @default(uuid())
+  employeeId  String           @map("employee_id")
+  employee    Employee         @relation(fields: [employeeId], references: [id])
+  date        DateTime
+  status      AttendanceStatus
+  checkIn     DateTime?        @map("check_in")
+  checkOut    DateTime?        @map("check_out")
+  hoursWorked Float?           @map("hours_worked")
+  createdAt   DateTime         @default(now()) @map("created_at")
+  updatedAt   DateTime         @updatedAt @map("updated_at")
+
+  @@map("attendances")
 }
 
-// Added for Sakshi's review
 model Leave {
-  id         String   @id @default(uuid())
-  employeeId String
-  employee   Employee @relation(fields: [employeeId], references: [id])
-  leaveType  LeaveType
-  startDate  DateTime
-  endDate    DateTime
+  id         String      @id @default(uuid())
+  employeeId String      @map("employee_id")
+  employee   Employee    @relation(fields: [employeeId], references: [id])
+  leaveType  LeaveType   @map("leave_type")
+  startDate  DateTime    @map("start_date")
+  endDate    DateTime    @map("end_date")
   status     LeaveStatus
-  reason     String   // Enforced required for frontend alignment
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-}
+  reason     String
+  createdAt  DateTime    @default(now()) @map("created_at")
+  updatedAt  DateTime    @updatedAt @map("updated_at")
 
+  @@map("leaves")
+}
 
 // ==========================================
 // CRM MODULE
@@ -181,83 +199,100 @@ model Lead {
   phone     String?
   company   String?
   status    LeadStatus
-  customer  Customer?   // Added for Sakshi's review (converted relation)
-  followUps FollowUp[]  // Added for Sakshi's review
-  createdAt DateTime    @default(now())
-  updatedAt DateTime    @updatedAt
+  customer  Customer?
+  followUps FollowUp[]
+  createdAt DateTime    @default(now()) @map("created_at")
+  updatedAt DateTime    @updatedAt @map("updated_at")
+
+  @@map("leads")
 }
 
-// Added for Sakshi's review
 model Customer {
-  id                 String        @id @default(uuid())
-  name               String
-  email              String?
-  phone              String?
-  company            String?
-  convertedFromLeadId String?      @unique
-  lead               Lead?         @relation(fields: [convertedFromLeadId], references: [id])
-  opportunities      Opportunity[]
-  followUps          FollowUp[]
-  supportTickets     SupportTicket[]
-  salesOrders        SalesOrder[]
-  createdAt          DateTime      @default(now())
-  updatedAt          DateTime      @updatedAt
+  id                  String          @id @default(uuid())
+  name                String
+  email               String?
+  phone               String?
+  company             String?
+  convertedFromLeadId String?         @unique @map("converted_from_lead_id")
+  lead                Lead?           @relation(fields: [convertedFromLeadId], references: [id])
+  opportunities       Opportunity[]
+  followUps           FollowUp[]
+  supportTickets      SupportTicket[]
+  salesOrders         SalesOrder[]
+  createdAt           DateTime        @default(now()) @map("created_at")
+  updatedAt           DateTime        @updatedAt @map("updated_at")
+
+  @@map("customers")
 }
 
-// Added for Sakshi's review
 model Opportunity {
-  id                String   @id @default(uuid())
-  customerId        String
-  customer          Customer @relation(fields: [customerId], references: [id])
+  id                String           @id @default(uuid())
+  customerId        String           @map("customer_id")
+  customer          Customer         @relation(fields: [customerId], references: [id])
   value             Float
   stage             OpportunityStage
-  expectedCloseDate DateTime?
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  expectedCloseDate DateTime?        @map("expected_close_date")
+  createdAt         DateTime         @default(now()) @map("created_at")
+  updatedAt         DateTime         @updatedAt @map("updated_at")
+
+  @@map("opportunities")
 }
 
-// Added for Sakshi's review
-/// @validation: Enforce that at least one of leadId or customerId is provided
 model FollowUp {
-  id            String    @id @default(uuid())
-  leadId        String?
-  lead          Lead?     @relation(fields: [leadId], references: [id])
-  customerId    String?
-  customer      Customer? @relation(fields: [customerId], references: [id])
-  date          DateTime
-  notes         String
-  nextActionDate DateTime?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-}
+  id             String    @id @default(uuid())
+  leadId         String?   @map("lead_id")
+  lead           Lead?     @relation(fields: [leadId], references: [id])
+  customerId     String?   @map("customer_id")
+  customer       Customer? @relation(fields: [customerId], references: [id])
+  date           DateTime
+  notes          String
+  nextActionDate DateTime? @map("next_action_date")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
 
+  @@map("follow_ups")
+}
 
 // ==========================================
 // INVENTORY MODULE
 // ==========================================
+
+model Category {
+  id          String    @id @default(uuid())
+  name        String    @unique
+  description String?
+  products    Product[]
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  @@map("categories")
+}
 
 model Product {
   id             String          @id @default(uuid())
   name           String
   sku            String          @unique
   category       String
+  categoryId     String?         @map("category_id")
+  categoryRel    Category?       @relation(fields: [categoryId], references: [id])
   price          Float
-  costPrice      Float?
-  stockLevel     Int             @default(0)
-  minStockLevel  Int             @default(0)
-  unit           String          // Piece, Kg, Box
+  costPrice      Float?          @map("cost_price")
+  stockLevel     Int             @default(0) @map("stock_level")
+  minStockLevel  Int             @default(0) @map("min_stock_level")
+  unit           String
   status         ProductStatus
-  purchaseOrders PurchaseOrder[] // Added for Sakshi's review
-  stockMovements StockMovement[] // Added for Sakshi's review
-  createdAt      DateTime        @default(now())
-  updatedAt      DateTime        @updatedAt
+  purchaseOrders PurchaseOrder[]
+  stockMovements StockMovement[]
+  createdAt      DateTime        @default(now()) @map("created_at")
+  updatedAt      DateTime        @updatedAt @map("updated_at")
+
+  @@map("products")
 }
 
-// Supplier entity – Added for Sakshi's review
 model Supplier {
   id             String          @id @default(uuid())
   name           String
-  contactPerson  String?
+  contactPerson  String?         @map("contact_person")
   email          String?
   phone          String?
   address        String?
@@ -265,114 +300,356 @@ model Supplier {
   country        String?
   status         SupplierStatus  @default(ACTIVE)
   purchaseOrders PurchaseOrder[]
-  createdAt      DateTime        @default(now())
-  updatedAt      DateTime        @updatedAt
+  createdAt      DateTime        @default(now()) @map("created_at")
+  updatedAt      DateTime        @updatedAt @map("updated_at")
+
+  @@map("suppliers")
 }
 
-// Added for Sakshi's review
 model PurchaseOrder {
-  id         String   @id @default(uuid())
-  supplierId String
-  supplier   Supplier @relation(fields: [supplierId], references: [id]) // Now a proper FK relation
-  productId  String
-  product    Product  @relation(fields: [productId], references: [id])
-  quantity   Int
-  orderDate  DateTime
-  status     POStatus
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id          String   @id @default(uuid())
+  orderNumber String?  @map("order_number")
+  supplierId  String   @map("supplier_id")
+  supplier    Supplier @relation(fields: [supplierId], references: [id])
+  productId   String   @map("product_id")
+  product     Product  @relation(fields: [productId], references: [id])
+  quantity    Int
+  totalAmount Float    @default(0) @map("total_amount")
+  orderDate   DateTime @map("order_date")
+  status      POStatus
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("purchase_orders")
 }
 
-// Added for Sakshi's review
 model StockMovement {
-  id           String   @id @default(uuid())
-  productId    String
-  product      Product  @relation(fields: [productId], references: [id])
-  changeAmount Int      // Positive for restock, negative for sale/loss
+  id           String         @id @default(uuid())
+  productId    String         @map("product_id")
+  product      Product        @relation(fields: [productId], references: [id])
+  changeAmount Int            @map("change_amount")
   reason       MovementReason
-  date         DateTime // Set independently to represent actual movement date
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-}
+  date         DateTime
+  createdAt    DateTime       @default(now()) @map("created_at")
+  updatedAt    DateTime       @updatedAt @map("updated_at")
 
+  @@map("stock_movements")
+}
 
 // ==========================================
 // PROJECTS MODULE
 // ==========================================
 
 model Project {
-  id          String      @id @default(uuid())
+  id          String        @id @default(uuid())
   name        String
   description String?
   status      ProjectStatus
   priority    Priority
-  startDate   DateTime?
-  endDate     DateTime?
+  progress    Float         @default(0)
+  startDate   DateTime?     @map("start_date")
+  endDate     DateTime?     @map("end_date")
   tasks       Task[]
-  milestones  Milestone[] // Added for Sakshi's review
-  assignments Assignment[] // Added for Sakshi's review
+  milestones  Milestone[]
+  assignments Assignment[]
   timeLogs    TimeLog[]
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
+  createdAt   DateTime      @default(now()) @map("created_at")
+  updatedAt   DateTime      @updatedAt @map("updated_at")
+
+  @@map("projects")
 }
 
 model Task {
-  id          String       @id @default(uuid())
-  projectId   String
-  project     Project      @relation(fields: [projectId], references: [id])
-  title       String
-  description String?
-  status      TaskStatus
-  priority    Priority
-  dueDate     DateTime?
-  assignments Assignment[] // Added for Sakshi's review
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
+  id                 String       @id @default(uuid())
+  projectId          String       @map("project_id")
+  project            Project      @relation(fields: [projectId], references: [id])
+  assignedEmployeeId String?      @map("assigned_employee_id")
+  assignedEmployee   Employee?    @relation(name: "AssignedTasks", fields: [assignedEmployeeId], references: [id])
+  title              String
+  description        String?
+  status             TaskStatus
+  priority           Priority
+  dueDate            DateTime?    @map("due_date")
+  assignments        Assignment[]
+  createdAt          DateTime     @default(now()) @map("created_at")
+  updatedAt          DateTime     @updatedAt @map("updated_at")
+
+  @@map("tasks")
 }
 
-// Assignment entity – Added for Sakshi's review
-// Tracks which employee is assigned to which task/project
-/// @validation: Enforce that at least one of taskId or projectId is provided
 model Assignment {
   id         String    @id @default(uuid())
-  taskId     String?
+  taskId     String?   @map("task_id")
   task       Task?     @relation(fields: [taskId], references: [id])
-  projectId  String?
+  projectId  String?   @map("project_id")
   project    Project?  @relation(fields: [projectId], references: [id])
-  employeeId String
+  employeeId String    @map("employee_id")
   employee   Employee  @relation(fields: [employeeId], references: [id])
-  role       String?   // e.g. Lead Developer, Reviewer, Tester
-  assignedAt DateTime  @default(now())
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
+  role       String?
+  assignedAt DateTime  @default(now()) @map("assigned_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @updatedAt @map("updated_at")
+
+  @@map("assignments")
 }
 
-// Added for Sakshi's review
 model Milestone {
-  id        String   @id @default(uuid())
-  projectId String
-  project   Project  @relation(fields: [projectId], references: [id])
+  id        String          @id @default(uuid())
+  projectId String          @map("project_id")
+  project   Project         @relation(fields: [projectId], references: [id])
   title     String
-  dueDate   DateTime?
+  dueDate   DateTime?       @map("due_date")
   status    MilestoneStatus
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime        @default(now()) @map("created_at")
+  updatedAt DateTime        @updatedAt @map("updated_at")
+
+  @@map("milestones")
 }
 
-// Added for Sakshi's review
 model PerformanceReview {
-  id          String   @id @default(uuid())
-  employeeId  String
-  employee    Employee @relation(name: "EmployeeReviews", fields: [employeeId], references: [id])
-  quarter     String   // e.g. Q1, Q2, Q3, Q4
-  rating      Int      // 1-5
-  review      String
-  goals       String?  // Optional goals
-  reviewerId  String   // Added for Sakshi's review (relation to Employee)
-  reviewer    Employee @relation(name: "EmployeeReviewers", fields: [reviewerId], references: [id])
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id         String   @id @default(uuid())
+  employeeId String   @map("employee_id")
+  employee   Employee @relation(name: "EmployeeReviews", fields: [employeeId], references: [id])
+  quarter    String
+  rating     Float
+  review     String
+  goals      String?
+  reviewerId String   @map("reviewer_id")
+  reviewer   Employee @relation(name: "EmployeeReviewers", fields: [reviewerId], references: [id])
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  @@map("performance_reviews")
 }
+
+// ==========================================
+// FINANCE MODULE
+// ==========================================
+
+model Expense {
+  id          String        @id @default(uuid())
+  amount      Float
+  category    ExpenseCategory
+  date        DateTime
+  description String?
+  status      ExpenseStatus @default(PENDING)
+  createdAt   DateTime      @default(now()) @map("created_at")
+  updatedAt   DateTime      @updatedAt @map("updated_at")
+
+  @@map("expenses")
+}
+
+model Income {
+  id          String   @id @default(uuid())
+  amount      Float
+  source      String
+  date        DateTime
+  description String?
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("incomes")
+}
+
+model Invoice {
+  id         String        @id @default(uuid())
+  invoiceNo  String        @unique @map("invoice_no")
+  clientId   String?       @map("client_id")
+  clientName String        @map("client_name")
+  amount     Float
+  dueDate    DateTime      @map("due_date")
+  status     InvoiceStatus @default(UNPAID)
+  payments   Payment[]
+  createdAt  DateTime      @default(now()) @map("created_at")
+  updatedAt  DateTime      @updatedAt @map("updated_at")
+
+  @@map("invoices")
+}
+
+model Budget {
+  id          String   @id @default(uuid())
+  department  String
+  planned     Float
+  actual      Float    @default(0)
+  startDate   DateTime @map("start_date")
+  endDate     DateTime @map("end_date")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("budgets")
+}
+
+model Payment {
+  id        String        @id @default(uuid())
+  invoiceId String?       @map("invoice_id")
+  invoice   Invoice?      @relation(fields: [invoiceId], references: [id])
+  amount    Float
+  method    PaymentMethod
+  date      DateTime
+  status    PaymentStatus @default(COMPLETED)
+  createdAt DateTime      @default(now()) @map("created_at")
+  updatedAt DateTime      @updatedAt @map("updated_at")
+
+  @@map("payments")
+}
+
+model Payroll {
+  id          String        @id @default(uuid())
+  employeeId  String        @map("employee_id")
+  employee    Employee      @relation(fields: [employeeId], references: [id])
+  baseSalary  Float         @map("base_salary")
+  bonus       Float         @default(0)
+  deductions  Float         @default(0)
+  netPay      Float         @map("net_pay")
+  payPeriod   String        @map("pay_period")
+  status      PayrollStatus @default(DRAFT)
+  paymentDate DateTime?     @map("payment_date")
+  createdAt   DateTime      @default(now()) @map("created_at")
+  updatedAt   DateTime      @updatedAt @map("updated_at")
+
+  @@map("payrolls")
+}
+
+model JobPosting {
+  id          String      @id @default(uuid())
+  title       String
+  department  String
+  location    String
+  description String
+  priority    Priority    @default(MEDIUM)
+  status      JobStatus   @default(OPEN)
+  applicants  Applicant[]
+  createdAt   DateTime    @default(now()) @map("created_at")
+  updatedAt   DateTime    @updatedAt @map("updated_at")
+
+  @@map("job_postings")
+}
+
+model Applicant {
+  id        String          @id @default(uuid())
+  jobId     String          @map("job_id")
+  job       JobPosting      @relation(fields: [jobId], references: [id])
+  name      String
+  email     String
+  phone     String?
+  resumeUrl String?         @map("resume_url")
+  status    ApplicantStatus @default(APPLIED)
+  appliedAt DateTime        @default(now()) @map("applied_at")
+  updatedAt DateTime        @updatedAt @map("updated_at")
+
+  @@map("applicants")
+}
+
+model LedgerEntry {
+  id          String     @id @default(uuid())
+  date        DateTime   @default(now())
+  account     String
+  type        LedgerType
+  amount      Float
+  description String?
+  createdAt   DateTime   @default(now()) @map("created_at")
+  updatedAt   DateTime   @updatedAt @map("updated_at")
+
+  @@map("ledger_entries")
+}
+
+model TaxRecord {
+  id        String    @id @default(uuid())
+  period    String
+  taxType   String    @map("tax_type")
+  amount    Float
+  status    TaxStatus @default(UNPAID)
+  dueDate   DateTime  @map("due_date")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+
+  @@map("tax_records")
+}
+
+model SupportTicket {
+  id          String         @id @default(uuid())
+  customerId  String         @map("customer_id")
+  customer    Customer       @relation(fields: [customerId], references: [id])
+  subject     String
+  description String
+  status      TicketStatus   @default(OPEN)
+  priority    TicketPriority @default(MEDIUM)
+  createdAt   DateTime       @default(now()) @map("created_at")
+  updatedAt   DateTime       @updatedAt @map("updated_at")
+
+  @@map("support_tickets")
+}
+
+model Warehouse {
+  id        String   @id @default(uuid())
+  name      String
+  location  String
+  capacity  Int
+  manager   String?
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("warehouses")
+}
+
+model SalesOrder {
+  id          String      @id @default(uuid())
+  orderNo     String      @unique @map("order_no")
+  customerId  String      @map("customer_id")
+  customer    Customer    @relation(fields: [customerId], references: [id])
+  totalAmount Float       @map("total_amount")
+  status      OrderStatus @default(PENDING)
+  createdAt   DateTime    @default(now()) @map("created_at")
+  updatedAt   DateTime    @updatedAt @map("updated_at")
+
+  @@map("sales_orders")
+}
+
+model TimeLog {
+  id          String   @id @default(uuid())
+  employeeId  String   @map("employee_id")
+  employee    Employee @relation(fields: [employeeId], references: [id])
+  projectId   String   @map("project_id")
+  project     Project  @relation(fields: [projectId], references: [id])
+  hours       Float
+  date        DateTime
+  description String?
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("time_logs")
+}
+
+// ==========================================
+// SYSTEM INFRASTRUCTURE MODULES
+// ==========================================
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  userId    String?  @map("user_id")
+  user      User?    @relation(fields: [userId], references: [id])
+  action    String
+  module    String
+  details   String?
+  timestamp DateTime @default(now())
+
+  @@map("audit_logs")
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  user      User     @relation(fields: [userId], references: [id])
+  title     String
+  message   String
+  type      String   @default("INFO") // INFO, WARNING, SUCCESS, ALERT
+  isRead    Boolean  @default(false) @map("is_read")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("notifications")
+}
+
+// ENUMS
 
 enum EmpType {
   FULL_TIME
@@ -474,67 +751,6 @@ enum MovementReason {
   RETURN
 }
 
-// ==========================================
-// FINANCE MODULE
-// ==========================================
-
-model Expense {
-  id          String   @id @default(uuid())
-  amount      Float
-  category    ExpenseCategory
-  date        DateTime
-  description String?
-  status      ExpenseStatus @default(PENDING)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-}
-
-model Income {
-  id          String   @id @default(uuid())
-  amount      Float
-  source      String
-  date        DateTime
-  description String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-}
-
-model Invoice {
-  id          String        @id @default(uuid())
-  invoiceNo   String        @unique
-  clientId    String?
-  clientName  String
-  amount      Float
-  dueDate     DateTime
-  status      InvoiceStatus @default(UNPAID)
-  payments    Payment[]
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
-}
-
-model Budget {
-  id          String   @id @default(uuid())
-  department  String
-  planned     Float
-  actual      Float    @default(0)
-  startDate   DateTime
-  endDate     DateTime
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-}
-
-model Payment {
-  id          String        @id @default(uuid())
-  invoiceId   String?
-  invoice     Invoice?      @relation(fields: [invoiceId], references: [id])
-  amount      Float
-  method      PaymentMethod
-  date        DateTime
-  status      PaymentStatus @default(COMPLETED)
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
-}
-
 enum ExpenseCategory {
   OPERATIONAL
   MARKETING
@@ -575,61 +791,16 @@ enum PaymentStatus {
   REFUNDED
 }
 
-// ==========================================
-// NEW MISSING MODULES
-// ==========================================
-
-model Payroll {
-  id          String   @id @default(uuid())
-  employeeId  String
-  employee    Employee @relation(fields: [employeeId], references: [id])
-  baseSalary  Float
-  bonus       Float    @default(0)
-  deductions  Float    @default(0)
-  netPay      Float
-  payPeriod   String
-  status      PayrollStatus @default(DRAFT)
-  paymentDate DateTime?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-}
-
 enum PayrollStatus {
   DRAFT
   APPROVED
   PAID
 }
 
-model JobPosting {
-  id          String   @id @default(uuid())
-  title       String
-  department  String
-  location    String
-  description String
-  priority    Priority @default(MEDIUM)
-  status      JobStatus @default(OPEN)
-  applicants  Applicant[]
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-}
-
 enum JobStatus {
   OPEN
   CLOSED
   DRAFT
-}
-
-model Applicant {
-  id          String   @id @default(uuid())
-  jobId       String
-  job         JobPosting @relation(fields: [jobId], references: [id])
-  name        String
-  email       String
-  phone       String?
-  resumeUrl   String?
-  status      ApplicantStatus @default(APPLIED)
-  appliedAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
 }
 
 enum ApplicantStatus {
@@ -641,48 +812,14 @@ enum ApplicantStatus {
   REJECTED
 }
 
-model LedgerEntry {
-  id          String   @id @default(uuid())
-  date        DateTime @default(now())
-  account     String
-  type        LedgerType
-  amount      Float
-  description String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-}
-
 enum LedgerType {
   CREDIT
   DEBIT
 }
 
-model TaxRecord {
-  id          String   @id @default(uuid())
-  period      String
-  taxType     String
-  amount      Float
-  status      TaxStatus @default(UNPAID)
-  dueDate     DateTime
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-}
-
 enum TaxStatus {
   PAID
   UNPAID
-}
-
-model SupportTicket {
-  id          String   @id @default(uuid())
-  customerId  String
-  customer    Customer @relation(fields: [customerId], references: [id])
-  subject     String
-  description String
-  status      TicketStatus @default(OPEN)
-  priority    TicketPriority @default(MEDIUM)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
 }
 
 enum TicketStatus {
@@ -699,45 +836,10 @@ enum TicketPriority {
   CRITICAL
 }
 
-
-model Warehouse {
-  id          String   @id @default(uuid())
-  name        String
-  location    String
-  capacity    Int
-  manager     String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-}
-
-model SalesOrder {
-  id          String   @id @default(uuid())
-  orderNo     String   @unique
-  customerId  String
-  customer    Customer @relation(fields: [customerId], references: [id])
-  totalAmount Float
-  status      OrderStatus @default(PENDING)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-}
-
 enum OrderStatus {
   PENDING
   PROCESSING
   SHIPPED
   DELIVERED
   CANCELLED
-}
-
-model TimeLog {
-  id          String   @id @default(uuid())
-  employeeId  String
-  employee    Employee @relation(fields: [employeeId], references: [id])
-  projectId   String
-  project     Project  @relation(fields: [projectId], references: [id])
-  hours       Float
-  date        DateTime
-  description String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
 }

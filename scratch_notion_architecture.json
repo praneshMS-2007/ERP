@@ -1,0 +1,1396 @@
+{
+  "pageId": "3878f9b8-6357-800c-bf09-cc5c5cfd1ff3",
+  "recordMap": {
+    "3878f9b8-6357-800c-bf09-cc5c5cfd1ff3": {
+      "spaceId": "2d9e04f5-1891-4256-a7bf-8824a9cb47cf",
+      "value": {
+        "value": {
+          "id": "3878f9b8-6357-800c-bf09-cc5c5cfd1ff3",
+          "version": 459,
+          "type": "page",
+          "properties": {
+            "title": [
+              [
+                "System Architechture Planning :"
+              ]
+            ]
+          },
+          "content": [
+            "3878f9b8-6357-8003-b54b-c6e93d1a5b03",
+            "3878f9b8-6357-8064-b115-ea3cb0fec685",
+            "3878f9b8-6357-8054-907f-d340ca3c6db0",
+            "3878f9b8-6357-807a-afff-caacc9d4bc68",
+            "3878f9b8-6357-806f-a269-cb1f7f6af8a2",
+            "3878f9b8-6357-8001-b7fa-f05efd039452",
+            "3878f9b8-6357-80d4-86ec-d1e083872bcd"
+          ],
+          "format": {
+            "social_media_image_preview_url": "attachment:3fd9b11b-7459-47a4-8d3e-eee497612d64:SocialMediaPreviewImage.png"
+          },
+          "created_time": 1782142925621,
+          "last_edited_time": 1782143042048,
+          "parent_id": "3878f9b8-6357-80a0-a9d9-cc91ec7857f2",
+          "parent_table": "block",
+          "alive": true,
+          "file_ids": [
+            "3fd9b11b-7459-47a4-8d3e-eee497612d64"
+          ],
+          "space_id": "2d9e04f5-1891-4256-a7bf-8824a9cb47cf",
+          "crdt_format_version": 1,
+          "crdt_data": {
+            "title": {
+              "r": "KhzsQ-AQQni7BEJSU-GBvg,\"start\",\"end\"",
+              "n": {
+                "KhzsQ-AQQni7BEJSU-GBvg,\"start\",\"end\"": {
+                  "s": {
+                    "x": "KhzsQ-AQQni7BEJSU-GBvg",
+                    "i": [
+                      {
+                        "t": "s"
+                      },
+                      {
+                        "t": "t",
+                        "i": [
+                          "nkSE5yuN_9i1",
+                          1
+                        ],
+                        "o": "start",
+                        "l": 1,
+                        "c": "S"
+                      },
+                      {
+                        "t": "t",
+                        "i": [
+                          "nkSE5yuN_9i1",
+                          3
+                        ],
+                        "o": [
+                          "nkSE5yuN_9i1",
+                          1
+                        ],
+                        "l": 30,
+                        "c": "ystem Architechture Planning :"
+                      },
+                      {
+                        "t": "t",
+                        "i": [
+                          "nkSE5yuN_9i1",
+                          2
+                        ],
+                        "o": [
+                          "nkSE5yuN_9i1",
+                          1
+                        ],
+                        "l": -1
+                      },
+                      {
+                        "t": "e"
+                      }
+                    ],
+                    "l": ""
+                  },
+                  "c": []
+                }
+              }
+            }
+          }
+        },
+        "role": "reader"
+      }
+    },
+    "3878f9b8-6357-80a0-a9d9-cc91ec7857f2": {
+      "spaceId": "2d9e04f5-1891-4256-a7bf-8824a9cb47cf",
+      "value": {
+        "value": {
+          "id": "3878f9b8-6357-80a0-a9d9-cc91ec7857f2",
+          "version": 51,
+          "type": "page",
+          "properties": {
+            "title": [
+              [
+                "ERP"
+              ]
+            ]
+          },
+          "content": [
+            "3878f9b8-6357-80d5-87e3-c6d4ce611ab5",
+            "3878f9b8-6357-8020-97e5-d0543f50c9b4",
+            "3878f9b8-6357-800c-bf09-cc5c5cfd1ff3",
+            "3878f9b8-6357-802f-9e44-e5111fdebca7",
+            "3878f9b8-6357-8008-88fd-ec1e4a19b7fb",
+            "3878f9b8-6357-80be-8063-c336f1d1caf1",
+            "38a8f9b8-6357-8073-b451-d8b2fbf7ad79",
+            "3878f9b8-6357-80ed-9393-d38024673c15",
+            "3878f9b8-6357-8026-85ec-f0e34d464bb3"
+          ],
+          "format": {
+            "social_media_image_preview_url": "attachment:2ccc9138-d0ef-4da4-8a89-54f349072b9e:SocialMediaPreviewImage.png"
+          },
+          "created_time": 1782142484262,
+          "last_edited_time": 1782406779096,
+          "parent_id": "3368f9b8-6357-8076-ac1c-d63221c86622",
+          "parent_table": "block",
+          "alive": true,
+          "file_ids": [
+            "2ccc9138-d0ef-4da4-8a89-54f349072b9e"
+          ],
+          "space_id": "2d9e04f5-1891-4256-a7bf-8824a9cb47cf",
+          "crdt_format_version": 1,
+          "crdt_data": {
+            "title": {
+              "r": "MLN78fleH6EKNA8oE2Cf7Q,\"start\",\"end\"",
+              "n": {
+                "MLN78fleH6EKNA8oE2Cf7Q,\"start\",\"end\"": {
+                  "s": {
+                    "x": "MLN78fleH6EKNA8oE2Cf7Q",
+                    "i": [
+                      {
+                        "t": "s"
+                      },
+                      {
+                        "t": "t",
+                        "i": [
+                          "nkSE5yuN_9i1",
+                          1
+                        ],
+                        "o": "start",
+                        "l": 3,
+                        "c": "ERP"
+                      },
+                      {
+                        "t": "e"
+                      }
+                    ],
+                    "l": ""
+                  },
+                  "c": []
+                }
+              }
+            }
+          }
+        },
+        "role": "reader"
+      }
+    },
+    "3368f9b8-6357-8076-ac1c-d63221c86622": {
+      "spaceId": "2d9e04f5-1891-4256-a7bf-8824a9cb47cf",
+      "value": {
+        "value": {
+          "id": "3368f9b8-6357-8076-ac1c-d63221c86622",
+          "version": 266,
+          "type": "page",
+          "properties": {
+            "title": [
+              [
+                "Shuroq Sales and Growth Associate Internship :"
+              ]
+            ]
+          },
+          "content": [
+            "38f8f9b8-6357-800b-bc94-fbd6ac988f3c",
+            "38f8f9b8-6357-8071-b70e-def3ab59ec24",
+            "38f8f9b8-6357-8092-b7fd-f9e369215084",
+            "38f8f9b8-6357-809f-a30b-dae17699ce89",
+            "38f8f9b8-6357-80da-9d1c-e142a3b9efbb",
+            "38f8f9b8-6357-805b-a6cb-c8025e260081",
+            "38f8f9b8-6357-802c-a140-fa4e7378e555",
+            "38f8f9b8-6357-8073-a3af-ddbeada9359b",
+            "38f8f9b8-6357-8031-a287-dafb7d65a913",
+            "38f8f9b8-6357-80a2-b3d3-d4182038a246",
+            "38f8f9b8-6357-80c4-83f6-d6841038a293",
+            "38f8f9b8-6357-8062-b2d5-ca1b231f11f6",
+            "38f8f9b8-6357-8016-964b-d010f91ec9cf",
+            "38f8f9b8-6357-8076-ba6b-fcfb4d256d35",
+            "38f8f9b8-6357-80fc-88ed-eca3327cb389",
+            "38f8f9b8-6357-807a-a0cd-eae11a5ba31e",
+            "38f8f9b8-6357-8030-a98e-ff5fad92bd87",
+            "38f8f9b8-6357-80d7-8710-f914c9893188",
+            "38f8f9b8-6357-80d4-b891-f4e3723b331a",
+            "38f8f9b8-6357-805a-99b5-f754b946a391",
+            "38f8f9b8-6357-8084-beb2-d003d0d29a4d",
+            "38f8f9b8-6357-804a-a75c-fd8194824cb9",
+            "38f8f9b8-6357-80c2-975e-e2a85a68f4c1",
+            "38f8f9b8-6357-8070-bc26-cdc1fabfb69b",
+            "38f8f9b8-6357-80f3-9a78-f50e952941fb",
+            "38f8f9b8-6357-80a2-a5bb-e679d7edb829",
+            "38f8f9b8-6357-8088-863a-d87fa1ac64ce",
+            "38f8f9b8-6357-80c5-9344-fd301ae40ddd",
+            "38f8f9b8-6357-8055-8aff-c47c7be68ca4",
+            "38f8f9b8-6357-8035-a14f-e03e99c6e0d0",
+            "38f8f9b8-6357-8019-815d-c8205a18cd31",
+            "38f8f9b8-6357-80bf-8fbd-c2d75279e4d4",
+            "38f8f9b8-6357-8079-9d28-ed275d24cc67",
+            "38f8f9b8-6357-8010-9ed2-f9e86f47227f",
+            "38f8f9b8-6357-809a-b7bb-d9252eae358c",
+            "3368f9b8-6357-806e-9c93-c392ad5d5257",
+            "3368f9b8-6357-80da-b9cc-d77a74645f66",
+            "3368f9b8-6357-803a-b775-c184b3277333",
+            "3368f9b8-6357-8076-948b-d3671cf500ca",
+            "3368f9b8-6357-8039-bbc6-f78553dd2a63",
+            "3368f9b8-6357-80c2-93f3-fbce5f278928",
+            "3368f9b8-6357-809d-ac00-f4a794839eb0",
+            "3368f9b8-6357-8063-b1b0-fc3a1b929868",
+            "3378f9b8-6357-803e-9f91-e0268cec40a8",
+            "3418f9b8-6357-804e-9821-d9e03e22ec7a",
+            "3418f9b8-6357-8064-b743-cb30e35e7991",
+            "3418f9b8-6357-8069-9bea-d5b8660e8c8a",
+            "34e8f9b8-6357-8079-b88b-eefe649478da",
+            "3518f9b8-6357-8085-8312-db7192e28b10",
+            "3508f9b8-6357-803d-a5d3-c548f31462cd",
+            "3878f9b8-6357-80a0-a9d9-cc91ec7857f2",
+            "3908f9b8-6357-80d5-8f61-f7105a3438b5",
+            "3968f9b8-6357-801b-a09b-cfb161df9071",
+            "3af8f9b8-6357-8096-8641-dabcfd159091"
+          ],
+          "format": {
+            "social_media_image_preview_url": "attachment:4a6c9c5f-c656-49c0-81b1-44d326731c0f:SocialMediaPreviewImage.png"
+          },
+          "created_time": 1775123595402,
+          "last_edited_time": 1785600180153,
+          "parent_id": "38f8f9b8-6357-80e5-9d09-c4e67e52cc05",
+          "parent_table": "block",
+          "alive": true,
+          "file_ids": [
+            "4a6c9c5f-c656-49c0-81b1-44d326731c0f"
+          ],
+          "space_id": "2d9e04f5-1891-4256-a7bf-8824a9cb47cf",
+          "crdt_format_version": 1,
+          "crdt_data": {
+            "title": {
+              "r": "J-EF3iySOiBYLVaECTaKbA,\"start\",\"end\"",
+              "n": {
+                "J-EF3iySOiBYLVaECTaKbA,\"start\",\"end\"": {
+                  "s": {
+                    "x": "J-EF3iySOiBYLVaECTaKbA",
+                    "i": [
+                      {
+                        "t": "s"
+                      },
+                      {
+                        "t": "t",
+                        "i": [
+                          "arMb_9hQrzX9",
+                          1
+                        ],
+                        "o": "start",
+                        "l": 24,
+                        "c": "Shuroq Sales and Growth "
+                      },
+                      {
+                        "t": "t",
+                        "i": [
+                          "arMb_9hQrzX9",
+                          28
+                        ],
+                        "o": [
+                          "arMb_9hQrzX9",
+                          24
+                        ],
+                        "l": 22,
+                        "c": "Associate Internship :"
+                      },
+                      {
+                        "t": "t",
+                        "i": [
+                          "arMb_9hQrzX9",
+                          25
+                        ],
+                        "o": [
+                          "arMb_9hQrzX9",
+                          24
+                        ],
+                        "l": -3
+                      },
+                      {
+                        "t": "e"
+                      }
+                    ],
+                    "l": ""
+                  },
+                  "c": []
+                }
+              }
+            }
+          }
+        },
+        "role": "reader"
+      }
+    },
+    "38f8f9b8-6357-80e5-9d09-c4e67e52cc05": {
+      "spaceId": "2d9e04f5-1891-4256-a7bf-8824a9cb47cf",
+      "value": {
+        "value": {
+          "id": "38f8f9b8-6357-80e5-9d09-c4e67e52cc05",
+          "version": 112,
+          "type": "page",
+          "properties": {
+            "title": [
+              [
+                "Internships :"
+              ]
+            ]
+          },
+          "content": [
+            "38f8f9b8-6357-802e-b764-ce0e2dd637b6",
+            "38f8f9b8-6357-80ef-83a3-c94fe331b02c",
+            "38f8f9b8-6357-8090-9456-cdef32552454",
+            "3368f9b8-6357-8076-ac1c-d63221c86622"
+          ],
+          "format": {
+            "social_media_image_preview_url": "attachment:d752dcbf-f2de-4aff-b4c4-ae07d8e35405:SocialMediaPreviewImage.png"
+          },
+          "created_time": 1782792938653,
+          "last_edited_time": 1782798863254,
+          "parent_id": "38f8f9b8-6357-805a-8f7d-d41d33d7c5f8",
+          "parent_table": "block",
+          "alive": true,
+          "file_ids": [
+            "d752dcbf-f2de-4aff-b4c4-ae07d8e35405"
+          ],
+          "space_id": "2d9e04f5-1891-4256-a7bf-8824a9cb47cf",
+          "crdt_format_version": 1,
+          "crdt_data": {
+            "title": {
+              "r": "VXw-411r5Xb-WMeNwEK6Kg,\"start\",\"end\"",
+              "n": {
+                "VXw-411r5Xb-WMeNwEK6Kg,\"start\",\"end\"": {
+                  "s": {
+                    "x": "VXw-411r5Xb-WMeNwEK6Kg",
+                    "i": [
+                      {
+                        "t": "s"
+                      },
+                      {
+                        "t": "t",
+                        "i": [
+                          "NTqK48c7YxNj",
+                          1
+                        ],
+                        "o": "start",
+                        "l": 13,
+                        "c": "Internships :"
+                      },
+                      {
+                        "t": "e"
+                      }
+                    ],
+                    "l": ""
+                  },
+                  "c": []
+                }
+              }
+            }
+          }
+        },
+        "role": "reader"
+      }
+    },
+    "38f8f9b8-6357-805a-8f7d-d41d33d7c5f8": {
+      "spaceId": "2d9e04f5-1891-4256-a7bf-8824a9cb47cf",
+      "value": {
+        "value": {
+          "id": "38f8f9b8-6357-805a-8f7d-d41d33d7c5f8",
+          "version": 67,
+          "type": "page",
+          "properties": {
+            "title": [
+              [
+                "Startups and Internships :"
+              ]
+            ]
+          },
+          "content": [
+            "38f8f9b8-6357-802b-a539-ce90f21d9d05",
+            "38f8f9b8-6357-80db-b039-eaccabfabdd5",
+            "38f8f9b8-6357-80e5-9d09-c4e67e52cc05"
+          ],
+          "format": {
+            "social_media_image_preview_url": "attachment:a0a3f0e9-8dfb-4216-9ead-e9582fd83d3a:SocialMediaPreviewImage.png"
+          },
+          "created_time": 1782798836250,
+          "last_edited_time": 1782798863254,
+          "parent_id": "3348f9b8-6357-80e6-8302-e5fb4df2f817",
+          "parent_table": "block",
+          "alive": true,
+          "file_ids": [
+            "a0a3f0e9-8dfb-4216-9ead-e9582fd83d3a"
+          ],
+          "space_id": "2d9e04f5-1891-4256-a7bf-8824a9cb47cf",
+          "crdt_format_version": 1,
+          "crdt_data": {
+            "title": {
+              "r": "su15Mi0ReHufmnCh8ho-7w,\"start\",\"end\"",
+              "n": {
+                "su15Mi0ReHufmnCh8ho-7w,\"start\",\"end\"": {
+                  "s": {
+                    "x": "su15Mi0ReHufmnCh8ho-7w",
+                    "i": [
+                      {
+                        "t": "s"
+                      },
+                      {
+                        "t": "t",
+                        "i": [
+                          "NTqK48c7YxNj",
+                          1
+                        ],
+                        "o": "start",
+                        "l": 9,
+                        "c": "Startups "
+                      },
+                      {
+                        "t": "t",
+                        "i": [
+                          "NTqK48c7YxNj",
+                          11
+                        ],
+                        "o": [
+                          "NTqK48c7YxNj",
+                          9
+                        ],
+                        "l": 17,
+                        "c": "and Internships :"
+                      },
+                      {
+                        "t": "t",
+                        "i": [
+                          "NTqK48c7YxNj",
+                          10
+                        ],
+                        "o": [
+                          "NTqK48c7YxNj",
+                          9
+                        ],
+                        "l": -1
+                      },
+                      {
+                        "t": "e"
+                      }
+                    ],
+                    "l": ""
+                  },
+                  "c": []
+                }
+              }
+            }
+          }
+        },
+        "role": "reader"
+      }
+    },
+    "3348f9b8-6357-80e6-8302-e5fb4df2f817": {
+      "spaceId": "2d9e04f5-1891-4256-a7bf-8824a9cb47cf",
+      "value": {
+        "value": {
+          "id": "3348f9b8-6357-80e6-8302-e5fb4df2f817",
+          "version": 376,
+          "type": "page",
+          "properties": {
+            "title": [
+              [
+                "Razeen Startup Products Portfolio :"
+              ]
+            ]
+          },
+          "content": [
+            "38f8f9b8-6357-8063-a5e8-ccc46a496130",
+            "38f8f9b8-6357-80d9-ac17-eba7719cecb5",
+            "38f8f9b8-6357-80ab-8abc-e53ae7993047",
+            "38f8f9b8-6357-80c2-acbd-f3727476fad9",
+            "38f8f9b8-6357-8093-b89b-d2b69af7857e",
+            "38f8f9b8-6357-80c7-9b3b-f262a1a71b2f",
+            "38f8f9b8-6357-80d0-8979-d2d68d9aa57e",
+            "38f8f9b8-6357-8059-bae5-d999daba89bc",
+            "38f8f9b8-6357-8073-850a-e3de38586261",
+            "38f8f9b8-6357-8024-9c1e-c22151bcafca",
+            "38f8f9b8-6357-809f-b753-fbafdcad37ba",
+            "38f8f9b8-6357-8000-a69d-c79dc9bf1656",
+            "38f8f9b8-6357-8053-b85d-df087dc82858",
+            "38f8f9b8-6357-80a6-a37c-f60e661bd6e9",
+            "38f8f9b8-6357-8034-a951-e16c7da57f2c",
+            "38f8f9b8-6357-80cd-8c3c-f1cb53baa7fc",
+            "38f8f9b8-6357-806c-a6cb-d2c8075053c4",
+            "38f8f9b8-6357-80d4-ae1f-d8892380ca4a",
+            "38f8f9b8-6357-8067-a45f-fa95d50016f5",
+            "38f8f9b8-6357-80b5-a655-e5d94f998288",
+            "38f8f9b8-6357-8031-8822-d0f6838a79f8",
+            "38f8f9b8-6357-80be-a362-eba423f00688",
+            "38f8f9b8-6357-80fa-b0a7-ced955284ad2",
+            "38f8f9b8-6357-80cc-a0f6-f54fac576663",
+            "38f8f9b8-6357-80c2-ba06-e15d1e387804",
+            "38f8f9b8-6357-80e9-9b66-d2eafd9fc09b",
+            "38f8f9b8-6357-80b3-9a48-f51a67f625dc",
+            "38f8f9b8-6357-8039-9342-cf7d2a47d4d3",
+            "38f8f9b8-6357-80c5-9561-dfdcd052635b",
+            "38f8f9b8-6357-80f9-8c7e-fec39fb900b2",
+            "38f8f9b8-6357-805a-8f7d-d41d33d7c5f8",
+            "3348f9b8-6357-8000-a8dc-c47d9fbee185",
+            "38f8f9b8-6357-80c9-9911-fbaa2eed439b",
+            "38f8f9b8-6357-808d-becf-fe724ef80c23",
+            "38f8f9b8-6357-8044-ae34-ef570c94da64",
+            "3648f9b8-6357-80f9-90eb-c775144f6c69",
+            "38f8f9b8-6357-80f4-89e3-fa01bfbd016a",
+            "38f8f9b8-6357-804e-926d-e65ee79eb137",
+            "38f8f9b8-6357-80cb-82f6-d6be2adc3297",
+            "38f8f9b8-6357-8085-9444-c9253c764cb3",
+            "38f8f9b8-6357-80fe-ac8d-eb1b02b5db0a",
+            "38f8f9b8-6357-8009-ab84-c18e34c46097"
+          ],
+          "format": {
+            "site_id": "3348f9b8-6357-80da-b51a-0079cb5e7983",
+            "page_cover": "attachment:7b2bb472-8bc5-42e1-b312-89591a5f0222:Gemini_Generated_Image_967roz967roz967r.png",
+            "page_cover_position": 0.5,
+            "social_media_image_preview_url": "attachment:82d792fd-72c2-40b3-90bd-6895c2b061de:SocialMediaPreviewImage.png"
+          },
+          "permissions": [
+            {
+              "role": "reader",
+              "type": "public_permission",
+              "is_site": true,
+              "added_timestamp": 1774969694970
+            }
+          ],
+          "created_time": 1774969645477,
+          "last_edited_time": 1782798979205,
+          "parent_id": "2eb8f9b8-6357-8108-bb72-e62f60a72e9d",
+          "parent_table": "block",
+          "alive": true,
+          "file_ids": [
+            "5efc8f49-1e85-475d-8b6f-2d3feb91a749",
+            "1302fba1-77ed-4dad-9f6c-6235fa14cd24",
+            "7b2bb472-8bc5-42e1-b312-89591a5f0222",
+            "82d792fd-72c2-40b3-90bd-6895c2b061de"
+          ],
+          "space_id": "2d9e04f5-1891-4256-a7bf-8824a9cb47cf",
+          "crdt_format_version": 1,
+          "crdt_data": {
+            "title": {
+              "r": "aFRDxsmQpWYnGUyb98X3mQ,\"start\",\"end\"",
+              "n": {
+                "aFRDxsmQpWYnGUyb98X3mQ,\"start\",\"end\"": {
+                  "s": {
+                    "x": "aFRDxsmQpWYnGUyb98X3mQ",
+                    "i": [
+                      {
+                        "t": "s"
+                      },
+                      {
+                        "t": "t",
+                        "i": [
+                          "NTqK48c7YxNj",
+                          11
+                        ],
+                        "o": "start",
+                        "l": 7,
+                        "c": "Razeen "
+                      },
+                      {
+                        "t": "t",
+                        "i": [
+                          "p9Q2GBYN3rlB",
+                          1
+                        ],
+                        "o": "start",
+                        "l": 7,
+                        "c": "Startup"
+                      },
+                      {
+                        "t": "t",
+                        "i": [
+                          "NTqK48c7YxNj",
+                          18
+                        ],
+                        "o": [
+                          "p9Q2GBYN3rlB",
+                          7
+                        ],
+                        "l": 10,
+                        "c": " Products "
+                      },
+                      {
+                        "t": "t",
+                        "i": [
+                          "NTqK48c7YxNj",
+                          29
+                        ],
+                        "o": [
+                          "NTqK48c7YxNj",
+                          27
+                        ],
+                        "l": 9,
+                        "c": "Portfolio"
+                      },
+                      {
+                        "t": "t",
+                        "i": [
+                          "NTqK48c7YxNj",
+                          28
+                        ],
+                        "o": [
+                          "NTqK48c7YxNj",
+                          27
+                        ],
+                        "l": -1
+                      },
+                      {
+                        "t": "t",
+                        "i": [
+                          "p9Q2GBYN3rlB",
+                          8
+                        ],
+                        "o": [
+                          "p9Q2GBYN3rlB",
+                          7
+                        ],
+                        "l": -1
+                      },
+                      {
+                        "t": "t",
+                        "i": [
+                          "p9Q2GBYN3rlB",
+                          9
+                        ],
+                        "o": [
+                          "p9Q2GBYN3rlB",
+                          8
+                        ],
+                        "l": 2,
+                        "c": " :"
+                      },
+                      {
+                        "t": "e"
+                      }
+                    ],
+                    "l": ""
+                  },
+                  "c": []
+                }
+              }
+            }
+          }
+        },
+        "role": "reader"
+      }
+    },
+    "2eb8f9b8-6357-8108-bb72-e62f60a72e9d": {
+      "spaceId": "2d9e04f5-1891-4256-a7bf-8824a9cb47cf",
+      "value": {
+        "role": "none"
+      }
+    },
+    "3878f9b8-6357-8003-b54b-c6e93d1a5b03": {
+      "value": {
+        "value": {
+          "id": "3878f9b8-6357-8003-b54b-c6e93d1a5b03",
+          "version": 14,
+          "type": "image",
+          "properties": {
+            "size": [
+              [
+                "124.3 KiB"
+              ]
+            ],
+            "title": [
+              [
+                "image.png"
+              ]
+            ],
+            "source": [
+              [
+                "attachment:496e7ba8-a9c8-48d6-b5d4-e092fad7d16d:image.png"
+              ]
+            ]
+          },
+          "format": {
+            "block_width": 704,
+            "display_source": "attachment:496e7ba8-a9c8-48d6-b5d4-e092fad7d16d:image.png",
+            "block_full_width": false,
+            "block_page_width": true,
+            "block_aspect_ratio": 0.3975782038345106,
+            "block_preserve_scale": true
+          },
+          "created_time": 1782142973988,
+          "last_edited_time": 1782142981007,
+          "parent_id": "3878f9b8-6357-800c-bf09-cc5c5cfd1ff3",
+          "parent_table": "block",
+          "alive": true,
+          "file_ids": [
+            "496e7ba8-a9c8-48d6-b5d4-e092fad7d16d"
+          ],
+          "space_id": "2d9e04f5-1891-4256-a7bf-8824a9cb47cf",
+          "crdt_format_version": 1,
+          "crdt_data": {
+            "title": {
+              "r": "M_lyxm1yTL03NublWAaPnw,\"start\",\"end\"",
+              "n": {
+                "M_lyxm1yTL03NublWAaPnw,\"start\",\"end\"": {
+                  "s": {
+                    "x": "M_lyxm1yTL03NublWAaPnw",
+                    "i": [
+                      {
+                        "t": "s"
+                      },
+                      {
+                        "t": "t",
+                        "i": [
+                          "nkSE5yuN_9i1",
+                          1
+                        ],
+                        "o": "start",
+                        "l": 9,
+                        "c": "image.png"
+                      },
+                      {
+                        "t": "e"
+                      }
+                    ],
+                    "l": ""
+                  },
+                  "c": []
+                }
+              }
+            }
+          }
+        },
+        "role": "reader"
+      }
+    },
+    "3878f9b8-6357-8064-b115-ea3cb0fec685": {
+      "value": {
+        "value": {
+          "id": "3878f9b8-6357-8064-b115-ea3cb0fec685",
+          "version": 12,
+          "type": "image",
+          "properties": {
+            "size": [
+              [
+                "162.5 KiB"
+              ]
+            ],
+            "title": [
+              [
+                "image.png"
+              ]
+            ],
+            "source": [
+              [
+                "attachment:ac6bd1ec-d31c-426e-a863-11807226c41d:image.png"
+              ]
+            ]
+          },
+          "format": {
+            "block_width": 2233,
+            "display_source": "attachment:ac6bd1ec-d31c-426e-a863-11807226c41d:image.png",
+            "block_full_width": false,
+            "block_page_width": true,
+            "block_aspect_ratio": 0.31303179579041646,
+            "block_preserve_scale": true
+          },
+          "created_time": 1782142989273,
+          "last_edited_time": 1782142993466,
+          "parent_id": "3878f9b8-6357-800c-bf09-cc5c5cfd1ff3",
+          "parent_table": "block",
+          "alive": true,
+          "file_ids": [
+            "ac6bd1ec-d31c-426e-a863-11807226c41d"
+          ],
+          "space_id": "2d9e04f5-1891-4256-a7bf-8824a9cb47cf",
+          "crdt_format_version": 1,
+          "crdt_data": {
+            "title": {
+              "r": "1Wj9UBy737jydejxWSpBWw,\"start\",\"end\"",
+              "n": {
+                "1Wj9UBy737jydejxWSpBWw,\"start\",\"end\"": {
+                  "s": {
+                    "x": "1Wj9UBy737jydejxWSpBWw",
+                    "i": [
+                      {
+                        "t": "s"
+                      },
+                      {
+                        "t": "t",
+                        "i": [
+                          "nkSE5yuN_9i1",
+                          1
+                        ],
+                        "o": "start",
+                        "l": 9,
+                        "c": "image.png"
+                      },
+                      {
+                        "t": "e"
+                      }
+                    ],
+                    "l": ""
+                  },
+                  "c": []
+                }
+              }
+            }
+          }
+        },
+        "role": "reader"
+      }
+    },
+    "3878f9b8-6357-8054-907f-d340ca3c6db0": {
+      "value": {
+        "value": {
+          "id": "3878f9b8-6357-8054-907f-d340ca3c6db0",
+          "version": 12,
+          "type": "image",
+          "properties": {
+            "size": [
+              [
+                "115.9 KiB"
+              ]
+            ],
+            "title": [
+              [
+                "image.png"
+              ]
+            ],
+            "source": [
+              [
+                "attachment:b2db9ae6-181c-493e-82c0-298ed7d38562:image.png"
+              ]
+            ]
+          },
+          "format": {
+            "block_width": 2266,
+            "display_source": "attachment:b2db9ae6-181c-493e-82c0-298ed7d38562:image.png",
+            "block_full_width": false,
+            "block_page_width": true,
+            "block_aspect_ratio": 0.30406001765225066,
+            "block_preserve_scale": true
+          },
+          "created_time": 1782143017919,
+          "last_edited_time": 1782143022368,
+          "parent_id": "3878f9b8-6357-800c-bf09-cc5c5cfd1ff3",
+          "parent_table": "block",
+          "alive": true,
+          "file_ids": [
+            "b2db9ae6-181c-493e-82c0-298ed7d38562"
+          ],
+          "space_id": "2d9e04f5-1891-4256-a7bf-8824a9cb47cf",
+          "crdt_format_version": 1,
+          "crdt_data": {
+            "title": {
+              "r": "-VYTFs1wIwA0WGLogKlcIg,\"start\",\"end\"",
+              "n": {
+                "-VYTFs1wIwA0WGLogKlcIg,\"start\",\"end\"": {
+                  "s": {
+                    "x": "-VYTFs1wIwA0WGLogKlcIg",
+                    "i": [
+                      {
+                        "t": "s"
+                      },
+                      {
+                        "t": "t",
+                        "i": [
+                          "nkSE5yuN_9i1",
+                          1
+                        ],
+                        "o": "start",
+                        "l": 9,
+                        "c": "image.png"
+                      },
+                      {
+                        "t": "e"
+                      }
+                    ],
+                    "l": ""
+                  },
+                  "c": []
+                }
+              }
+            }
+          }
+        },
+        "role": "reader"
+      }
+    },
+    "3878f9b8-6357-807a-afff-caacc9d4bc68": {
+      "value": {
+        "value": {
+          "id": "3878f9b8-6357-807a-afff-caacc9d4bc68",
+          "version": 14,
+          "type": "image",
+          "properties": {
+            "size": [
+              [
+                "117.4 KiB"
+              ]
+            ],
+            "title": [
+              [
+                "image.png"
+              ]
+            ],
+            "source": [
+              [
+                "attachment:d1e7bbe8-ed24-4f2f-afc4-34d3dcae8dc2:image.png"
+              ]
+            ]
+          },
+          "format": {
+            "block_width": 703.9874877929688,
+            "display_source": "attachment:d1e7bbe8-ed24-4f2f-afc4-34d3dcae8dc2:image.png",
+            "block_full_width": false,
+            "block_page_width": true,
+            "block_aspect_ratio": 0.8228031953522149,
+            "block_preserve_scale": true
+          },
+          "created_time": 1782143042044,
+          "last_edited_time": 1782143048055,
+          "parent_id": "3878f9b8-6357-800c-bf09-cc5c5cfd1ff3",
+          "parent_table": "block",
+          "alive": true,
+          "file_ids": [
+            "d1e7bbe8-ed24-4f2f-afc4-34d3dcae8dc2"
+          ],
+          "space_id": "2d9e04f5-1891-4256-a7bf-8824a9cb47cf",
+          "crdt_format_version": 1,
+          "crdt_data": {
+            "title": {
+              "r": "t6mU6clTqj-UEsWm03sKkw,\"start\",\"end\"",
+              "n": {
+                "t6mU6clTqj-UEsWm03sKkw,\"start\",\"end\"": {
+                  "s": {
+                    "x": "t6mU6clTqj-UEsWm03sKkw",
+                    "i": [
+                      {
+                        "t": "s"
+                      },
+                      {
+                        "t": "t",
+                        "i": [
+                          "nkSE5yuN_9i1",
+                          1
+                        ],
+                        "o": "start",
+                        "l": 9,
+                        "c": "image.png"
+                      },
+                      {
+                        "t": "e"
+                      }
+                    ],
+                    "l": ""
+                  },
+                  "c": []
+                }
+              }
+            }
+          }
+        },
+        "role": "reader"
+      }
+    },
+    "3878f9b8-6357-806f-a269-cb1f7f6af8a2": {
+      "value": {
+        "value": {
+          "id": "3878f9b8-6357-806f-a269-cb1f7f6af8a2",
+          "version": 14,
+          "type": "image",
+          "properties": {
+            "size": [
+              [
+                "100.5 KiB"
+              ]
+            ],
+            "title": [
+              [
+                "image.png"
+              ]
+            ],
+            "source": [
+              [
+                "attachment:1d1d373b-4f2e-44f2-817d-c1662689df9d:image.png"
+              ]
+            ]
+          },
+          "format": {
+            "block_width": 704,
+            "display_source": "attachment:1d1d373b-4f2e-44f2-817d-c1662689df9d:image.png",
+            "block_full_width": false,
+            "block_page_width": true,
+            "block_aspect_ratio": 0.3756743501716528,
+            "block_preserve_scale": true
+          },
+          "created_time": 1782143055321,
+          "last_edited_time": 1782143061691,
+          "parent_id": "3878f9b8-6357-800c-bf09-cc5c5cfd1ff3",
+          "parent_table": "block",
+          "alive": true,
+          "file_ids": [
+            "1d1d373b-4f2e-44f2-817d-c1662689df9d"
+          ],
+          "space_id": "2d9e04f5-1891-4256-a7bf-8824a9cb47cf",
+          "crdt_format_version": 1,
+          "crdt_data": {
+            "title": {
+              "r": "UxGfIzM1JGR_PU6bzqlr4Q,\"start\",\"end\"",
+              "n": {
+                "UxGfIzM1JGR_PU6bzqlr4Q,\"start\",\"end\"": {
+                  "s": {
+                    "x": "UxGfIzM1JGR_PU6bzqlr4Q",
+                    "i": [
+                      {
+                        "t": "s"
+                      },
+                      {
+                        "t": "t",
+                        "i": [
+                          "nkSE5yuN_9i1",
+                          1
+                        ],
+                        "o": "start",
+                        "l": 9,
+                        "c": "image.png"
+                      },
+                      {
+                        "t": "e"
+                      }
+                    ],
+                    "l": ""
+                  },
+                  "c": []
+                }
+              }
+            }
+          }
+        },
+        "role": "reader"
+      }
+    },
+    "3878f9b8-6357-8001-b7fa-f05efd039452": {
+      "value": {
+        "value": {
+          "id": "3878f9b8-6357-8001-b7fa-f05efd039452",
+          "version": 14,
+          "type": "image",
+          "properties": {
+            "size": [
+              [
+                "95.4 KiB"
+              ]
+            ],
+            "title": [
+              [
+                "image.png"
+              ]
+            ],
+            "source": [
+              [
+                "attachment:de1f9016-9c8c-4926-b108-16abf7e859f0:image.png"
+              ]
+            ]
+          },
+          "format": {
+            "block_width": 704,
+            "display_source": "attachment:de1f9016-9c8c-4926-b108-16abf7e859f0:image.png",
+            "block_full_width": false,
+            "block_page_width": true,
+            "block_aspect_ratio": 0.4714285714285714,
+            "block_preserve_scale": true
+          },
+          "created_time": 1782143070023,
+          "last_edited_time": 1782143076269,
+          "parent_id": "3878f9b8-6357-800c-bf09-cc5c5cfd1ff3",
+          "parent_table": "block",
+          "alive": true,
+          "file_ids": [
+            "de1f9016-9c8c-4926-b108-16abf7e859f0"
+          ],
+          "space_id": "2d9e04f5-1891-4256-a7bf-8824a9cb47cf",
+          "crdt_format_version": 1,
+          "crdt_data": {
+            "title": {
+              "r": "moOgdnQsIEeqxbuaCF6FIA,\"start\",\"end\"",
+              "n": {
+                "moOgdnQsIEeqxbuaCF6FIA,\"start\",\"end\"": {
+                  "s": {
+                    "x": "moOgdnQsIEeqxbuaCF6FIA",
+                    "i": [
+                      {
+                        "t": "s"
+                      },
+                      {
+                        "t": "t",
+                        "i": [
+                          "nkSE5yuN_9i1",
+                          1
+                        ],
+                        "o": "start",
+                        "l": 9,
+                        "c": "image.png"
+                      },
+                      {
+                        "t": "e"
+                      }
+                    ],
+                    "l": ""
+                  },
+                  "c": []
+                }
+              }
+            }
+          }
+        },
+        "role": "reader"
+      }
+    },
+    "3878f9b8-6357-80d4-86ec-d1e083872bcd": {
+      "value": {
+        "value": {
+          "id": "3878f9b8-6357-80d4-86ec-d1e083872bcd",
+          "version": 12,
+          "type": "image",
+          "properties": {
+            "size": [
+              [
+                "108.7 KiB"
+              ]
+            ],
+            "title": [
+              [
+                "image.png"
+              ]
+            ],
+            "source": [
+              [
+                "attachment:78fbbde5-2d7f-402f-a486-18d697dfa9b3:image.png"
+              ]
+            ]
+          },
+          "format": {
+            "block_width": 3075,
+            "display_source": "attachment:78fbbde5-2d7f-402f-a486-18d697dfa9b3:image.png",
+            "block_full_width": false,
+            "block_page_width": true,
+            "block_aspect_ratio": 0.16520325203252031,
+            "block_preserve_scale": true
+          },
+          "created_time": 1782143084316,
+          "last_edited_time": 1782143090540,
+          "parent_id": "3878f9b8-6357-800c-bf09-cc5c5cfd1ff3",
+          "parent_table": "block",
+          "alive": true,
+          "file_ids": [
+            "78fbbde5-2d7f-402f-a486-18d697dfa9b3"
+          ],
+          "space_id": "2d9e04f5-1891-4256-a7bf-8824a9cb47cf",
+          "crdt_format_version": 1,
+          "crdt_data": {
+            "title": {
+              "r": "ybAgq090Pne4DFwmJB0yZg,\"start\",\"end\"",
+              "n": {
+                "ybAgq090Pne4DFwmJB0yZg,\"start\",\"end\"": {
+                  "s": {
+                    "x": "ybAgq090Pne4DFwmJB0yZg",
+                    "i": [
+                      {
+                        "t": "s"
+                      },
+                      {
+                        "t": "t",
+                        "i": [
+                          "nkSE5yuN_9i1",
+                          1
+                        ],
+                        "o": "start",
+                        "l": 9,
+                        "c": "image.png"
+                      },
+                      {
+                        "t": "e"
+                      }
+                    ],
+                    "l": ""
+                  },
+                  "c": []
+                }
+              }
+            }
+          }
+        },
+        "role": "reader"
+      }
+    }
+  },
+  "parsed": [
+    {
+      "id": "3878f9b8-6357-800c-bf09-cc5c5cfd1ff3",
+      "type": "page",
+      "title": "System Architechture Planning :",
+      "caption": "",
+      "source": "",
+      "format": {
+        "social_media_image_preview_url": "attachment:3fd9b11b-7459-47a4-8d3e-eee497612d64:SocialMediaPreviewImage.png"
+      }
+    },
+    {
+      "id": "3878f9b8-6357-80a0-a9d9-cc91ec7857f2",
+      "type": "page",
+      "title": "ERP",
+      "caption": "",
+      "source": "",
+      "format": {
+        "social_media_image_preview_url": "attachment:2ccc9138-d0ef-4da4-8a89-54f349072b9e:SocialMediaPreviewImage.png"
+      }
+    },
+    {
+      "id": "3368f9b8-6357-8076-ac1c-d63221c86622",
+      "type": "page",
+      "title": "Shuroq Sales and Growth Associate Internship :",
+      "caption": "",
+      "source": "",
+      "format": {
+        "social_media_image_preview_url": "attachment:4a6c9c5f-c656-49c0-81b1-44d326731c0f:SocialMediaPreviewImage.png"
+      }
+    },
+    {
+      "id": "38f8f9b8-6357-80e5-9d09-c4e67e52cc05",
+      "type": "page",
+      "title": "Internships :",
+      "caption": "",
+      "source": "",
+      "format": {
+        "social_media_image_preview_url": "attachment:d752dcbf-f2de-4aff-b4c4-ae07d8e35405:SocialMediaPreviewImage.png"
+      }
+    },
+    {
+      "id": "38f8f9b8-6357-805a-8f7d-d41d33d7c5f8",
+      "type": "page",
+      "title": "Startups and Internships :",
+      "caption": "",
+      "source": "",
+      "format": {
+        "social_media_image_preview_url": "attachment:a0a3f0e9-8dfb-4216-9ead-e9582fd83d3a:SocialMediaPreviewImage.png"
+      }
+    },
+    {
+      "id": "3348f9b8-6357-80e6-8302-e5fb4df2f817",
+      "type": "page",
+      "title": "Razeen Startup Products Portfolio :",
+      "caption": "",
+      "source": "",
+      "format": {
+        "site_id": "3348f9b8-6357-80da-b51a-0079cb5e7983",
+        "page_cover": "attachment:7b2bb472-8bc5-42e1-b312-89591a5f0222:Gemini_Generated_Image_967roz967roz967r.png",
+        "page_cover_position": 0.5,
+        "social_media_image_preview_url": "attachment:82d792fd-72c2-40b3-90bd-6895c2b061de:SocialMediaPreviewImage.png"
+      }
+    },
+    {
+      "title": "",
+      "caption": "",
+      "source": ""
+    },
+    {
+      "id": "3878f9b8-6357-8003-b54b-c6e93d1a5b03",
+      "type": "image",
+      "title": "image.png",
+      "caption": "",
+      "source": "attachment:496e7ba8-a9c8-48d6-b5d4-e092fad7d16d:image.png",
+      "format": {
+        "block_width": 704,
+        "display_source": "attachment:496e7ba8-a9c8-48d6-b5d4-e092fad7d16d:image.png",
+        "block_full_width": false,
+        "block_page_width": true,
+        "block_aspect_ratio": 0.3975782038345106,
+        "block_preserve_scale": true
+      }
+    },
+    {
+      "id": "3878f9b8-6357-8064-b115-ea3cb0fec685",
+      "type": "image",
+      "title": "image.png",
+      "caption": "",
+      "source": "attachment:ac6bd1ec-d31c-426e-a863-11807226c41d:image.png",
+      "format": {
+        "block_width": 2233,
+        "display_source": "attachment:ac6bd1ec-d31c-426e-a863-11807226c41d:image.png",
+        "block_full_width": false,
+        "block_page_width": true,
+        "block_aspect_ratio": 0.31303179579041646,
+        "block_preserve_scale": true
+      }
+    },
+    {
+      "id": "3878f9b8-6357-8054-907f-d340ca3c6db0",
+      "type": "image",
+      "title": "image.png",
+      "caption": "",
+      "source": "attachment:b2db9ae6-181c-493e-82c0-298ed7d38562:image.png",
+      "format": {
+        "block_width": 2266,
+        "display_source": "attachment:b2db9ae6-181c-493e-82c0-298ed7d38562:image.png",
+        "block_full_width": false,
+        "block_page_width": true,
+        "block_aspect_ratio": 0.30406001765225066,
+        "block_preserve_scale": true
+      }
+    },
+    {
+      "id": "3878f9b8-6357-807a-afff-caacc9d4bc68",
+      "type": "image",
+      "title": "image.png",
+      "caption": "",
+      "source": "attachment:d1e7bbe8-ed24-4f2f-afc4-34d3dcae8dc2:image.png",
+      "format": {
+        "block_width": 703.9874877929688,
+        "display_source": "attachment:d1e7bbe8-ed24-4f2f-afc4-34d3dcae8dc2:image.png",
+        "block_full_width": false,
+        "block_page_width": true,
+        "block_aspect_ratio": 0.8228031953522149,
+        "block_preserve_scale": true
+      }
+    },
+    {
+      "id": "3878f9b8-6357-806f-a269-cb1f7f6af8a2",
+      "type": "image",
+      "title": "image.png",
+      "caption": "",
+      "source": "attachment:1d1d373b-4f2e-44f2-817d-c1662689df9d:image.png",
+      "format": {
+        "block_width": 704,
+        "display_source": "attachment:1d1d373b-4f2e-44f2-817d-c1662689df9d:image.png",
+        "block_full_width": false,
+        "block_page_width": true,
+        "block_aspect_ratio": 0.3756743501716528,
+        "block_preserve_scale": true
+      }
+    },
+    {
+      "id": "3878f9b8-6357-8001-b7fa-f05efd039452",
+      "type": "image",
+      "title": "image.png",
+      "caption": "",
+      "source": "attachment:de1f9016-9c8c-4926-b108-16abf7e859f0:image.png",
+      "format": {
+        "block_width": 704,
+        "display_source": "attachment:de1f9016-9c8c-4926-b108-16abf7e859f0:image.png",
+        "block_full_width": false,
+        "block_page_width": true,
+        "block_aspect_ratio": 0.4714285714285714,
+        "block_preserve_scale": true
+      }
+    },
+    {
+      "id": "3878f9b8-6357-80d4-86ec-d1e083872bcd",
+      "type": "image",
+      "title": "image.png",
+      "caption": "",
+      "source": "attachment:78fbbde5-2d7f-402f-a486-18d697dfa9b3:image.png",
+      "format": {
+        "block_width": 3075,
+        "display_source": "attachment:78fbbde5-2d7f-402f-a486-18d697dfa9b3:image.png",
+        "block_full_width": false,
+        "block_page_width": true,
+        "block_aspect_ratio": 0.16520325203252031,
+        "block_preserve_scale": true
+      }
+    }
+  ]
+}

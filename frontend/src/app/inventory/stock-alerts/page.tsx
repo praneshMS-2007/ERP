@@ -1,16 +1,58 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { inventoryApi } from '../../../services/api';
 
 export default function StockAlerts() {
-  // Preloaded low-stock alerts
-  const alerts = [
-    { id: 1, sku: 'PROD-002', name: 'USB-C Hub', category: 'Accessories', stockLevel: 23, minStockLevel: 30, unit: 'pcs', severity: 'Warning' },
-    { id: 2, sku: 'PROD-004', name: 'Webcam HD', category: 'Electronics', stockLevel: 12, minStockLevel: 25, unit: 'pcs', severity: 'Critical' },
-    { id: 3, sku: 'PROD-007', name: 'Ethernet Cable 5m', category: 'Networking', stockLevel: 8, minStockLevel: 50, unit: 'pcs', severity: 'Critical' },
-    { id: 4, sku: 'PROD-011', name: 'Mouse Pad XL', category: 'Accessories', stockLevel: 15, minStockLevel: 20, unit: 'pcs', severity: 'Warning' },
-  ];
+  const [alerts, setAlerts] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [suppliers, setSuppliers] = useState<any[]>([]);
+  const [reorderedId, setReorderedId] = useState<string | null>(null);
+
+  async function loadStockAlerts() {
+    setLoading(true);
+    try {
+      const [alertData, suppData] = await Promise.all([
+        inventoryApi.getStockAlerts(),
+        inventoryApi.getSuppliers(),
+      ]);
+      if (Array.isArray(alertData)) setAlerts(alertData);
+      if (Array.isArray(suppData)) setSuppliers(suppData);
+    } catch (e) {
+      console.error('Failed to load stock alerts', e);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    loadStockAlerts();
+  }, []);
+
+  async function handleReorder(item: any) {
+    const suppId = suppliers.length > 0 ? suppliers[0].id : null;
+    if (!suppId) {
+      alert('Please create a Supplier first before placing a Purchase Order.');
+      return;
+    }
+
+    try {
+      const quantity = Math.max( item.minStockLevel * 2 - item.stockLevel, 20 );
+      await inventoryApi.createPurchaseOrder({
+        supplierId: suppId,
+        productId: item.id,
+        quantity,
+        orderDate: new Date().toISOString(),
+        status: 'ORDERED',
+      });
+      setReorderedId(item.id);
+      setTimeout(() => setReorderedId(null), 3000);
+      loadStockAlerts();
+    } catch (e) {
+      console.error('Reorder error', e);
+    }
+  }
 
   const sevColor = (s: string) => s === 'Critical' ? 'var(--red)' : 'var(--amber)';
 
@@ -19,7 +61,7 @@ export default function StockAlerts() {
       <div className="page-header">
         <div className="page-header-left">
           <h1>Stock Alerts</h1>
-          <p>Products below minimum stock threshold</p>
+          <p>Products below minimum stock threshold (Live PostgreSQL Audit)</p>
         </div>
         <div className="page-actions">
           <Link href="/inventory" className="btn btn-secondary btn-sm">
@@ -36,36 +78,48 @@ export default function StockAlerts() {
             Low Stock Items ({alerts.length})
           </div>
         </div>
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th>SKU</th>
-              <th>Product Name</th>
-              <th>Category</th>
-              <th>Current Stock</th>
-              <th>Min Required</th>
-              <th>Severity</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {alerts.map((a) => (
-              <tr key={a.id}>
-                <td style={{fontFamily: 'monospace', color: 'var(--text-muted)'}}>{a.sku}</td>
-                <td style={{fontWeight: 600}}>{a.name}</td>
-                <td>{a.category}</td>
-                <td style={{fontWeight: 600, color: 'var(--red)'}}>{a.stockLevel} {a.unit}</td>
-                <td>{a.minStockLevel} {a.unit}</td>
-                <td>
-                  <span className="badge" style={{ color: sevColor(a.severity), backgroundColor: `${sevColor(a.severity)}15` }}>{a.severity}</span>
-                </td>
-                <td>
-                  <button className="btn btn-primary btn-sm">Reorder</button>
-                </td>
+        {loading ? (
+          <div style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)' }}>Loading live stock alerts...</div>
+        ) : alerts.length === 0 ? (
+          <div style={{ padding: '24px', textAlign: 'center', color: 'var(--green)' }}>✓ All product stock levels are healthy!</div>
+        ) : (
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>SKU</th>
+                <th>Product Name</th>
+                <th>Category</th>
+                <th>Current Stock</th>
+                <th>Min Required</th>
+                <th>Severity</th>
+                <th>Actions</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {alerts.map((a) => (
+                <tr key={a.id}>
+                  <td style={{fontFamily: 'monospace', color: 'var(--text-muted)'}}>{a.sku}</td>
+                  <td style={{fontWeight: 600}}>{a.name}</td>
+                  <td>{a.category}</td>
+                  <td style={{fontWeight: 600, color: 'var(--red)'}}>{a.stockLevel} {a.unit || 'pcs'}</td>
+                  <td>{a.minStockLevel} {a.unit || 'pcs'}</td>
+                  <td>
+                    <span className="badge" style={{ color: sevColor(a.severity), backgroundColor: `${sevColor(a.severity)}15` }}>{a.severity}</span>
+                  </td>
+                  <td>
+                    <button
+                      className="btn btn-primary btn-sm"
+                      onClick={() => handleReorder(a)}
+                      disabled={reorderedId === a.id}
+                    >
+                      {reorderedId === a.id ? 'PO Generated ✓' : 'Reorder'}
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </div>
     </div>
   );

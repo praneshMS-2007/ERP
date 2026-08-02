@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { Prisma } from '@prisma/client';
 
@@ -8,34 +8,25 @@ export class FinanceService {
 
   constructor(private prisma: PrismaService) {}
 
-  /**
-   * BUSINESS LOGIC: Real dashboard metrics from actual database records.
-   * No more mock data — all values are calculated from live tables.
-   */
   async getDashboardMetrics() {
-    // Total Revenue = sum of all Income records
     const revenueAgg = await this.prisma.income.aggregate({
       _sum: { amount: true },
     });
     const totalRevenue = revenueAgg._sum.amount || 0;
 
-    // Total Expenses = sum of all Expense records
     const expenseAgg = await this.prisma.expense.aggregate({
       _sum: { amount: true },
     });
     const totalExpenses = expenseAgg._sum.amount || 0;
 
-    // Net Profit
     const netProfit = totalRevenue - totalExpenses;
 
-    // Outstanding Invoices = sum of invoices that are UNPAID or OVERDUE
     const outstandingAgg = await this.prisma.invoice.aggregate({
       where: { status: { in: ['UNPAID', 'OVERDUE'] } },
       _sum: { amount: true },
     });
     const outstandingInvoices = outstandingAgg._sum.amount || 0;
 
-    // Additional useful metrics
     const totalInvoices = await this.prisma.invoice.count();
     const paidInvoices = await this.prisma.invoice.count({ where: { status: 'PAID' } });
     const pendingExpenses = await this.prisma.expense.count({ where: { status: 'PENDING' } });
@@ -69,7 +60,6 @@ export class FinanceService {
   }
 
   async createInvoice(data: Prisma.InvoiceUncheckedCreateInput) {
-    // Auto-generate invoice number if not provided
     if (!data.invoiceNo) {
       const count = await this.prisma.invoice.count();
       data.invoiceNo = `INV-${new Date().getFullYear()}-${String(count + 1).padStart(4, '0')}`;
@@ -93,15 +83,54 @@ export class FinanceService {
     });
   }
 
-  // ========== LEDGER ==========
+  // ========== LEDGER & DOUBLE-ENTRY ACCOUNTING ==========
   async getLedgerEntries() {
     return this.prisma.ledgerEntry.findMany({
       orderBy: { date: 'desc' },
     });
   }
 
-  async createLedgerEntry(data: Prisma.LedgerEntryUncheckedCreateInput) {
-    return this.prisma.ledgerEntry.create({ data });
+  /**
+   * Enterprise Double-Entry Accounting Enforcement:
+   * Supports creating balanced transaction pairs (Array of entries where sum(DEBITS) === sum(CREDITS))
+   * or a single entry that auto-balances with cash/revenue account.
+   */
+  async createLedgerEntry(data: any) {
+    if (Array.isArray(data)) {
+      let totalDebits = 0;
+      let totalCredits = 0;
+
+      data.forEach(entry => {
+        if (entry.type === 'DEBIT') totalDebits += entry.amount;
+        if (entry.type === 'CREDIT') totalCredits += entry.amount;
+      });
+
+      if (Math.abs(totalDebits - totalCredits) > 0.01) {
+        throw new BadRequestException(`Double-Entry Violation: Total Debits ($${totalDebits}) must equal Total Credits ($${totalCredits}). Transaction rejected.`);
+      }
+
+      return this.prisma.$transaction(
+        data.map(entry => this.prisma.ledgerEntry.create({ data: entry }))
+      );
+    }
+
+    // Auto-balancing single entry pair if provided as single object
+    const counterType = data.type === 'DEBIT' ? 'CREDIT' : 'DEBIT';
+    const counterAccount = data.type === 'DEBIT' ? '1010-CASH' : '4000-REVENUE';
+
+    return this.prisma.$transaction(async (tx) => {
+      const entry1 = await tx.ledgerEntry.create({ data });
+      const entry2 = await tx.ledgerEntry.create({
+        data: {
+          account: counterAccount,
+          type: counterType,
+          amount: data.amount,
+          description: `Auto-balanced contra entry for ${data.account}`,
+          date: data.date || new Date(),
+        },
+      });
+      return [entry1, entry2];
+    });
   }
 
   // ========== TAX ==========
@@ -130,16 +159,10 @@ export class FinanceService {
     });
   }
 
-  /**
-   * BUSINESS LOGIC: When a payment is recorded against an invoice,
-   * auto-update the invoice status based on total payments received.
-   */
   async createPayment(data: Prisma.PaymentUncheckedCreateInput) {
     return this.prisma.$transaction(async (tx) => {
-      // 1. Create the payment
       const payment = await tx.payment.create({ data });
 
-      // 2. If linked to an invoice, check if fully paid
       if (data.invoiceId) {
         const invoice = await tx.invoice.findUnique({
           where: { id: data.invoiceId },

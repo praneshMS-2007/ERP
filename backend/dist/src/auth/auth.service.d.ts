@@ -41,8 +41,8 @@ export declare class AuthService {
             id: string;
             createdAt: Date;
             updatedAt: Date;
-            empCode: string | null;
             userId: string | null;
+            empCode: string | null;
             firstName: string;
             lastName: string;
             gender: string | null;
@@ -67,6 +67,10 @@ export declare class AuthService {
         passwordHash: string;
         resetToken: string | null;
         resetTokenExpiry: Date | null;
+        theme: string;
+        language: string;
+        twoFactorEnabled: boolean;
+        emailNotifications: boolean;
     }>;
     updateProfile(userId: string, data: any): Promise<{
         message: string;

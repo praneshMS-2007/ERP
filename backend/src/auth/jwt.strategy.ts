@@ -16,7 +16,12 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
-      secretOrKey: process.env.JWT_SECRET || 'shuroq-erp-secret-key-2026',
+      secretOrKey: (() => {
+        if (!process.env.JWT_SECRET) {
+          throw new Error('JWT_SECRET environment variable is required. Set it in your .env file.');
+        }
+        return process.env.JWT_SECRET;
+      })(),
     });
   }
 

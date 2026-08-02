@@ -58,8 +58,8 @@ export declare class UsersController {
             id: string;
             createdAt: Date;
             updatedAt: Date;
-            empCode: string | null;
             userId: string | null;
+            empCode: string | null;
             firstName: string;
             lastName: string;
             gender: string | null;

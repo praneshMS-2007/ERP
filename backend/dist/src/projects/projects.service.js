@@ -34,7 +34,7 @@ let ProjectsService = ProjectsService_1 = class ProjectsService {
         const project = await this.prisma.project.findUnique({
             where: { id },
             include: {
-                tasks: true,
+                tasks: { include: { assignedEmployee: { select: { firstName: true, lastName: true } } } },
                 milestones: true,
                 assignments: { include: { employee: { select: { firstName: true, lastName: true } } } },
             },
@@ -59,13 +59,16 @@ let ProjectsService = ProjectsService_1 = class ProjectsService {
             where,
             include: {
                 project: { select: { name: true } },
+                assignedEmployee: { select: { firstName: true, lastName: true } },
                 assignments: { include: { employee: { select: { firstName: true, lastName: true } } } },
             },
             orderBy: { createdAt: 'desc' },
         });
     }
     async createTask(data) {
-        return this.prisma.task.create({ data });
+        const task = await this.prisma.task.create({ data });
+        await this.recalculateProjectProgress(data.projectId);
+        return task;
     }
     async updateTaskStatus(id, status) {
         const task = await this.prisma.task.findUnique({ where: { id } });
@@ -75,31 +78,24 @@ let ProjectsService = ProjectsService_1 = class ProjectsService {
             where: { id },
             data: { status },
         });
-        if (status === 'DONE') {
-            const allTasks = await this.prisma.task.findMany({
-                where: { projectId: task.projectId },
-                select: { status: true },
-            });
-            const allDone = allTasks.length > 0 && allTasks.every(t => t.status === 'DONE');
-            if (allDone) {
-                await this.prisma.project.update({
-                    where: { id: task.projectId },
-                    data: { status: 'COMPLETED' },
-                });
-                this.logger.log(`All tasks done — Project ${task.projectId} auto-marked COMPLETED`);
-            }
-        }
-        if (status !== 'DONE') {
-            const project = await this.prisma.project.findUnique({ where: { id: task.projectId } });
-            if (project && project.status === 'COMPLETED') {
-                await this.prisma.project.update({
-                    where: { id: task.projectId },
-                    data: { status: 'IN_PROGRESS' },
-                });
-                this.logger.log(`Task reopened — Project ${task.projectId} reverted to IN_PROGRESS`);
-            }
-        }
+        await this.recalculateProjectProgress(task.projectId);
         return updatedTask;
+    }
+    async recalculateProjectProgress(projectId) {
+        const allTasks = await this.prisma.task.findMany({
+            where: { projectId },
+            select: { status: true },
+        });
+        if (allTasks.length === 0)
+            return;
+        const doneCount = allTasks.filter(t => t.status === 'DONE').length;
+        const progress = Math.round((doneCount / allTasks.length) * 100);
+        const newStatus = progress === 100 ? 'COMPLETED' : 'IN_PROGRESS';
+        await this.prisma.project.update({
+            where: { id: projectId },
+            data: { progress, status: newStatus },
+        });
+        this.logger.log(`Project ${projectId} progress auto-updated to ${progress}%`);
     }
     async getMilestones(projectId) {
         return this.prisma.milestone.findMany({
@@ -136,7 +132,6 @@ let ProjectsService = ProjectsService_1 = class ProjectsService {
                     role: 'Contributor',
                 },
             });
-            this.logger.log(`Auto-assigned employee ${data.employeeId} to project ${data.projectId}`);
         }
         return this.prisma.timeLog.create({ data });
     }

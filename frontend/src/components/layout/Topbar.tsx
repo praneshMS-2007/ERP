@@ -1,94 +1,61 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import {
-  Search, Bell, Settings, LogOut, User, Shield, Sun, Moon, Laptop,
-  Globe, Lock, Volume2, Mail, Smartphone, Check, ChevronDown, Key
-} from 'lucide-react';
+import { Search, Bell, Settings, LogOut, User, Shield } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '../../context/AuthContext';
-
-const GLOBAL_SEARCH_ROUTES = [
-  { name: 'System Administration', path: '/admin' },
-  { name: 'User Management', path: '/admin' },
-  { name: 'HR Dashboard', path: '/hrm' },
-  { name: 'CRM Overview', path: '/crm' },
-  { name: 'Inventory Management', path: '/inventory' },
-  { name: 'Project Tracking', path: '/projects' },
-  { name: 'Finance & Accounting', path: '/finance' },
-  { name: 'Enterprise Analytics', path: '/analytics' }
-];
+import { notificationApi, searchApi } from '../../services/api';
 
 export default function Topbar() {
   const { user } = useAuth();
   const [showNotifications, setShowNotifications] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
-  const [showSettingsMenu, setShowSettingsMenu] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<any>(null);
+  const [searching, setSearching] = useState(false);
 
-  // Settings State
-  const [theme, setTheme] = useState<'light' | 'dark' | 'system'>('light');
-  const [language, setLanguage] = useState('English (US)');
-  const [activeTab, setActiveTab] = useState<'account' | 'notifications' | 'preferences'>('preferences');
-  
-  // Notification Toggles State
-  const [notifToggles, setNotifToggles] = useState({
-    email: true,
-    push: true,
-    sound: false,
-  });
-
-  // Account Settings State
-  const [accountForm, setAccountForm] = useState({
-    name: 'Pranesh M S',
-    email: 'pranesh@shuroq.com',
-    password: '',
-  });
-  const [savedSuccess, setSavedSuccess] = useState(false);
-
-  const [notifications, setNotifications] = useState([
-    { id: 1, title: 'Stock Alert: Fiber Optics', desc: 'Inventory fell below minimum threshold (120 units).', time: '10 mins ago', read: false },
-    { id: 2, title: 'Leave Request Approved', desc: 'Sarah Jenkins vacation request has been approved.', time: '2 hours ago', read: false }
-  ]);
+  const [notifications, setNotifications] = useState<any[]>([]);
 
   const notifRef = useRef<HTMLDivElement>(null);
   const profileRef = useRef<HTMLDivElement>(null);
-  const settingsRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
 
-  // Load initial theme & language preferences
-  useEffect(() => {
-    const savedTheme = (localStorage.getItem('theme') as 'light' | 'dark' | 'system') || 'light';
-    setTheme(savedTheme);
-    applyTheme(savedTheme);
+  async function loadNotifications() {
+    try {
+      const data = await notificationApi.getNotifications();
+      if (Array.isArray(data)) setNotifications(data);
+    } catch (e) {
+      console.error('Failed to load notifications', e);
+    }
+  }
 
-    const savedLang = localStorage.getItem('language') || 'English (US)';
-    setLanguage(savedLang);
+  useEffect(() => {
+    loadNotifications();
   }, []);
 
-  // Theme application logic
-  const applyTheme = (newTheme: 'light' | 'dark' | 'system') => {
-    setTheme(newTheme);
-    localStorage.setItem('theme', newTheme);
-    if (newTheme === 'dark') {
-      document.documentElement.setAttribute('data-theme', 'dark');
-      document.documentElement.classList.add('dark');
-    } else if (newTheme === 'light') {
-      document.documentElement.setAttribute('data-theme', 'light');
-      document.documentElement.classList.remove('dark');
-    } else {
-      const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-      if (prefersDark) {
-        document.documentElement.setAttribute('data-theme', 'dark');
-        document.documentElement.classList.add('dark');
-      } else {
-        document.documentElement.setAttribute('data-theme', 'light');
-        document.documentElement.classList.remove('dark');
-      }
+  // Live unified global search
+  useEffect(() => {
+    if (!searchQuery || searchQuery.trim().length === 0) {
+      setSearchResults(null);
+      return;
     }
-  };
+
+    const timer = setTimeout(async () => {
+      setSearching(true);
+      try {
+        const res = await searchApi.globalSearch(searchQuery);
+        setSearchResults(res);
+      } catch (e) {
+        console.error('Global search error', e);
+      } finally {
+        setSearching(false);
+      }
+    }, 250);
+
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
 
   // Close dropdowns when clicking outside
   useEffect(() => {
@@ -99,11 +66,9 @@ export default function Topbar() {
       if (profileRef.current && !profileRef.current.contains(event.target as Node)) {
         setShowProfile(false);
       }
-      if (settingsRef.current && !settingsRef.current.contains(event.target as Node)) {
-        setShowSettingsMenu(false);
-      }
       if (searchRef.current && !searchRef.current.contains(event.target as Node)) {
         setSearchQuery('');
+        setSearchResults(null);
       }
     }
     document.addEventListener('mousedown', handleClickOutside);
@@ -116,29 +81,27 @@ export default function Topbar() {
     router.push('/login');
   };
 
-  const unreadCount = notifications.filter(n => !n.read).length;
-
-  const markAllRead = () => {
-    setNotifications(notifications.map(n => ({ ...n, read: true })));
+  const markAllRead = async () => {
+    try {
+      await notificationApi.markAllAsRead();
+      loadNotifications();
+    } catch (e) {
+      console.error('Failed to mark notifications read', e);
+    }
   };
 
-  const handleLanguageChange = (lang: string) => {
-    setLanguage(lang);
-    localStorage.setItem('language', lang);
-  };
-
-  const handleSaveAccount = (e: React.FormEvent) => {
-    e.preventDefault();
-    setSavedSuccess(true);
-    setTimeout(() => setSavedSuccess(false), 2500);
-  };
-
-  const filteredRoutes = GLOBAL_SEARCH_ROUTES.filter(route => 
-    route.name.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const unreadCount = notifications.filter(n => !n.isRead).length;
 
   const displayEmail = user?.email || 'pranesh@shuroq.com';
   const displayName = displayEmail.split('@')[0].toUpperCase();
+
+  const hasSearchResults = searchResults && (
+    (searchResults.employees && searchResults.employees.length > 0) ||
+    (searchResults.products && searchResults.products.length > 0) ||
+    (searchResults.customers && searchResults.customers.length > 0) ||
+    (searchResults.invoices && searchResults.invoices.length > 0) ||
+    (searchResults.projects && searchResults.projects.length > 0)
+  );
 
   return (
     <header className="topbar">
@@ -147,25 +110,59 @@ export default function Topbar() {
         <Search className="search-icon" />
         <input 
           type="text" 
-          placeholder="Search operations..." 
+          placeholder="Global Search (Employees, Invoices, Products, Projects...)" 
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
         />
         {searchQuery && (
-          <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: 'var(--color-surface, white)', border: '1px solid var(--color-border)', borderRadius: '8px', marginTop: '4px', padding: '8px', boxShadow: '0 4px 12px rgba(0,0,0,0.15)', zIndex: 50, maxHeight: '200px', overflowY: 'auto' }}>
-            {filteredRoutes.length > 0 ? (
-              filteredRoutes.map((route, i) => (
-                <div 
-                  key={i} 
-                  onClick={() => { router.push(route.path); setSearchQuery(''); }}
-                  style={{ padding: '8px 12px', fontSize: '13px', color: 'var(--color-text-primary)', cursor: 'pointer', borderRadius: '4px' }} 
-                  className="hover-bg-gray"
-                >
-                  {route.name}
-                </div>
-              ))
+          <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: 'var(--color-surface, white)', border: '1px solid var(--color-border)', borderRadius: '8px', marginTop: '4px', padding: '12px', boxShadow: '0 8px 24px rgba(0,0,0,0.2)', zIndex: 100, maxHeight: '350px', overflowY: 'auto' }}>
+            {searching ? (
+              <div style={{ padding: '8px', fontSize: '13px', color: 'var(--color-text-muted)', textAlign: 'center' }}>Searching database...</div>
+            ) : hasSearchResults ? (
+              <div>
+                {searchResults.employees?.length > 0 && (
+                  <div style={{ marginBottom: '10px' }}>
+                    <div style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', color: '#2563eb', marginBottom: '4px' }}>Employees</div>
+                    {searchResults.employees.map((e: any) => (
+                      <div key={e.id} onClick={() => { router.push('/hrm/employees'); setSearchQuery(''); }} style={{ padding: '6px 8px', fontSize: '13px', cursor: 'pointer', borderRadius: '4px' }} className="hover-bg-gray">
+                        {e.firstName} {e.lastName} ({e.empCode})
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {searchResults.products?.length > 0 && (
+                  <div style={{ marginBottom: '10px' }}>
+                    <div style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', color: '#10b981', marginBottom: '4px' }}>Products</div>
+                    {searchResults.products.map((p: any) => (
+                      <div key={p.id} onClick={() => { router.push('/inventory/products'); setSearchQuery(''); }} style={{ padding: '6px 8px', fontSize: '13px', cursor: 'pointer', borderRadius: '4px' }} className="hover-bg-gray">
+                        {p.name} ({p.sku}) — Stock: {p.stockLevel}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {searchResults.invoices?.length > 0 && (
+                  <div style={{ marginBottom: '10px' }}>
+                    <div style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', color: '#8b5cf6', marginBottom: '4px' }}>Invoices</div>
+                    {searchResults.invoices.map((inv: any) => (
+                      <div key={inv.id} onClick={() => { router.push('/finance'); setSearchQuery(''); }} style={{ padding: '6px 8px', fontSize: '13px', cursor: 'pointer', borderRadius: '4px' }} className="hover-bg-gray">
+                        {inv.invoiceNo} — {inv.clientName} (${inv.amount})
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {searchResults.projects?.length > 0 && (
+                  <div>
+                    <div style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', color: '#f59e0b', marginBottom: '4px' }}>Projects</div>
+                    {searchResults.projects.map((proj: any) => (
+                      <div key={proj.id} onClick={() => { router.push('/projects'); setSearchQuery(''); }} style={{ padding: '6px 8px', fontSize: '13px', cursor: 'pointer', borderRadius: '4px' }} className="hover-bg-gray">
+                        {proj.name} ({proj.progress}%)
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             ) : (
-              <div style={{ padding: '8px', fontSize: '13px', color: 'var(--color-text-muted)', textAlign: 'center' }}>No results found for "{searchQuery}"</div>
+              <div style={{ padding: '8px', fontSize: '13px', color: 'var(--color-text-muted)', textAlign: 'center' }}>No matching records for "{searchQuery}"</div>
             )}
           </div>
         )}
@@ -187,7 +184,7 @@ export default function Topbar() {
           </button>
 
           {showNotifications && (
-            <div style={{ position: 'absolute', top: '100%', right: 0, width: '320px', background: 'var(--color-surface, white)', border: '1px solid var(--color-border)', borderRadius: '8px', marginTop: '8px', boxShadow: '0 10px 25px rgba(0,0,0,0.15)', zIndex: 50, overflow: 'hidden' }}>
+            <div style={{ position: 'absolute', top: '100%', right: 0, width: '340px', background: 'var(--color-surface, white)', border: '1px solid var(--color-border)', borderRadius: '8px', marginTop: '8px', boxShadow: '0 10px 25px rgba(0,0,0,0.15)', zIndex: 100, overflow: 'hidden' }}>
               <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--color-border)', fontWeight: 600, fontSize: '14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: 'var(--color-text-primary)' }}>
                 Notifications ({unreadCount})
                 {unreadCount > 0 && (
@@ -196,23 +193,20 @@ export default function Topbar() {
               </div>
               <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
                 {notifications.length > 0 ? notifications.map(notif => (
-                  <div key={notif.id} style={{ padding: '12px 16px', borderBottom: '1px solid var(--color-border-light)', cursor: 'pointer', opacity: notif.read ? 0.6 : 1 }} className="hover-bg-gray">
+                  <div key={notif.id} style={{ padding: '12px 16px', borderBottom: '1px solid var(--color-border-light)', cursor: 'pointer', opacity: notif.isRead ? 0.6 : 1 }} className="hover-bg-gray">
                     <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--color-text-primary)' }}>{notif.title}</div>
-                    <div style={{ fontSize: '12px', color: 'var(--color-text-secondary)', marginTop: '2px' }}>{notif.desc}</div>
-                    <div style={{ fontSize: '11px', color: 'var(--color-text-muted)', marginTop: '4px' }}>{notif.time}</div>
+                    <div style={{ fontSize: '12px', color: 'var(--color-text-secondary)', marginTop: '2px' }}>{notif.message}</div>
+                    <div style={{ fontSize: '11px', color: 'var(--color-text-muted)', marginTop: '4px' }}>{new Date(notif.createdAt).toLocaleTimeString()}</div>
                   </div>
                 )) : (
                   <div style={{ padding: '24px', textAlign: 'center', color: 'var(--color-text-muted)', fontSize: '13px' }}>No notifications</div>
                 )}
               </div>
-              <div style={{ padding: '12px', textAlign: 'center', borderTop: '1px solid var(--color-border)', fontSize: '13px', color: '#2563eb', cursor: 'pointer', fontWeight: 600 }} className="hover-bg-gray" onClick={() => setNotifications([])}>
-                Clear all
-              </div>
             </div>
           )}
         </div>
 
-        {/* Settings Button -> Redirects to Settings Page */}
+        {/* Settings Button */}
         <Link 
           href="/settings"
           className="topbar-icon-btn" 
@@ -236,7 +230,7 @@ export default function Topbar() {
           </div>
 
           {showProfile && (
-            <div style={{ position: 'absolute', top: '100%', right: 0, width: '220px', background: 'var(--color-surface, white)', border: '1px solid var(--color-border)', borderRadius: '8px', marginTop: '8px', boxShadow: '0 10px 25px rgba(0,0,0,0.15)', zIndex: 50, padding: '8px 0' }}>
+            <div style={{ position: 'absolute', top: '100%', right: 0, width: '220px', background: 'var(--color-surface, white)', border: '1px solid var(--color-border)', borderRadius: '8px', marginTop: '8px', boxShadow: '0 10px 25px rgba(0,0,0,0.15)', zIndex: 100, padding: '8px 0' }}>
               <div style={{ padding: '8px 16px', borderBottom: '1px solid var(--color-border-light)', marginBottom: '8px' }}>
                 <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--color-text-primary)' }}>{displayName}</div>
                 <div style={{ fontSize: '12px', color: 'var(--color-text-muted)' }}>{displayEmail}</div>

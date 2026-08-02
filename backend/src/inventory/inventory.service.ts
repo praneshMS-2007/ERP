@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
+import { Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { Prisma } from '@prisma/client';
 
@@ -8,6 +8,18 @@ export class InventoryService {
 
   constructor(private prisma: PrismaService) {}
 
+  // ========== CATEGORIES ==========
+  async getCategories() {
+    return this.prisma.category.findMany({
+      include: { _count: { select: { products: true } } },
+      orderBy: { name: 'asc' },
+    });
+  }
+
+  async createCategory(data: { name: string; description?: string }) {
+    return this.prisma.category.create({ data });
+  }
+
   // ========== PRODUCTS ==========
   async getProducts(category?: string, status?: any) {
     const where: any = {};
@@ -16,24 +28,46 @@ export class InventoryService {
 
     return this.prisma.product.findMany({
       where,
+      include: { categoryRel: true },
       orderBy: { name: 'asc' },
+    });
+  }
+
+  async getStockAlerts() {
+    // Products where current stock level is less than or equal to min stock level
+    const products = await this.prisma.product.findMany({
+      orderBy: { stockLevel: 'asc' },
+    });
+
+    return products.map(p => {
+      const isCritical = p.stockLevel <= Math.floor(p.minStockLevel / 2);
+      return {
+        id: p.id,
+        sku: p.sku,
+        name: p.name,
+        category: p.category,
+        stockLevel: p.stockLevel,
+        minStockLevel: p.minStockLevel,
+        unit: p.unit,
+        severity: isCritical ? 'Critical' : 'Warning',
+      };
     });
   }
 
   async getProduct(id: string) {
     const product = await this.prisma.product.findUnique({
       where: { id },
-      include: { stockMovements: { take: 10, orderBy: { date: 'desc' } } }
+      include: { stockMovements: { take: 10, orderBy: { date: 'desc' } } },
     });
     if (!product) throw new NotFoundException('Product not found');
     return product;
   }
 
-  async createProduct(data: Prisma.ProductCreateInput) {
+  async createProduct(data: Prisma.ProductUncheckedCreateInput) {
     return this.prisma.product.create({ data });
   }
 
-  async updateProduct(id: string, data: Prisma.ProductUpdateInput) {
+  async updateProduct(id: string, data: Prisma.ProductUncheckedUpdateInput) {
     return this.prisma.product.update({ where: { id }, data });
   }
 
@@ -45,11 +79,11 @@ export class InventoryService {
   // ========== SUPPLIERS ==========
   async getSuppliers() {
     return this.prisma.supplier.findMany({
-      orderBy: { name: 'asc' }
+      orderBy: { name: 'asc' },
     });
   }
 
-  async createSupplier(data: Prisma.SupplierCreateInput) {
+  async createSupplier(data: Prisma.SupplierUncheckedCreateInput) {
     return this.prisma.supplier.create({ data });
   }
 
@@ -58,44 +92,48 @@ export class InventoryService {
     return this.prisma.purchaseOrder.findMany({
       include: { 
         supplier: { select: { name: true } },
-        product: { select: { name: true, sku: true } }
+        product: { select: { name: true, sku: true } },
       },
-      orderBy: { orderDate: 'desc' }
+      orderBy: { orderDate: 'desc' },
     });
   }
 
   async createPurchaseOrder(data: Prisma.PurchaseOrderUncheckedCreateInput) {
-    return this.prisma.purchaseOrder.create({ data });
+    const product = await this.prisma.product.findUnique({ where: { id: data.productId } });
+    const unitPrice = product ? product.price : 100;
+    const totalAmount = data.totalAmount || (data.quantity * unitPrice);
+    const count = await this.prisma.purchaseOrder.count();
+    const orderNumber = data.orderNumber || `PO-2026-${String(count + 1).padStart(3, '0')}`;
+
+    return this.prisma.purchaseOrder.create({
+      data: {
+        ...data,
+        totalAmount,
+        orderNumber,
+      },
+    });
   }
 
-  /**
-   * BUSINESS LOGIC: When a Purchase Order is marked DELIVERED,
-   * auto-increase product stock and create a StockMovement record.
-   */
   async updatePurchaseOrderStatus(id: string, status: any) {
     const po = await this.prisma.purchaseOrder.findUnique({ where: { id } });
     if (!po) throw new NotFoundException('Purchase order not found');
 
     if (status === 'DELIVERED' && po.status !== 'DELIVERED') {
-      // Use a transaction to ensure atomicity
       return this.prisma.$transaction(async (tx) => {
-        // 1. Update PO status
         const updatedPO = await tx.purchaseOrder.update({
           where: { id },
           data: { status },
         });
 
-        // 2. Increase product stock level
         await tx.product.update({
           where: { id: po.productId },
           data: { stockLevel: { increment: po.quantity } },
         });
 
-        // 3. Create StockMovement record
         await tx.stockMovement.create({
           data: {
             productId: po.productId,
-            changeAmount: po.quantity, // Positive = restock
+            changeAmount: po.quantity,
             reason: 'RESTOCK',
             date: new Date(),
           },
@@ -106,7 +144,6 @@ export class InventoryService {
       });
     }
 
-    // For non-DELIVERED status changes, just update normally
     return this.prisma.purchaseOrder.update({
       where: { id },
       data: { status },
@@ -135,32 +172,18 @@ export class InventoryService {
   }
 
   async createSalesOrder(data: Prisma.SalesOrderUncheckedCreateInput) {
-    return this.prisma.salesOrder.create({ data });
+    const count = await this.prisma.salesOrder.count();
+    const orderNo = data.orderNo || `SO-2026-${String(count + 1).padStart(3, '0')}`;
+    return this.prisma.salesOrder.create({ data: { ...data, orderNo } });
   }
 
-  /**
-   * BUSINESS LOGIC: When a Sales Order status is changed to DELIVERED,
-   * auto-deduct stock from the related products and create StockMovement records.
-   * Note: Since SalesOrder doesn't have line items with product references in schema,
-   * we log the event. For full implementation, a SalesOrderItem model would be needed.
-   */
   async updateSalesOrderStatus(id: string, status: any) {
     const order = await this.prisma.salesOrder.findUnique({ where: { id } });
     if (!order) throw new NotFoundException('Sales order not found');
 
-    const updatedOrder = await this.prisma.salesOrder.update({
+    return this.prisma.salesOrder.update({
       where: { id },
       data: { status },
     });
-
-    if (status === 'DELIVERED' && order.status !== 'DELIVERED') {
-      this.logger.log(`Sales Order ${order.orderNo} delivered. Total: ${order.totalAmount}`);
-    }
-
-    if (status === 'CANCELLED' && order.status !== 'CANCELLED') {
-      this.logger.log(`Sales Order ${order.orderNo} cancelled.`);
-    }
-
-    return updatedOrder;
   }
 }

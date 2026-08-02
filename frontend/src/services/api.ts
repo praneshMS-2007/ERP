@@ -75,12 +75,16 @@ export const hrmApi = {
   requestLeave: (data: any) => fetchApi('/hrm/leaves', { method: 'POST', body: JSON.stringify(data) }),
   updateLeaveStatus: (id: string, status: string) => fetchApi(`/hrm/leaves/${id}/status`, { method: 'PUT', body: JSON.stringify({ status }) }),
   getPerformanceReviews: () => fetchApi('/hrm/performance-reviews'),
+  createPerformanceReview: (data: any) => fetchApi('/hrm/performance-reviews', { method: 'POST', body: JSON.stringify(data) }),
   getAttendanceStats: (date: string) => fetchApi(`/hrm/attendance/stats?date=${date}`),
   getAttendanceTrend: (year: number) => fetchApi(`/hrm/attendance/trend?year=${year}`),
 };
 
 export const inventoryApi = {
   getProducts: () => fetchApi('/inventory/products'),
+  getStockAlerts: () => fetchApi('/inventory/stock-alerts'),
+  getCategories: () => fetchApi('/inventory/categories'),
+  createCategory: (data: any) => fetchApi('/inventory/categories', { method: 'POST', body: JSON.stringify(data) }),
   getSuppliers: () => fetchApi('/inventory/suppliers'),
   getWarehouses: () => fetchApi('/inventory/warehouses'),
   getSalesOrders: () => fetchApi('/inventory/sales-orders'),
@@ -138,6 +142,20 @@ export const aiApi = {
     method: 'POST',
     body: JSON.stringify({ messages }),
   }),
+  getSalesInsights: () => fetchApi('/ai/sales-insights'),
+  getHrInsights: () => fetchApi('/ai/hr-insights'),
+  getInventoryInsights: () => fetchApi('/ai/inventory-insights'),
+  getExecutiveSummary: () => fetchApi('/ai/executive-summary'),
+};
+
+export const notificationApi = {
+  getNotifications: () => fetchApi('/notifications'),
+  markAsRead: (id: string) => fetchApi(`/notifications/${id}/read`, { method: 'PUT' }),
+  markAllAsRead: () => fetchApi('/notifications/read-all', { method: 'PUT' }),
+};
+
+export const searchApi = {
+  globalSearch: (q: string) => fetchApi(`/search?q=${encodeURIComponent(q)}`),
 };
 
 // ========== EXPORT API ==========

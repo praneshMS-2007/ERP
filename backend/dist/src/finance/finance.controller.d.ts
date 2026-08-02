@@ -39,8 +39,8 @@ export declare class FinanceController {
             status: import(".prisma/client").$Enums.PaymentStatus;
             date: Date;
             amount: number;
-            invoiceId: string | null;
             method: import(".prisma/client").$Enums.PaymentMethod;
+            invoiceId: string | null;
         }[];
     } & {
         id: string;
@@ -104,8 +104,8 @@ export declare class FinanceController {
         status: import(".prisma/client").$Enums.PaymentStatus;
         date: Date;
         amount: number;
-        invoiceId: string | null;
         method: import(".prisma/client").$Enums.PaymentMethod;
+        invoiceId: string | null;
     })[]>;
     createPayment(data: any): Promise<{
         id: string;
@@ -114,8 +114,8 @@ export declare class FinanceController {
         status: import(".prisma/client").$Enums.PaymentStatus;
         date: Date;
         amount: number;
-        invoiceId: string | null;
         method: import(".prisma/client").$Enums.PaymentMethod;
+        invoiceId: string | null;
     }>;
     getLedgerEntries(): Promise<{
         id: string;
@@ -136,7 +136,7 @@ export declare class FinanceController {
         amount: number;
         account: string;
         type: import(".prisma/client").$Enums.LedgerType;
-    }>;
+    }[]>;
     getTaxRecords(): Promise<{
         id: string;
         createdAt: Date;

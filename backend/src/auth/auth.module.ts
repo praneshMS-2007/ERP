@@ -9,7 +9,12 @@ import { JwtStrategy } from './jwt.strategy';
   imports: [
     PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.register({
-      secret: process.env.JWT_SECRET || 'shuroq-erp-secret-key-2026',
+      secret: (() => {
+        if (!process.env.JWT_SECRET) {
+          throw new Error('JWT_SECRET environment variable is required. Set it in your .env file.');
+        }
+        return process.env.JWT_SECRET;
+      })(),
       signOptions: { expiresIn: '24h' },
     }),
   ],

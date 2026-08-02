@@ -87,7 +87,35 @@ let FinanceService = FinanceService_1 = class FinanceService {
         });
     }
     async createLedgerEntry(data) {
-        return this.prisma.ledgerEntry.create({ data });
+        if (Array.isArray(data)) {
+            let totalDebits = 0;
+            let totalCredits = 0;
+            data.forEach(entry => {
+                if (entry.type === 'DEBIT')
+                    totalDebits += entry.amount;
+                if (entry.type === 'CREDIT')
+                    totalCredits += entry.amount;
+            });
+            if (Math.abs(totalDebits - totalCredits) > 0.01) {
+                throw new common_1.BadRequestException(`Double-Entry Violation: Total Debits ($${totalDebits}) must equal Total Credits ($${totalCredits}). Transaction rejected.`);
+            }
+            return this.prisma.$transaction(data.map(entry => this.prisma.ledgerEntry.create({ data: entry })));
+        }
+        const counterType = data.type === 'DEBIT' ? 'CREDIT' : 'DEBIT';
+        const counterAccount = data.type === 'DEBIT' ? '1010-CASH' : '4000-REVENUE';
+        return this.prisma.$transaction(async (tx) => {
+            const entry1 = await tx.ledgerEntry.create({ data });
+            const entry2 = await tx.ledgerEntry.create({
+                data: {
+                    account: counterAccount,
+                    type: counterType,
+                    amount: data.amount,
+                    description: `Auto-balanced contra entry for ${data.account}`,
+                    date: data.date || new Date(),
+                },
+            });
+            return [entry1, entry2];
+        });
     }
     async getTaxRecords() {
         return this.prisma.taxRecord.findMany({

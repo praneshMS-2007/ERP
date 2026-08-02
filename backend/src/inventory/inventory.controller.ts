@@ -7,6 +7,24 @@ import { RequirePermission } from '../auth/decorators';
 export class InventoryController {
   constructor(private readonly inventoryService: InventoryService) {}
 
+  @Get('stock-alerts')
+  @RequirePermission('INVENTORY', 'READ')
+  getStockAlerts() {
+    return this.inventoryService.getStockAlerts();
+  }
+
+  @Get('categories')
+  @RequirePermission('INVENTORY', 'READ')
+  getCategories() {
+    return this.inventoryService.getCategories();
+  }
+
+  @Post('categories')
+  @RequirePermission('INVENTORY', 'WRITE')
+  createCategory(@Body() data: { name: string; description?: string }) {
+    return this.inventoryService.createCategory(data);
+  }
+
   @Get('products')
   @RequirePermission('INVENTORY', 'READ')
   getProducts(@Query('category') category?: string, @Query('status') status?: string) {
@@ -21,13 +39,13 @@ export class InventoryController {
 
   @Post('products')
   @RequirePermission('INVENTORY', 'WRITE')
-  createProduct(@Body() data: Prisma.ProductCreateInput) {
+  createProduct(@Body() data: Prisma.ProductUncheckedCreateInput) {
     return this.inventoryService.createProduct(data);
   }
 
   @Put('products/:id')
   @RequirePermission('INVENTORY', 'WRITE')
-  updateProduct(@Param('id') id: string, @Body() data: Prisma.ProductUpdateInput) {
+  updateProduct(@Param('id') id: string, @Body() data: Prisma.ProductUncheckedUpdateInput) {
     return this.inventoryService.updateProduct(id, data);
   }
 
@@ -45,7 +63,7 @@ export class InventoryController {
 
   @Post('suppliers')
   @RequirePermission('INVENTORY', 'WRITE')
-  createSupplier(@Body() data: Prisma.SupplierCreateInput) {
+  createSupplier(@Body() data: Prisma.SupplierUncheckedCreateInput) {
     return this.inventoryService.createSupplier(data);
   }
 
@@ -67,7 +85,6 @@ export class InventoryController {
     return this.inventoryService.updatePurchaseOrderStatus(id, status);
   }
 
-  // ========== WAREHOUSES ==========
   @Get('warehouses')
   @RequirePermission('INVENTORY', 'READ')
   getWarehouses() {
@@ -80,7 +97,6 @@ export class InventoryController {
     return this.inventoryService.createWarehouse(data);
   }
 
-  // ========== SALES ORDERS ==========
   @Get('sales-orders')
   @RequirePermission('INVENTORY', 'READ')
   getSalesOrders(@Query('status') status?: string) {

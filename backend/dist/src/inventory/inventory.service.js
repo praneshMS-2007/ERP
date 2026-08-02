@@ -19,6 +19,15 @@ let InventoryService = InventoryService_1 = class InventoryService {
     constructor(prisma) {
         this.prisma = prisma;
     }
+    async getCategories() {
+        return this.prisma.category.findMany({
+            include: { _count: { select: { products: true } } },
+            orderBy: { name: 'asc' },
+        });
+    }
+    async createCategory(data) {
+        return this.prisma.category.create({ data });
+    }
     async getProducts(category, status) {
         const where = {};
         if (category)
@@ -27,13 +36,32 @@ let InventoryService = InventoryService_1 = class InventoryService {
             where.status = status;
         return this.prisma.product.findMany({
             where,
+            include: { categoryRel: true },
             orderBy: { name: 'asc' },
+        });
+    }
+    async getStockAlerts() {
+        const products = await this.prisma.product.findMany({
+            orderBy: { stockLevel: 'asc' },
+        });
+        return products.map(p => {
+            const isCritical = p.stockLevel <= Math.floor(p.minStockLevel / 2);
+            return {
+                id: p.id,
+                sku: p.sku,
+                name: p.name,
+                category: p.category,
+                stockLevel: p.stockLevel,
+                minStockLevel: p.minStockLevel,
+                unit: p.unit,
+                severity: isCritical ? 'Critical' : 'Warning',
+            };
         });
     }
     async getProduct(id) {
         const product = await this.prisma.product.findUnique({
             where: { id },
-            include: { stockMovements: { take: 10, orderBy: { date: 'desc' } } }
+            include: { stockMovements: { take: 10, orderBy: { date: 'desc' } } },
         });
         if (!product)
             throw new common_1.NotFoundException('Product not found');
@@ -51,7 +79,7 @@ let InventoryService = InventoryService_1 = class InventoryService {
     }
     async getSuppliers() {
         return this.prisma.supplier.findMany({
-            orderBy: { name: 'asc' }
+            orderBy: { name: 'asc' },
         });
     }
     async createSupplier(data) {
@@ -61,13 +89,24 @@ let InventoryService = InventoryService_1 = class InventoryService {
         return this.prisma.purchaseOrder.findMany({
             include: {
                 supplier: { select: { name: true } },
-                product: { select: { name: true, sku: true } }
+                product: { select: { name: true, sku: true } },
             },
-            orderBy: { orderDate: 'desc' }
+            orderBy: { orderDate: 'desc' },
         });
     }
     async createPurchaseOrder(data) {
-        return this.prisma.purchaseOrder.create({ data });
+        const product = await this.prisma.product.findUnique({ where: { id: data.productId } });
+        const unitPrice = product ? product.price : 100;
+        const totalAmount = data.totalAmount || (data.quantity * unitPrice);
+        const count = await this.prisma.purchaseOrder.count();
+        const orderNumber = data.orderNumber || `PO-2026-${String(count + 1).padStart(3, '0')}`;
+        return this.prisma.purchaseOrder.create({
+            data: {
+                ...data,
+                totalAmount,
+                orderNumber,
+            },
+        });
     }
     async updatePurchaseOrderStatus(id, status) {
         const po = await this.prisma.purchaseOrder.findUnique({ where: { id } });
@@ -117,23 +156,18 @@ let InventoryService = InventoryService_1 = class InventoryService {
         });
     }
     async createSalesOrder(data) {
-        return this.prisma.salesOrder.create({ data });
+        const count = await this.prisma.salesOrder.count();
+        const orderNo = data.orderNo || `SO-2026-${String(count + 1).padStart(3, '0')}`;
+        return this.prisma.salesOrder.create({ data: { ...data, orderNo } });
     }
     async updateSalesOrderStatus(id, status) {
         const order = await this.prisma.salesOrder.findUnique({ where: { id } });
         if (!order)
             throw new common_1.NotFoundException('Sales order not found');
-        const updatedOrder = await this.prisma.salesOrder.update({
+        return this.prisma.salesOrder.update({
             where: { id },
             data: { status },
         });
-        if (status === 'DELIVERED' && order.status !== 'DELIVERED') {
-            this.logger.log(`Sales Order ${order.orderNo} delivered. Total: ${order.totalAmount}`);
-        }
-        if (status === 'CANCELLED' && order.status !== 'CANCELLED') {
-            this.logger.log(`Sales Order ${order.orderNo} cancelled.`);
-        }
-        return updatedOrder;
     }
 };
 exports.InventoryService = InventoryService;
