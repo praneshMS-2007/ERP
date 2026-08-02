@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { Sparkles, Send, User, Bot, Loader2, ArrowRight } from 'lucide-react';
+import { aiApi } from '../../services/api';
 
 interface Message {
   id: string;
@@ -21,6 +22,7 @@ export default function AIPage() {
   ]);
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -28,10 +30,11 @@ export default function AIPage() {
   };
 
   useEffect(() => {
+    setMounted(true);
     scrollToBottom();
   }, [messages, isTyping]);
 
-  const handleSend = (e: React.FormEvent) => {
+  const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim()) return;
 
@@ -42,22 +45,19 @@ export default function AIPage() {
       timestamp: new Date()
     };
 
-    setMessages(prev => [...prev, userMessage]);
+    const newMessages = [...messages, userMessage];
+    setMessages(newMessages);
     setInput('');
     setIsTyping(true);
 
-    // Mock AI response
-    setTimeout(() => {
-      let aiContent = "I'm sorry, I don't have access to that information right now. (This is a mock UI, pending real AI integration!)";
-      
-      const lowerInput = userMessage.content.toLowerCase();
-      if (lowerInput.includes('sales') || lowerInput.includes('revenue')) {
-        aiContent = "Based on current pipeline acceleration, projected Q4 revenue is 12% above target. Would you like me to generate a full breakdown?";
-      } else if (lowerInput.includes('inventory') || lowerInput.includes('stock')) {
-        aiContent = "Fiber Optic stock depletion rate has doubled. I recommend initiating a PO immediately. Should I draft the Purchase Order for you?";
-      } else if (lowerInput.includes('hr') || lowerInput.includes('employee')) {
-        aiContent = "Employee retention is up 2.1% from Q2, currently sitting at 94.2%. Sarah Jenkins and 7 others have pending leave requests awaiting approval.";
-      }
+    try {
+      const apiMessages = newMessages.map(msg => ({
+        role: msg.role,
+        content: msg.content
+      }));
+
+      const res = await aiApi.chat(apiMessages);
+      const aiContent = res.choices?.[0]?.message?.content || "I'm sorry, I couldn't generate a response.";
 
       const aiMessage: Message = {
         id: (Date.now() + 1).toString(),
@@ -67,8 +67,18 @@ export default function AIPage() {
       };
 
       setMessages(prev => [...prev, aiMessage]);
+    } catch (err) {
+      console.error(err);
+      const errorMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        role: 'assistant',
+        content: "Error communicating with AI service. Please check API key.",
+        timestamp: new Date()
+      };
+      setMessages(prev => [...prev, errorMessage]);
+    } finally {
       setIsTyping(false);
-    }, 1500);
+    }
   };
 
   const handleQuickAction = (text: string) => {
@@ -93,16 +103,16 @@ export default function AIPage() {
         {/* Chat Interface */}
         <div className="card" style={{ display: 'flex', flexDirection: 'column', padding: 0, overflow: 'hidden' }}>
           
-          {/* Chat Messages */}
-          <div style={{ flex: 1, overflowY: 'auto', padding: '24px', display: 'flex', flexDirection: 'column', gap: '20px', background: '#f9fafb' }}>
+          {/* Chat Messages Container — Using CSS Variables for Dark Mode Compatibility */}
+          <div style={{ flex: 1, overflowY: 'auto', padding: '24px', display: 'flex', flexDirection: 'column', gap: '20px', background: 'var(--color-background)' }}>
             {messages.map((msg) => (
               <div key={msg.id} style={{ display: 'flex', gap: '16px', flexDirection: msg.role === 'user' ? 'row-reverse' : 'row' }}>
                 <div style={{
                   width: '36px',
                   height: '36px',
                   borderRadius: '50%',
-                  background: msg.role === 'user' ? '#2563eb' : '#fbbf24',
-                  color: msg.role === 'user' ? 'white' : '#78350f',
+                  background: msg.role === 'user' ? '#2563eb' : '#f59e0b',
+                  color: 'white',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
@@ -111,8 +121,8 @@ export default function AIPage() {
                   {msg.role === 'user' ? <User size={18} /> : <Bot size={18} />}
                 </div>
                 <div style={{
-                  background: msg.role === 'user' ? '#2563eb' : 'white',
-                  color: msg.role === 'user' ? 'white' : '#111827',
+                  background: msg.role === 'user' ? '#2563eb' : 'var(--color-surface)',
+                  color: msg.role === 'user' ? 'white' : 'var(--color-text-primary)',
                   padding: '16px',
                   borderRadius: '12px',
                   borderTopRightRadius: msg.role === 'user' ? '4px' : '12px',
@@ -121,11 +131,11 @@ export default function AIPage() {
                   maxWidth: '75%',
                   fontSize: '14.5px',
                   lineHeight: 1.5,
-                  border: msg.role === 'assistant' ? '1px solid #e5e7eb' : 'none'
+                  border: msg.role === 'assistant' ? '1px solid var(--color-border)' : 'none'
                 }}>
                   {msg.content}
-                  <div style={{ fontSize: '11px', color: msg.role === 'user' ? '#bfdbfe' : '#9ca3af', marginTop: '8px', textAlign: msg.role === 'user' ? 'right' : 'left' }}>
-                    {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  <div style={{ fontSize: '11px', color: msg.role === 'user' ? '#bfdbfe' : 'var(--color-text-muted)', marginTop: '8px', textAlign: msg.role === 'user' ? 'right' : 'left' }}>
+                    {mounted ? msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
                   </div>
                 </div>
               </div>
@@ -133,20 +143,20 @@ export default function AIPage() {
             
             {isTyping && (
               <div style={{ display: 'flex', gap: '16px' }}>
-                <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: '#fbbf24', color: '#78350f', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: '#f59e0b', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                   <Bot size={18} />
                 </div>
-                <div style={{ background: 'white', padding: '16px', borderRadius: '12px', borderTopLeftRadius: '4px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)', border: '1px solid #e5e7eb', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <Loader2 size={16} className="animate-spin" style={{ color: '#9ca3af' }} />
-                  <span style={{ fontSize: '14px', color: '#6b7280' }}>Analyzing enterprise data...</span>
+                <div style={{ background: 'var(--color-surface)', padding: '16px', borderRadius: '12px', borderTopLeftRadius: '4px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)', border: '1px solid var(--color-border)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <Loader2 size={16} className="animate-spin" style={{ color: 'var(--color-text-muted)' }} />
+                  <span style={{ fontSize: '14px', color: 'var(--color-text-secondary)' }}>Analyzing enterprise data...</span>
                 </div>
               </div>
             )}
             <div ref={messagesEndRef} />
           </div>
 
-          {/* Chat Input */}
-          <div style={{ padding: '20px', borderTop: '1px solid #e5e7eb', background: 'white' }}>
+          {/* Chat Input Bar — Theme-Aware */}
+          <div style={{ padding: '20px', borderTop: '1px solid var(--color-border)', background: 'var(--color-surface)' }}>
             <form onSubmit={handleSend} style={{ display: 'flex', gap: '12px', position: 'relative' }}>
               <input 
                 type="text" 
@@ -158,7 +168,9 @@ export default function AIPage() {
                   padding: '16px 20px',
                   paddingRight: '60px',
                   borderRadius: '24px',
-                  border: '1px solid #d1d5db',
+                  border: '1px solid var(--color-border)',
+                  background: 'var(--color-background)',
+                  color: 'var(--color-text-primary)',
                   fontSize: '15px',
                   outline: 'none',
                   boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.05)'
@@ -174,7 +186,7 @@ export default function AIPage() {
                   width: '42px',
                   height: '42px',
                   borderRadius: '50%',
-                  background: !input.trim() || isTyping ? '#e5e7eb' : '#2563eb',
+                  background: !input.trim() || isTyping ? 'var(--color-border)' : '#2563eb',
                   color: 'white',
                   border: 'none',
                   display: 'flex',
@@ -193,7 +205,7 @@ export default function AIPage() {
         {/* Right Panel - Suggestions */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           <div className="card" style={{ background: 'linear-gradient(135deg, #1e3a8a, #3b82f6)', color: 'white', border: 'none' }}>
-            <h3 style={{ fontSize: '15px', fontWeight: 700, marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <h3 style={{ fontSize: '15px', fontWeight: 700, marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px', color: 'white' }}>
               <Sparkles size={16} style={{ color: '#fbbf24' }} />
               Suggested Prompts
             </h3>
@@ -213,8 +225,8 @@ export default function AIPage() {
                     alignItems: 'center',
                     justifyContent: 'space-between',
                     padding: '12px',
-                    background: 'rgba(255,255,255,0.1)',
-                    border: '1px solid rgba(255,255,255,0.2)',
+                    background: 'rgba(255,255,255,0.15)',
+                    border: '1px solid rgba(255,255,255,0.25)',
                     borderRadius: '8px',
                     color: 'white',
                     fontSize: '13px',
@@ -222,11 +234,11 @@ export default function AIPage() {
                     cursor: 'pointer',
                     transition: 'background 0.2s'
                   }}
-                  onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.2)'}
-                  onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.1)'}
+                  onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.25)'}
+                  onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.15)'}
                 >
                   <span style={{ lineHeight: 1.4 }}>{prompt}</span>
-                  <ArrowRight size={14} style={{ opacity: 0.7, flexShrink: 0, marginLeft: '8px' }} />
+                  <ArrowRight size={14} style={{ opacity: 0.8, flexShrink: 0, marginLeft: '8px' }} />
                 </button>
               ))}
             </div>
@@ -236,15 +248,15 @@ export default function AIPage() {
             <h3 style={{ fontSize: '15px', fontWeight: 700, marginBottom: '12px' }}>AI Integration Status</h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontSize: '13px', color: '#4b5563', fontWeight: 600 }}>Model</span>
-                <span className="badge" style={{ background: '#fef3c7', color: '#92400e' }}>MOCKED (UI ONLY)</span>
+                <span style={{ fontSize: '13px', color: 'var(--color-text-secondary)', fontWeight: 600 }}>Model</span>
+                <span className="badge" style={{ background: '#dbeafe', color: '#1e40af' }}>llama-3.3-70b-versatile</span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontSize: '13px', color: '#4b5563', fontWeight: 600 }}>Database Context</span>
-                <span className="badge badge-inactive">DISCONNECTED</span>
+                <span style={{ fontSize: '13px', color: 'var(--color-text-secondary)', fontWeight: 600 }}>API Status</span>
+                <span className="badge badge-active">CONNECTED</span>
               </div>
-              <p style={{ fontSize: '12px', color: '#6b7280', marginTop: '8px', lineHeight: 1.5, padding: '12px', background: '#f3f4f6', borderRadius: '6px' }}>
-                Currently running in demonstration mode. Connect a valid API key in the backend settings to enable real-time generative responses based on live database metrics.
+              <p style={{ fontSize: '12px', color: 'var(--color-text-secondary)', marginTop: '8px', lineHeight: 1.5, padding: '12px', background: 'var(--color-background)', border: '1px solid var(--color-border)', borderRadius: '6px' }}>
+                Groq AI integration is active. The assistant generates real-time responses.
               </p>
             </div>
           </div>

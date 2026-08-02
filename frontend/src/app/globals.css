@@ -20,8 +20,8 @@
 
   --color-surface: #ffffff;
   --color-background: #f8fafc;
-  --color-border: #e5e7eb;
-  --color-border-light: #f3f4f6;
+  --color-border: #d1d5db;
+  --color-border-light: #e5e7eb;
 
   --color-text-primary: #111827;
   --color-text-secondary: #6b7280;
@@ -32,7 +32,54 @@
   --color-danger: #ef4444;
   --color-info: #3b82f6;
 
+  --color-card: #ffffff;
+
   --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+/* ---- DARK MODE OVERRIDES ---- */
+[data-theme='dark'], html.dark {
+  --color-surface: #1e293b;
+  --color-background: #0f172a;
+  --color-border: #334155;
+  --color-border-light: #334155;
+  --color-text-primary: #f8fafc;
+  --color-text-secondary: #cbd5e1;
+  --color-text-muted: #94a3b8;
+  --color-card: #1e293b;
+}
+
+[data-theme='dark'] input,
+[data-theme='dark'] select,
+[data-theme='dark'] textarea,
+html.dark input,
+html.dark select,
+html.dark textarea {
+  background-color: #0f172a !important;
+  color: #f8fafc !important;
+  border-color: #334155 !important;
+}
+
+[data-theme='dark'] input::placeholder,
+[data-theme='dark'] textarea::placeholder,
+html.dark input::placeholder,
+html.dark textarea::placeholder {
+  color: #64748b !important;
+}
+
+[data-theme='dark'] .card,
+[data-theme='dark'] .kpi-card,
+[data-theme='dark'] .topbar,
+html.dark .card,
+html.dark .kpi-card,
+html.dark .topbar {
+  background-color: #1e293b !important;
+  border-color: #334155 !important;
+}
+
+[data-theme='dark'] .hover-bg-gray:hover,
+html.dark .hover-bg-gray:hover {
+  background-color: #334155 !important;
 }
 
 /* ---- BASE ---- */
@@ -460,22 +507,23 @@ body {
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: 12px;
-  padding: 20px;
+  padding: 24px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 12px;
   transition: box-shadow 0.2s ease;
 }
 .kpi-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.04); }
 
-.kpi-card-header {
+.kpi-card-top {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  margin-bottom: 8px;
 }
 
 .kpi-card-label {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -483,24 +531,24 @@ body {
 }
 
 .kpi-card-icon {
-  width: 40px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
   border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
 }
-.kpi-card-icon svg { width: 20px; height: 20px; }
+.kpi-card-icon svg { width: 22px; height: 22px; }
 
 .kpi-card-value {
-  font-size: 32px;
+  font-size: 36px;
   font-weight: 800;
   color: var(--color-text-primary);
   line-height: 1;
 }
 
 .kpi-card-trend {
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 600;
   display: flex;
   align-items: center;
@@ -510,7 +558,7 @@ body {
 .kpi-card-trend.down { color: var(--color-danger); }
 .kpi-card-trend.neutral { color: var(--color-text-muted); }
 
-.kpi-card-trend svg { width: 14px; height: 14px; }
+.kpi-card-trend svg { width: 16px; height: 16px; }
 
 /* ============================================================
    DATA TABLES
@@ -580,9 +628,9 @@ body {
   letter-spacing: 0.03em;
 }
 
-.badge-active { background: #dcfce7; color: #15803d; }
-.badge-on-leave { background: #fef3c7; color: #b45309; }
-.badge-probation { background: #f3e8ff; color: #7c3aed; }
+.badge-active { background: #dbeafe; color: #1d4ed8; }
+.badge-on-leave { background: #fee2e2; color: #dc2626; }
+.badge-probation { background: #f3f4f6; color: #4b5563; }
 .badge-suspended { background: #fee2e2; color: #b91c1c; }
 
 .badge-lead { background: #dbeafe; color: #1d4ed8; }
@@ -602,8 +650,9 @@ body {
 .badge-discovery { background: #f3e8ff; color: #7c3aed; }
 .badge-review { background: #fef3c7; color: #b45309; }
 
-.badge-sick-leave { background: #fee2e2; color: #b91c1c; }
+.badge-sick-leave { background: #e0e7ff; color: #4338ca; }
 .badge-vacation { background: #dbeafe; color: #1d4ed8; }
+.badge-month { background: #dcfce7; color: #15803d; }
 
 /* System/Admin badges */
 .badge-system { background: #1d4ed8; color: white; }
@@ -1171,3 +1220,16 @@ body {
   box-shadow: 0 6px 20px rgba(37,99,235,0.4);
 }
 .ai-fab svg { width: 24px; height: 24px; }
+
+/* ---- MODAL ANIMATIONS ---- */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(20px) scale(0.97); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* ---- HOVER STATE for dropdowns ---- */
+[style*="--color-bg-hover"] { }

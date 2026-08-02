@@ -2,103 +2,155 @@
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { hrmApi } from '@/services/api';
+import { hrmApi, exportApi } from '@/services/api';
+import ExportButton from '@/components/ExportButton';
+import { ChevronLeft, Check, X, Search } from 'lucide-react';
 
 export default function HRMLeaves() {
-  const [employees, setEmployees] = useState<any[]>([]);
+  const [leaves, setLeaves] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<'PENDING' | 'HISTORY'>('PENDING');
+
+  async function loadData() {
+    setLoading(true);
+    try {
+      const data = await hrmApi.getLeaves();
+      setLeaves(Array.isArray(data) ? data : []);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  }
 
   useEffect(() => {
-    async function loadData() {
-      try {
-        const data = await hrmApi.getEmployees();
-        setEmployees(data || []);
-      } catch (e) {
-        console.error(e);
-      } finally {
-        setLoading(false);
-      }
-    }
     loadData();
   }, []);
 
-  // Preloaded demo leave records
-  const leaveRecords = [
-    { id: 1, empName: 'Pranesh M S', type: 'Casual Leave', from: '2026-07-20', to: '2026-07-21', days: 2, reason: 'Personal work', status: 'Approved' },
-    { id: 2, empName: 'Akshay Kumar', type: 'Sick Leave', from: '2026-07-18', to: '2026-07-19', days: 2, reason: 'Fever and cold', status: 'Approved' },
-    { id: 3, empName: 'Priya Sharma', type: 'Annual Leave', from: '2026-07-25', to: '2026-07-30', days: 6, reason: 'Family vacation', status: 'Pending' },
-    { id: 4, empName: 'Rahul Singh', type: 'Casual Leave', from: '2026-07-22', to: '2026-07-22', days: 1, reason: 'Doctor appointment', status: 'Approved' },
-    { id: 5, empName: 'Deepa Nair', type: 'Maternity Leave', from: '2026-08-01', to: '2026-10-30', days: 91, reason: 'Maternity', status: 'Pending' },
-  ];
+  async function handleLeaveAction(id: string, status: 'APPROVED' | 'REJECTED') {
+    await hrmApi.updateLeaveStatus(id, status);
+    loadData();
+  }
 
-  const statusColor = (s: string) => s === 'Approved' ? 'var(--green)' : s === 'Pending' ? 'var(--amber)' : 'var(--red)';
+  const pendingLeaves = leaves.filter(l => l.status === 'PENDING').sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime());
+  const historyLeaves = leaves.filter(l => l.status !== 'PENDING').sort((a, b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime());
+
+  const displayedLeaves = activeTab === 'PENDING' ? pendingLeaves : historyLeaves;
+
+  const formatDate = (d: string) => new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+
+  const statusBadge = (status: string) => {
+    if (status === 'APPROVED') return <span className="badge badge-approved">APPROVED</span>;
+    if (status === 'REJECTED') return <span className="badge badge-suspended">REJECTED</span>;
+    return <span className="badge badge-pending">PENDING</span>;
+  };
+
+  const leaveTypeBadgeClass = (type: string) => {
+    if (type === 'SICK_LEAVE') return 'badge badge-sick-leave';
+    if (type === 'ANNUAL_LEAVE') return 'badge badge-vacation';
+    return 'badge badge-vacation';
+  };
+
+  const formatLeaveType = (type: string) => {
+    if (type === 'SICK_LEAVE') return 'SICK LEAVE';
+    if (type === 'ANNUAL_LEAVE') return 'VACATION';
+    return type?.replace(/_/g, ' ') || 'LEAVE';
+  };
 
   return (
-    <div className="page-content">
+    <div className="fade-in">
       <div className="page-header">
-        <div className="page-header-left">
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+            <Link href="/hrm" style={{ color: 'var(--color-text-muted)', display: 'flex', alignItems: 'center' }}>
+              <ChevronLeft size={16} /> Back to Overview
+            </Link>
+          </div>
           <h1>Leave Management</h1>
-          <p>Track and manage employee leave applications</p>
+          <p>Review pending leave requests and view historical records.</p>
         </div>
-        <div className="page-actions">
-          <Link href="/hrm" className="btn btn-secondary btn-sm">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="14" height="14" style={{marginRight: '4px'}}><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
-            Back to HR
-          </Link>
-          <button className="btn btn-primary">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-            Apply Leave
-          </button>
-        </div>
+        {activeTab === 'HISTORY' && (
+          <div className="page-header-actions">
+            <ExportButton onExport={(format) => exportApi.exportLeaves(format)} label="Export History" />
+          </div>
+        )}
       </div>
 
-      <div className="table-card fade-in">
-        <div className="table-toolbar">
-          <div className="table-title">Leave Applications ({leaveRecords.length})</div>
+      <div className="card" style={{ padding: '0', overflow: 'hidden' }}>
+        <div style={{ display: 'flex', borderBottom: '1px solid var(--color-border-light)', background: '#f9fafb' }}>
+          <button
+            onClick={() => setActiveTab('PENDING')}
+            style={{
+              padding: '16px 24px', fontSize: '14px', fontWeight: 600, border: 'none', background: 'none', cursor: 'pointer',
+              color: activeTab === 'PENDING' ? '#2563eb' : 'var(--color-text-muted)',
+              borderBottom: activeTab === 'PENDING' ? '2px solid #2563eb' : '2px solid transparent',
+            }}
+          >
+            Pending Requests ({pendingLeaves.length})
+          </button>
+          <button
+            onClick={() => setActiveTab('HISTORY')}
+            style={{
+              padding: '16px 24px', fontSize: '14px', fontWeight: 600, border: 'none', background: 'none', cursor: 'pointer',
+              color: activeTab === 'HISTORY' ? '#2563eb' : 'var(--color-text-muted)',
+              borderBottom: activeTab === 'HISTORY' ? '2px solid #2563eb' : '2px solid transparent',
+            }}
+          >
+            Leave History ({historyLeaves.length})
+          </button>
         </div>
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th>Employee</th>
-              <th>Type</th>
-              <th>From</th>
-              <th>To</th>
-              <th>Days</th>
-              <th>Reason</th>
-              <th>Status</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {leaveRecords.map((l) => (
-              <tr key={l.id}>
-                <td style={{fontWeight: 600}}>{l.empName}</td>
-                <td>{l.type}</td>
-                <td>{l.from}</td>
-                <td>{l.to}</td>
-                <td>{l.days}</td>
-                <td style={{maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis'}}>{l.reason}</td>
-                <td>
-                  <span className="badge" style={{ color: statusColor(l.status), backgroundColor: `${statusColor(l.status)}15` }}>{l.status}</span>
-                </td>
-                <td>
-                  <div className="action-btns">
-                    {l.status === 'Pending' && (
-                      <>
-                        <button className="act-btn act-edit" title="Approve" style={{color: 'var(--green)'}}>
-                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
-                        </button>
-                        <button className="act-btn act-delete" title="Reject">
-                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
-                        </button>
-                      </>
-                    )}
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+
+        <div style={{ padding: '24px' }}>
+          {loading ? (
+            <div style={{ textAlign: 'center', padding: '40px', color: 'var(--color-text-muted)' }}>Loading records...</div>
+          ) : (
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th style={{ textTransform: 'uppercase', fontSize: '11px', fontWeight: 700, color: 'var(--color-text-muted)' }}>Employee</th>
+                  <th style={{ textTransform: 'uppercase', fontSize: '11px', fontWeight: 700, color: 'var(--color-text-muted)' }}>Department</th>
+                  <th style={{ textTransform: 'uppercase', fontSize: '11px', fontWeight: 700, color: 'var(--color-text-muted)' }}>Type</th>
+                  <th style={{ textTransform: 'uppercase', fontSize: '11px', fontWeight: 700, color: 'var(--color-text-muted)' }}>Dates</th>
+                  <th style={{ textTransform: 'uppercase', fontSize: '11px', fontWeight: 700, color: 'var(--color-text-muted)' }}>Reason</th>
+                  <th style={{ textTransform: 'uppercase', fontSize: '11px', fontWeight: 700, color: 'var(--color-text-muted)' }}>{activeTab === 'HISTORY' ? 'Action Time' : 'Status'}</th>
+                  <th style={{ textTransform: 'uppercase', fontSize: '11px', fontWeight: 700, color: 'var(--color-text-muted)' }}>{activeTab === 'HISTORY' ? 'Status' : 'Actions'}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {displayedLeaves.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} style={{ textAlign: 'center', padding: '40px', color: 'var(--color-text-muted)' }}>
+                      No records found
+                    </td>
+                  </tr>
+                ) : displayedLeaves.map((l) => (
+                  <tr key={l.id}>
+                    <td style={{ fontWeight: 600 }}>{l.employee?.firstName} {l.employee?.lastName}</td>
+                    <td>{l.employee?.department?.name || '-'}</td>
+                    <td><span className={leaveTypeBadgeClass(l.leaveType)}>{formatLeaveType(l.leaveType)}</span></td>
+                    <td>{formatDate(l.startDate)} - {formatDate(l.endDate)}</td>
+                    <td style={{ maxWidth: '300px', fontStyle: 'italic', color: 'var(--color-text-secondary)' }}>&ldquo;{l.reason || 'No reason provided'}&rdquo;</td>
+                    <td>{activeTab === 'HISTORY' ? new Date(l.updatedAt).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }) : statusBadge(l.status)}</td>
+                    <td>
+                      {activeTab === 'HISTORY' ? (
+                        statusBadge(l.status)
+                      ) : (
+                        <div style={{ display: 'flex', gap: '12px' }}>
+                          <button onClick={() => handleLeaveAction(l.id, 'REJECTED')} style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#dc2626', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '13px', fontWeight: 600 }}>
+                            <X size={16} /> Reject
+                          </button>
+                          <button onClick={() => handleLeaveAction(l.id, 'APPROVED')} style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#2563eb', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '13px', fontWeight: 600 }}>
+                            <Check size={16} /> Approve
+                          </button>
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
       </div>
     </div>
   );

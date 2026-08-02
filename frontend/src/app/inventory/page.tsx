@@ -2,263 +2,243 @@
 
 import { useEffect, useState } from 'react';
 import {
-  Package,
-  DollarSign,
-  AlertTriangle,
-  ShoppingCart,
-  TrendingUp,
-  Download,
-  Plus,
-  Filter,
-  MoreVertical,
-  ChevronLeft,
-  ChevronRight,
-  Bot,
+  Package, DollarSign, AlertTriangle, ShoppingCart, TrendingUp,
+  Download, Plus, Filter, MoreVertical, ChevronLeft, ChevronRight, Bot,
 } from 'lucide-react';
-import { inventoryApi } from '../../services/api';
+import { inventoryApi, exportApi } from '../../services/api';
+import ExportButton from '../../components/ExportButton';
+import Modal, { FormField } from '../../components/Modal';
 
 export default function InventoryPage() {
   const [products, setProducts] = useState<any[]>([]);
-  const [stats, setStats] = useState({
-    totalProducts: 0,
-    inStockValue: 0,
-    lowStockCount: 0,
-    pendingOrders: 0,
-  });
+  const [purchaseOrders, setPurchaseOrders] = useState<any[]>([]);
+  const [suppliers, setSuppliers] = useState<any[]>([]);
+  const [stats, setStats] = useState({ total: 0, lowStock: 0, totalValue: 0, pendingPOs: 0 });
+  const [page, setPage] = useState(0);
+  const [filterCat, setFilterCat] = useState('');
+  const [showPOModal, setShowPOModal] = useState(false);
+  const [showProductModal, setShowProductModal] = useState(false);
+  const [poForm, setPoForm] = useState({ productId: '', supplierId: '', quantity: '', totalCost: '' });
+  const [prodForm, setProdForm] = useState({ name: '', sku: '', category: '', price: '', costPrice: '', stockLevel: '', minStockLevel: '' });
+  const pageSize = 8;
 
-  useEffect(() => {
-    async function fetchData() {
-      try {
-        const [prodData] = await Promise.all([
-          inventoryApi.getProducts(),
-        ]);
+  async function fetchAll() {
+    try {
+      const [prodData, poData, supData] = await Promise.all([
+        inventoryApi.getProducts(), inventoryApi.getPurchaseOrders(), inventoryApi.getSuppliers(),
+      ]);
+      const prodList = Array.isArray(prodData) ? prodData : [];
+      const poList = Array.isArray(poData) ? poData : [];
+      const supList = Array.isArray(supData) ? supData : [];
 
-        let inStockValue = 0;
-        let lowStockCount = 0;
+      setProducts(prodList);
+      setPurchaseOrders(poList);
+      setSuppliers(supList);
 
-        const formattedProducts = prodData.map((p: any) => {
-          inStockValue += (p.price || 0) * (p.stockLevel || 0);
-          
-          let status = 'HEALTHY';
-          if (p.stockLevel <= p.minStockLevel) {
-            status = 'CRITICAL';
-            lowStockCount++;
-          } else if (p.stockLevel <= p.minStockLevel * 2) {
-            status = 'WARNING';
-          }
+      const lowStock = prodList.filter((p: any) => p.stockLevel <= p.minStockLevel).length;
+      const totalValue = prodList.reduce((s: number, p: any) => s + (p.price * p.stockLevel), 0);
+      const pendingPOs = poList.filter((po: any) => po.status === 'PENDING' || po.status === 'ORDERED').length;
 
-          return {
-            icon: p.category === 'Electronics' ? '⊕' : p.category === 'Networking' ? '⬡' : '▣',
-            name: p.name,
-            sku: p.sku,
-            category: p.category,
-            qty: p.stockLevel,
-            status,
-          };
-        });
+      setStats({ total: prodList.length, lowStock, totalValue, pendingPOs });
+    } catch (e) { console.error('Inventory error', e); }
+  }
 
-        setStats({
-          totalProducts: prodData.length,
-          inStockValue,
-          lowStockCount,
-          pendingOrders: 156, // Mock for now until PO endpoint returns data
-        });
+  useEffect(() => { fetchAll(); }, []);
 
-        setProducts(formattedProducts);
-      } catch (e) {
-        console.error('Failed to fetch inventory data:', e);
-      }
-    }
-    fetchData();
-  }, []);
+  let filtered = [...products];
+  if (filterCat) filtered = filtered.filter(p => p.category === filterCat);
+  const totalPages = Math.ceil(filtered.length / pageSize);
+  const paginated = filtered.slice(page * pageSize, (page + 1) * pageSize);
+  const uniqueCats = [...new Set(products.map(p => p.category).filter(Boolean))];
 
-  const badgeClass = (s: string) => {
-    if (s === 'HEALTHY') return 'badge badge-healthy';
-    if (s === 'CRITICAL') return 'badge badge-critical';
-    if (s === 'WARNING') return 'badge badge-warning';
-    return 'badge';
-  };
+  async function handleCreatePO() {
+    if (!poForm.productId || !poForm.quantity) return;
+    await inventoryApi.createPurchaseOrder({
+      productId: poForm.productId, supplierId: poForm.supplierId || undefined,
+      quantity: parseInt(poForm.quantity), totalCost: parseFloat(poForm.totalCost || '0'),
+    } as any);
+    setShowPOModal(false);
+    setPoForm({ productId: '', supplierId: '', quantity: '', totalCost: '' });
+    fetchAll();
+  }
+
+  async function handleCreateProduct() {
+    if (!prodForm.name || !prodForm.sku) return;
+    await inventoryApi.createProduct({
+      name: prodForm.name, sku: prodForm.sku, category: prodForm.category,
+      price: parseFloat(prodForm.price || '0'), costPrice: parseFloat(prodForm.costPrice || '0'),
+      stockLevel: parseInt(prodForm.stockLevel || '0'), minStockLevel: parseInt(prodForm.minStockLevel || '10'),
+    } as any);
+    setShowProductModal(false);
+    setProdForm({ name: '', sku: '', category: '', price: '', costPrice: '', stockLevel: '', minStockLevel: '' });
+    fetchAll();
+  }
+
+  const formatCurrency = (n: number) => n >= 1_000_000 ? `$${(n / 1_000_000).toFixed(1)}M` : n >= 1000 ? `$${(n / 1000).toFixed(1)}K` : `$${n}`;
+  const stockBadge = (p: any) => p.stockLevel <= p.minStockLevel ? 'badge badge-on-leave' : 'badge badge-active';
+  const stockLabel = (p: any) => p.stockLevel <= p.minStockLevel ? 'LOW STOCK' : 'IN STOCK';
 
   return (
     <div className="fade-in">
-      {/* Page Header */}
       <div className="page-header">
         <div>
           <h1>Inventory Management</h1>
           <p>Real-time oversight of global stock and procurement cycles.</p>
         </div>
         <div className="page-header-actions">
-          <button className="btn btn-secondary"><Download size={16} /> Export Report</button>
-          <button className="btn btn-primary"><Plus size={16} /> New Purchase Order</button>
+          <ExportButton onExport={(format) => exportApi.exportProducts(format)} label="Export Products" />
+          <button className="btn btn-secondary" onClick={() => setShowProductModal(true)}><Plus size={16} /> Add Product</button>
+          <button className="btn btn-primary" onClick={() => setShowPOModal(true)}><Plus size={16} /> New Purchase Order</button>
         </div>
       </div>
 
-      {/* KPI Grid */}
+      {/* KPI Grid — LIVE */}
       <div className="kpi-grid">
         <div className="kpi-card">
           <div className="kpi-card-header">
             <div className="kpi-card-label">Total Products</div>
             <div className="kpi-card-icon" style={{ background: '#eff6ff', color: '#2563eb' }}><Package size={20} /></div>
           </div>
-          <div className="kpi-card-value">{stats.totalProducts}</div>
-          <div className="kpi-card-trend up"><TrendingUp size={14} /> +4.2% from last month</div>
+          <div className="kpi-card-value">{stats.total}</div>
         </div>
         <div className="kpi-card">
           <div className="kpi-card-header">
-            <div className="kpi-card-label">In-Stock Value</div>
-            <div className="kpi-card-icon" style={{ background: '#f0fdf4', color: '#16a34a' }}><DollarSign size={20} /></div>
-          </div>
-          <div className="kpi-card-value">${(stats.inStockValue / 1000).toFixed(1)}K</div>
-          <div className="kpi-card-trend neutral" style={{color: 'var(--color-text-muted)'}}>Updated 2m ago</div>
-        </div>
-        <div className="kpi-card">
-          <div className="kpi-card-header">
-            <div className="kpi-card-label">Low Stock SKU</div>
+            <div className="kpi-card-label">Low Stock Alerts</div>
             <div className="kpi-card-icon" style={{ background: '#fef2f2', color: '#dc2626' }}><AlertTriangle size={20} /></div>
           </div>
-          <div className="kpi-card-value" style={{ color: '#dc2626' }}>{stats.lowStockCount}</div>
-          <div className="kpi-card-trend down">Action required immediately</div>
+          <div className="kpi-card-value" style={{ color: stats.lowStock > 0 ? '#dc2626' : undefined }}>{stats.lowStock}</div>
         </div>
         <div className="kpi-card">
           <div className="kpi-card-header">
-            <div className="kpi-card-label">Pending Orders</div>
-            <div className="kpi-card-icon" style={{ background: '#eff6ff', color: '#2563eb' }}><ShoppingCart size={20} /></div>
+            <div className="kpi-card-label">Total Inventory Value</div>
+            <div className="kpi-card-icon" style={{ background: '#f0fdf4', color: '#16a34a' }}><DollarSign size={20} /></div>
           </div>
-          <div className="kpi-card-value">{stats.pendingOrders}</div>
-          <div className="kpi-card-trend neutral" style={{color: 'var(--color-text-muted)'}}>Avg. process time: 1.4 days</div>
+          <div className="kpi-card-value">{formatCurrency(stats.totalValue)}</div>
+        </div>
+        <div className="kpi-card">
+          <div className="kpi-card-header">
+            <div className="kpi-card-label">Pending POs</div>
+            <div className="kpi-card-icon" style={{ background: '#fef3c7', color: '#d97706' }}><ShoppingCart size={20} /></div>
+          </div>
+          <div className="kpi-card-value">{stats.pendingPOs}</div>
         </div>
       </div>
 
-      {/* Main Content Grid */}
-      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '16px', marginBottom: '24px' }}>
-        {/* Live Inventory Status */}
+      {/* Main Grid — Product Catalog + Live Stock Movement */}
+      <div style={{ display: 'grid', gridTemplateColumns: '2.5fr 1fr', gap: '20px', marginTop: '16px' }}>
+
+        {/* Products Table */}
         <div className="card">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-            <h3 style={{ fontSize: '16px', fontWeight: 700 }}>Live Inventory Status</h3>
-            <div style={{ display: 'flex', gap: '8px' }}>
-              <button style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--color-text-muted)' }}><Filter size={16} /></button>
-              <button style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--color-text-muted)' }}><MoreVertical size={16} /></button>
-            </div>
+            <h3 style={{ fontSize: '16px', fontWeight: 700 }}>Product Catalog</h3>
+            <select className="btn btn-secondary btn-sm" value={filterCat} onChange={(e) => { setFilterCat(e.target.value); setPage(0); }} style={{ fontSize: '12px' }}>
+              <option value="">All Categories</option>
+              {uniqueCats.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
           </div>
+
           <table className="data-table">
-            <thead>
-              <tr>
-                <th>Product Name</th>
-                <th>SKU</th>
-                <th>Category</th>
-                <th>QTY</th>
-                <th>Status</th>
-              </tr>
-            </thead>
+            <thead><tr><th>Product</th><th>SKU</th><th>Category</th><th>Price</th><th>Stock</th><th>Status</th></tr></thead>
             <tbody>
-              {products.length === 0 ? (
-                <tr><td colSpan={5} style={{ textAlign: 'center', padding: '20px' }}>Loading or no data...</td></tr>
-              ) : products.slice(0, 5).map((p, i) => (
-                <tr key={i}>
-                  <td>
-                    <div className="employee-cell">
-                      <div className="employee-avatar" style={{ background: '#eff6ff', color: '#2563eb', fontSize: '16px' }}>{p.icon}</div>
-                      <div className="employee-name">{p.name}</div>
-                    </div>
-                  </td>
-                  <td style={{ fontFamily: 'monospace', fontSize: '12px', color: 'var(--color-text-muted)' }}>{p.sku}</td>
-                  <td>{p.category}</td>
-                  <td style={{ fontWeight: 700, color: p.status === 'CRITICAL' ? '#dc2626' : p.status === 'WARNING' ? '#d97706' : 'inherit' }}>{p.qty?.toLocaleString()}</td>
-                  <td><span className={badgeClass(p.status)}>{p.status}</span></td>
+              {paginated.length === 0 ? (
+                <tr><td colSpan={6} style={{ textAlign: 'center', padding: '20px' }}>No products found</td></tr>
+              ) : paginated.map((p) => (
+                <tr key={p.id}>
+                  <td style={{ fontWeight: 600 }}>{p.name}</td>
+                  <td style={{ color: 'var(--color-text-muted)', fontFamily: 'monospace' }}>{p.sku}</td>
+                  <td>{p.category || '-'}</td>
+                  <td style={{ fontWeight: 700 }}>${p.price?.toFixed(2)}</td>
+                  <td>{p.stockLevel} / {p.minStockLevel}</td>
+                  <td><span className={stockBadge(p)}>{stockLabel(p)}</span></td>
                 </tr>
               ))}
             </tbody>
           </table>
+
           <div className="pagination">
-            <span>Showing {Math.min(5, products.length)} of {products.length} products</span>
+            <span>Showing {filtered.length === 0 ? 0 : page * pageSize + 1}–{Math.min((page + 1) * pageSize, filtered.length)} of {filtered.length}</span>
             <div className="pagination-buttons">
-              <button className="pagination-btn"><ChevronLeft size={14} /></button>
-              <button className="pagination-btn"><ChevronRight size={14} /></button>
+              <button className="pagination-btn" disabled={page === 0} onClick={() => setPage(p => p - 1)}><ChevronLeft size={14} /></button>
+              <span style={{ fontSize: '13px', padding: '0 8px' }}>{page + 1} / {totalPages || 1}</span>
+              <button className="pagination-btn" disabled={page >= totalPages - 1} onClick={() => setPage(p => p + 1)}><ChevronRight size={14} /></button>
             </div>
           </div>
         </div>
 
-        {/* Right Column */}
+        {/* Right Column: Live Stock Movement & Alerts */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          {/* Stock Movement Timeline */}
+          
+          {/* Stock Movement Feed */}
           <div className="card">
-            <h3 style={{ fontSize: '16px', fontWeight: 700, marginBottom: '16px' }}>Stock Movement</h3>
-            <div className="timeline">
-              <div className="timeline-item">
-                <div className="timeline-dot" style={{ background: '#16a34a' }} />
-                <div className="timeline-title">Shipment Received</div>
-                <div className="timeline-desc">500 units of Neural Core X1</div>
-                <div className="timeline-time">Today, 09:12 AM</div>
-              </div>
-              <div className="timeline-item">
-                <div className="timeline-dot" style={{ background: '#2563eb' }} />
-                <div className="timeline-title">Internal Transfer</div>
-                <div className="timeline-desc">20 units sent to Berlin Site</div>
-                <div className="timeline-time">Today, 07:45 AM</div>
-              </div>
-              <div className="timeline-item">
-                <div className="timeline-dot" style={{ background: '#dc2626' }} />
-                <div className="timeline-title">Cycle Count Mismatch</div>
-                <div className="timeline-desc">-2 units of Fiber Optic</div>
-                <div className="timeline-time">Yesterday, 11:30 PM</div>
-              </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <h3 style={{ fontSize: '16px', fontWeight: 700 }}>Stock Movement</h3>
+              <span style={{ fontSize: '11px', color: '#16a34a', fontWeight: 700 }}>LIVE DB</span>
             </div>
-            <div style={{ textAlign: 'center', paddingTop: '12px' }}>
-              <button className="btn btn-secondary btn-sm" style={{ width: '100%', justifyContent: 'center', textTransform: 'uppercase', fontSize: '11px', fontWeight: 700 }}>View Full Log</button>
-            </div>
+
+            {purchaseOrders.length === 0 && products.length === 0 ? (
+              <div style={{ fontSize: '12px', color: 'var(--color-text-muted)', textAlign: 'center', padding: '20px 0' }}>No stock activity logged</div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                {purchaseOrders.slice(0, 3).map((po: any) => (
+                  <div key={po.id} style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', fontSize: '12px' }}>
+                    <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#2563eb', marginTop: 5, flexShrink: 0 }}></div>
+                    <div>
+                      <div style={{ fontWeight: 700, color: 'var(--color-text-primary)' }}>PO Order #{po.poNumber || po.id.slice(0, 6)}</div>
+                      <div style={{ color: 'var(--color-text-secondary)' }}>{po.quantity} units · Status: {po.status}</div>
+                      <div style={{ fontSize: '10px', color: 'var(--color-text-muted)' }}>{po.createdAt ? new Date(po.createdAt).toLocaleDateString() : 'Today'}</div>
+                    </div>
+                  </div>
+                ))}
+
+                {products.filter(p => p.stockLevel <= p.minStockLevel).slice(0, 2).map((p: any) => (
+                  <div key={p.id} style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', fontSize: '12px' }}>
+                    <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#dc2626', marginTop: 5, flexShrink: 0 }}></div>
+                    <div>
+                      <div style={{ fontWeight: 700, color: '#dc2626' }}>Low Stock: {p.name}</div>
+                      <div style={{ color: 'var(--color-text-secondary)' }}>Current: {p.stockLevel} units (Min: {p.minStockLevel})</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
-          {/* Stock Alerts */}
-          <div className="card">
-            <h3 style={{ fontSize: '16px', fontWeight: 700, marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <AlertTriangle size={18} style={{ color: '#d97706' }} /> Stock Alerts
-            </h3>
-            {products.filter(p => p.status === 'CRITICAL' || p.status === 'WARNING').slice(0, 2).map((p, i) => (
-              <div key={i} className={`stock-alert-item ${p.status === 'CRITICAL' ? 'critical' : ''}`}>
-                <div>
-                  <div style={{ fontWeight: 600, fontSize: '13px' }}>{p.name}</div>
-                  <div style={{ fontSize: '12px', color: p.status === 'CRITICAL' ? '#dc2626' : '#d97706' }}>{p.qty} units remaining</div>
-                </div>
-                <button className={`btn btn-sm ${p.status === 'CRITICAL' ? 'btn-danger' : 'btn-secondary'}`}>Order Now</button>
-              </div>
-            ))}
-          </div>
         </div>
+
       </div>
 
-      {/* Active Purchase Orders */}
-      <div className="card">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-          <h3 style={{ fontSize: '16px', fontWeight: 700 }}>Active Purchase Orders</h3>
-          <button className="btn btn-secondary btn-sm" style={{ textTransform: 'uppercase', fontSize: '11px', fontWeight: 700 }}>Manage Suppliers</button>
+      {/* NEW PURCHASE ORDER MODAL */}
+      <Modal isOpen={showPOModal} onClose={() => setShowPOModal(false)} title="Create Purchase Order">
+        <FormField label="Product" type="select" value={poForm.productId} onChange={(v) => setPoForm({ ...poForm, productId: v })} required
+          options={products.map(p => ({ label: `${p.name} (${p.sku})`, value: p.id }))} />
+        <FormField label="Supplier" type="select" value={poForm.supplierId} onChange={(v) => setPoForm({ ...poForm, supplierId: v })}
+          options={suppliers.map(s => ({ label: s.name, value: s.id }))} />
+        <FormField label="Quantity" type="number" value={poForm.quantity} onChange={(v) => setPoForm({ ...poForm, quantity: v })} required placeholder="100" />
+        <FormField label="Total Cost" type="number" value={poForm.totalCost} onChange={(v) => setPoForm({ ...poForm, totalCost: v })} placeholder="5000" />
+        <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', marginTop: '8px' }}>
+          <button className="btn btn-secondary" onClick={() => setShowPOModal(false)}>Cancel</button>
+          <button className="btn btn-primary" onClick={handleCreatePO}>Create PO</button>
         </div>
-        <div className="po-grid">
-          {[
-            { id: 'PO-2024-889', status: 'IN TRANSIT', statusCls: 'badge-in-transit', company: 'Global Tech Supply Inc.', detail: 'Neural Core Components (x400)', progress: 75, footer: 'Estimated Arrival: Oct 24' },
-            { id: 'PO-2024-912', status: 'PENDING', statusCls: 'badge-pending', company: 'Optic Flow Solutions', detail: 'Fiber Optic Cabling (x2000)', progress: 25, footer: 'Awaiting Supplier Approval' },
-            { id: 'PO-2024-925', status: 'APPROVED', statusCls: 'badge-approved', company: 'Nexus Power Systems', detail: 'Solid State Batteries (x150)', progress: 50, footer: 'Order Processed' },
-          ].map((po) => (
-            <div key={po.id} className="po-card">
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div className="po-card-id">{po.id}</div>
-                <span className={`badge ${po.statusCls}`}>{po.status}</span>
-              </div>
-              <div className="po-card-company">{po.company}</div>
-              <div className="po-card-detail">{po.detail}</div>
-              <div className="progress-bar-track">
-                <div className="progress-bar-fill" style={{ width: `${po.progress}%` }} />
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '4px' }}>
-                <div className="po-card-footer">{po.footer}</div>
-                <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--color-text-secondary)' }}>{po.progress}%</span>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
+      </Modal>
 
-      {/* AI FAB */}
-      <button className="ai-fab" aria-label="AI Assistant"><Bot size={24} /></button>
+      {/* ADD PRODUCT MODAL */}
+      <Modal isOpen={showProductModal} onClose={() => setShowProductModal(false)} title="Add New Product">
+        <FormField label="Product Name" value={prodForm.name} onChange={(v) => setProdForm({ ...prodForm, name: v })} required placeholder="Industrial Sensor" />
+        <FormField label="SKU" value={prodForm.sku} onChange={(v) => setProdForm({ ...prodForm, sku: v })} required placeholder="SKU-001" />
+        <FormField label="Category" value={prodForm.category} onChange={(v) => setProdForm({ ...prodForm, category: v })} placeholder="Electronics" />
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+          <FormField label="Price" type="number" value={prodForm.price} onChange={(v) => setProdForm({ ...prodForm, price: v })} placeholder="99.99" />
+          <FormField label="Cost Price" type="number" value={prodForm.costPrice} onChange={(v) => setProdForm({ ...prodForm, costPrice: v })} placeholder="50.00" />
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+          <FormField label="Initial Stock" type="number" value={prodForm.stockLevel} onChange={(v) => setProdForm({ ...prodForm, stockLevel: v })} placeholder="100" />
+          <FormField label="Min Stock Level" type="number" value={prodForm.minStockLevel} onChange={(v) => setProdForm({ ...prodForm, minStockLevel: v })} placeholder="10" />
+        </div>
+        <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', marginTop: '8px' }}>
+          <button className="btn btn-secondary" onClick={() => setShowProductModal(false)}>Cancel</button>
+          <button className="btn btn-primary" onClick={handleCreateProduct}>Add Product</button>
+        </div>
+      </Modal>
     </div>
   );
 }

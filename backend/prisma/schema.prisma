@@ -3,8 +3,9 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 // ==========================================
@@ -67,6 +68,9 @@ enum Module {
   CRM
   INVENTORY
   PROJECTS
+  FINANCE
+  ANALYTICS
+  ADMIN
 }
 
 enum Action {
@@ -83,6 +87,7 @@ enum Action {
 
 model Employee {
   id            String       @id @default(uuid())
+  empCode       String?      @unique  // Auto-generated ERP-XXXX code
   userId        String?      @unique
   user          User?        @relation(fields: [userId], references: [id])
   firstName     String
@@ -109,6 +114,8 @@ model Employee {
   assignments   Assignment[] // Added for Sakshi's review
   performanceReviews      PerformanceReview[] @relation(name: "EmployeeReviews") // Added for Sakshi's review
   performanceReviewsGiven PerformanceReview[] @relation(name: "EmployeeReviewers") // Added for Sakshi's review
+  payrolls      Payroll[]
+  timeLogs      TimeLog[]
   
   createdAt     DateTime     @default(now())
   updatedAt     DateTime     @updatedAt
@@ -191,6 +198,8 @@ model Customer {
   lead               Lead?         @relation(fields: [convertedFromLeadId], references: [id])
   opportunities      Opportunity[]
   followUps          FollowUp[]
+  supportTickets     SupportTicket[]
+  salesOrders        SalesOrder[]
   createdAt          DateTime      @default(now())
   updatedAt          DateTime      @updatedAt
 }
@@ -302,6 +311,7 @@ model Project {
   tasks       Task[]
   milestones  Milestone[] // Added for Sakshi's review
   assignments Assignment[] // Added for Sakshi's review
+  timeLogs    TimeLog[]
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
 }
@@ -373,6 +383,8 @@ enum EmpType {
 enum EmpStatus {
   ACTIVE
   INACTIVE
+  ON_LEAVE
+  PROBATION
 }
 
 enum AttendanceStatus {
@@ -460,4 +472,272 @@ enum MovementReason {
   RESTOCK
   ADJUSTMENT
   RETURN
+}
+
+// ==========================================
+// FINANCE MODULE
+// ==========================================
+
+model Expense {
+  id          String   @id @default(uuid())
+  amount      Float
+  category    ExpenseCategory
+  date        DateTime
+  description String?
+  status      ExpenseStatus @default(PENDING)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Income {
+  id          String   @id @default(uuid())
+  amount      Float
+  source      String
+  date        DateTime
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Invoice {
+  id          String        @id @default(uuid())
+  invoiceNo   String        @unique
+  clientId    String?
+  clientName  String
+  amount      Float
+  dueDate     DateTime
+  status      InvoiceStatus @default(UNPAID)
+  payments    Payment[]
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+}
+
+model Budget {
+  id          String   @id @default(uuid())
+  department  String
+  planned     Float
+  actual      Float    @default(0)
+  startDate   DateTime
+  endDate     DateTime
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Payment {
+  id          String        @id @default(uuid())
+  invoiceId   String?
+  invoice     Invoice?      @relation(fields: [invoiceId], references: [id])
+  amount      Float
+  method      PaymentMethod
+  date        DateTime
+  status      PaymentStatus @default(COMPLETED)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+}
+
+enum ExpenseCategory {
+  OPERATIONAL
+  MARKETING
+  PAYROLL
+  SOFTWARE
+  TRAVEL
+  OTHER
+}
+
+enum ExpenseStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  PAID
+}
+
+enum InvoiceStatus {
+  DRAFT
+  UNPAID
+  PARTIALLY_PAID
+  PAID
+  OVERDUE
+}
+
+enum PaymentMethod {
+  CREDIT_CARD
+  BANK_TRANSFER
+  CASH
+  CHECK
+  STRIPE
+  PAYPAL
+}
+
+enum PaymentStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  REFUNDED
+}
+
+// ==========================================
+// NEW MISSING MODULES
+// ==========================================
+
+model Payroll {
+  id          String   @id @default(uuid())
+  employeeId  String
+  employee    Employee @relation(fields: [employeeId], references: [id])
+  baseSalary  Float
+  bonus       Float    @default(0)
+  deductions  Float    @default(0)
+  netPay      Float
+  payPeriod   String
+  status      PayrollStatus @default(DRAFT)
+  paymentDate DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+enum PayrollStatus {
+  DRAFT
+  APPROVED
+  PAID
+}
+
+model JobPosting {
+  id          String   @id @default(uuid())
+  title       String
+  department  String
+  location    String
+  description String
+  priority    Priority @default(MEDIUM)
+  status      JobStatus @default(OPEN)
+  applicants  Applicant[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+enum JobStatus {
+  OPEN
+  CLOSED
+  DRAFT
+}
+
+model Applicant {
+  id          String   @id @default(uuid())
+  jobId       String
+  job         JobPosting @relation(fields: [jobId], references: [id])
+  name        String
+  email       String
+  phone       String?
+  resumeUrl   String?
+  status      ApplicantStatus @default(APPLIED)
+  appliedAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+enum ApplicantStatus {
+  APPLIED
+  SCREENING
+  INTERVIEWING
+  OFFERED
+  HIRED
+  REJECTED
+}
+
+model LedgerEntry {
+  id          String   @id @default(uuid())
+  date        DateTime @default(now())
+  account     String
+  type        LedgerType
+  amount      Float
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+enum LedgerType {
+  CREDIT
+  DEBIT
+}
+
+model TaxRecord {
+  id          String   @id @default(uuid())
+  period      String
+  taxType     String
+  amount      Float
+  status      TaxStatus @default(UNPAID)
+  dueDate     DateTime
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+enum TaxStatus {
+  PAID
+  UNPAID
+}
+
+model SupportTicket {
+  id          String   @id @default(uuid())
+  customerId  String
+  customer    Customer @relation(fields: [customerId], references: [id])
+  subject     String
+  description String
+  status      TicketStatus @default(OPEN)
+  priority    TicketPriority @default(MEDIUM)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+enum TicketStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
+
+enum TicketPriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+
+model Warehouse {
+  id          String   @id @default(uuid())
+  name        String
+  location    String
+  capacity    Int
+  manager     String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model SalesOrder {
+  id          String   @id @default(uuid())
+  orderNo     String   @unique
+  customerId  String
+  customer    Customer @relation(fields: [customerId], references: [id])
+  totalAmount Float
+  status      OrderStatus @default(PENDING)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+enum OrderStatus {
+  PENDING
+  PROCESSING
+  SHIPPED
+  DELIVERED
+  CANCELLED
+}
+
+model TimeLog {
+  id          String   @id @default(uuid())
+  employeeId  String
+  employee    Employee @relation(fields: [employeeId], references: [id])
+  projectId   String
+  project     Project  @relation(fields: [projectId], references: [id])
+  hours       Float
+  date        DateTime
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }

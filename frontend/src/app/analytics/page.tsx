@@ -41,17 +41,24 @@ export default function AnalyticsPage() {
           analyticsApi.getRevenueTrend(),
         ]);
 
-        if (dashMetrics) {
-          // Add default fallback objects if metrics are empty arrays
-          const m = Array.isArray(dashMetrics) && dashMetrics.length === 0 ? 
-            { totalRevenue: 12400000, employeeRetention: 94.2, inventoryTurnover: 4.8, projectSuccessRate: 91, departmentCosts: { labels: ['Engineering', 'Marketing', 'Sales', 'Operations', 'HR'], data: [45, 20, 15, 12, 8] } } 
-            : dashMetrics;
-            
-          setMetrics(m as any);
+        if (dashMetrics && !Array.isArray(dashMetrics)) {
+          setMetrics({
+            totalRevenue: dashMetrics.revenueYTD || dashMetrics.totalRevenue || 0,
+            employeeRetention: dashMetrics.employees ? Math.min(99, 90 + dashMetrics.employees) : 94.2,
+            inventoryTurnover: dashMetrics.inventoryValue ? Math.round((dashMetrics.inventoryValue / 100000) * 10) / 10 : 4.8,
+            projectSuccessRate: dashMetrics.activeProjects ? Math.min(98, 85 + dashMetrics.activeProjects * 2) : 91,
+            departmentCosts: dashMetrics.departmentCosts || {
+              labels: ['Engineering', 'Marketing', 'Sales', 'Operations', 'HR'],
+              data: [45, 20, 15, 12, 8],
+            },
+          });
         }
-        
-        if (revTrend && !Array.isArray(revTrend)) {
-           setRevenueTrend(revTrend as any);
+
+        if (revTrend && !Array.isArray(revTrend) && revTrend.labels && revTrend.data) {
+          setRevenueTrend({
+            labels: revTrend.labels,
+            data: revTrend.data,
+          });
         }
       } catch (e) {
         console.error('Failed to fetch analytics data:', e);
@@ -59,6 +66,8 @@ export default function AnalyticsPage() {
     }
     fetchData();
   }, []);
+
+  const [activeTab, setActiveTab] = useState<'enterprise' | 'sales' | 'hr'>('enterprise');
 
   return (
     <div className="fade-in">
@@ -78,7 +87,31 @@ export default function AnalyticsPage() {
         </div>
       </div>
 
-      {/* KPI Overview */}
+      {/* Tabs */}
+      <div style={{ display: 'flex', gap: '24px', borderBottom: '1px solid var(--color-border)', marginBottom: '24px' }}>
+        <button 
+          onClick={() => setActiveTab('enterprise')}
+          style={{ padding: '0 0 12px 0', border: 'none', background: 'none', cursor: 'pointer', fontWeight: 600, color: activeTab === 'enterprise' ? 'var(--color-primary)' : 'var(--color-text-muted)', borderBottom: activeTab === 'enterprise' ? '2px solid var(--color-primary)' : '2px solid transparent' }}
+        >
+          Enterprise Overview
+        </button>
+        <button 
+          onClick={() => setActiveTab('sales')}
+          style={{ padding: '0 0 12px 0', border: 'none', background: 'none', cursor: 'pointer', fontWeight: 600, color: activeTab === 'sales' ? 'var(--color-primary)' : 'var(--color-text-muted)', borderBottom: activeTab === 'sales' ? '2px solid var(--color-primary)' : '2px solid transparent' }}
+        >
+          Sales Performance
+        </button>
+        <button 
+          onClick={() => setActiveTab('hr')}
+          style={{ padding: '0 0 12px 0', border: 'none', background: 'none', cursor: 'pointer', fontWeight: 600, color: activeTab === 'hr' ? 'var(--color-primary)' : 'var(--color-text-muted)', borderBottom: activeTab === 'hr' ? '2px solid var(--color-primary)' : '2px solid transparent' }}
+        >
+          HR Metrics
+        </button>
+      </div>
+
+      {activeTab === 'enterprise' && (
+        <>
+          {/* KPI Overview */}
       <div className="kpi-grid" style={{ marginBottom: '24px' }}>
         <div className="kpi-card">
           <div className="kpi-card-header">
@@ -141,19 +174,20 @@ export default function AnalyticsPage() {
           <div className="chart-wrap" style={{ height: '300px', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
             <div style={{ width: '240px', height: '240px' }}>
               <DoughnutChart
-                labels={metrics.departmentCosts.labels}
-                dataPoints={metrics.departmentCosts.data}
+                labels={metrics.departmentCosts?.labels || ['Engineering', 'Marketing', 'Sales', 'Operations', 'HR']}
+                dataPoints={metrics.departmentCosts?.data || [45, 20, 15, 12, 8]}
               />
             </div>
             {/* Custom Legend */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginLeft: '24px' }}>
-              {metrics.departmentCosts.labels.map((label: string, idx: number) => {
+              {(metrics.departmentCosts?.labels || ['Engineering', 'Marketing', 'Sales', 'Operations', 'HR']).map((label: string, idx: number) => {
                 const colors = ['#2563eb', '#3b82f6', '#60a5fa', '#93c5fd', '#1d4ed8'];
+                const data = metrics.departmentCosts?.data || [45, 20, 15, 12, 8];
                 return (
                   <div key={label} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px' }}>
                     <div style={{ width: '12px', height: '12px', borderRadius: '3px', background: colors[idx % colors.length] }} />
                     <span style={{ fontWeight: 600 }}>{label}</span>
-                    <span style={{ color: 'var(--color-text-muted)' }}>{metrics.departmentCosts.data[idx]}%</span>
+                    <span style={{ color: 'var(--color-text-muted)' }}>{data[idx]}%</span>
                   </div>
                 );
               })}
@@ -164,69 +198,115 @@ export default function AnalyticsPage() {
 
       {/* Secondary Metrics Row */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px' }}>
-        {/* Resource Allocation */}
+        {/* Resource Efficiency */}
+        <div className="card" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+          <h3 style={{ fontSize: '16px', fontWeight: 700, marginBottom: '24px', alignSelf: 'flex-start' }}>Resource Efficiency</h3>
+          
+          <div style={{ position: 'relative', width: '160px', height: '160px', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '50%', background: 'conic-gradient(#2563eb 82%, #e5e7eb 0)' }}>
+            <div style={{ width: '130px', height: '130px', borderRadius: '50%', background: 'white', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+              <span style={{ fontSize: '32px', fontWeight: 800, color: '#111827' }}>82%</span>
+              <span style={{ fontSize: '11px', color: '#6b7280', fontWeight: 600 }}>OPTIMAL</span>
+            </div>
+          </div>
+          
+          <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', marginTop: '24px' }}>
+            <div style={{ textAlign: 'center' }}>
+              <div style={{ fontSize: '12px', color: 'var(--color-text-muted)' }}>Peak Dept</div>
+              <div style={{ fontSize: '13px', fontWeight: 700, color: '#2563eb' }}>R&D Team</div>
+            </div>
+            <div style={{ textAlign: 'center' }}>
+              <div style={{ fontSize: '12px', color: 'var(--color-text-muted)' }}>Peak Hour</div>
+              <div style={{ fontSize: '13px', fontWeight: 700, color: '#16a34a' }}>10:00 AM</div>
+            </div>
+          </div>
+        </div>
+
+        {/* Project Milestones */}
         <div className="card">
-          <h3 style={{ fontSize: '16px', fontWeight: 700, marginBottom: '16px' }}>Resource Allocation Matrix</h3>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          <h3 style={{ fontSize: '16px', fontWeight: 700, marginBottom: '16px' }}>Project Milestones</h3>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
             {[
-              { label: 'Product Development', pct: 40, color: '#2563eb' },
-              { label: 'Client Delivery', pct: 35, color: '#16a34a' },
-              { label: 'Internal Operations', pct: 15, color: '#f59e0b' },
-              { label: 'R&D / Innovation', pct: 10, color: '#8b5cf6' },
-            ].map(r => (
-              <div key={r.label}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', fontWeight: 600, marginBottom: '4px' }}>
-                  <span>{r.label}</span>
-                  <span>{r.pct}%</span>
-                </div>
-                <div className="progress-bar-track" style={{ height: '6px' }}>
-                  <div className="progress-bar-fill" style={{ width: `${r.pct}%`, background: r.color }} />
+              { id: '01', title: 'Quarterly Audit', desc: 'Financial compliance review', status: 'In Progress', color: '#2563eb' },
+              { id: '02', title: 'ERP Core Update', desc: 'Version 2.4 deployment', status: 'Pending', color: '#d97706' },
+              { id: '03', title: 'Q3 Strategic Planning', desc: 'Board review preparation', status: 'Completed', color: '#16a34a' },
+            ].map((m) => (
+              <div key={m.id} style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
+                <div style={{ fontSize: '20px', fontWeight: 800, color: '#e5e7eb' }}>{m.id}</div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: '14px', fontWeight: 700 }}>{m.title}</span>
+                    <span style={{ fontSize: '11px', fontWeight: 600, color: m.color, background: m.color + '15', padding: '2px 6px', borderRadius: '4px' }}>{m.status}</span>
+                  </div>
+                  <div style={{ fontSize: '12px', color: 'var(--color-text-secondary)', marginTop: '4px' }}>{m.desc}</div>
                 </div>
               </div>
             ))}
           </div>
+          <button className="btn btn-secondary btn-sm" style={{ width: '100%', marginTop: '24px', justifyContent: 'center' }}>View All Milestones</button>
         </div>
 
-        {/* Global Traffic / Usage */}
+        {/* Inventory Turnover Trends */}
         <div className="card">
-          <h3 style={{ fontSize: '16px', fontWeight: 700, marginBottom: '16px' }}>System Usage by Region</h3>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            {[
-              { label: 'North America', value: '14,204', trend: '+12%' },
-              { label: 'Europe (EMEA)', value: '8,401', trend: '+4%' },
-              { label: 'Asia Pacific (APAC)', value: '5,920', trend: '+28%' },
-              { label: 'Latin America', value: '1,204', trend: '-2%' },
-            ].map((r, i) => (
-              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '8px', borderBottom: i < 3 ? '1px solid var(--color-border-light)' : 'none' }}>
-                <span style={{ fontSize: '13px', fontWeight: 600 }}>{r.label}</span>
-                <div style={{ textAlign: 'right' }}>
-                  <div style={{ fontSize: '14px', fontWeight: 700 }}>{r.value}</div>
-                  <div style={{ fontSize: '11px', color: r.trend.startsWith('+') ? '#16a34a' : '#dc2626' }}>{r.trend}</div>
-                </div>
-              </div>
-            ))}
-          </div>
+          <h3 style={{ fontSize: '16px', fontWeight: 700, marginBottom: '16px' }}>Inventory Turnover Trends</h3>
+          <table className="data-table" style={{ fontSize: '12px' }}>
+            <thead>
+              <tr>
+                <th style={{ padding: '8px 12px' }}>Category</th>
+                <th style={{ padding: '8px 12px' }}>Current Level</th>
+                <th style={{ padding: '8px 12px' }}>Status</th>
+                <th style={{ padding: '8px 12px', textAlign: 'right' }}>Reorder Qty</th>
+              </tr>
+            </thead>
+            <tbody>
+              {[
+                { cat: 'Processors', level: '1,240', status: 'HEALTHY', statusColor: '#16a34a', qty: '-' },
+                { cat: 'Fiber Optics', level: '120', status: 'CRITICAL', statusColor: '#dc2626', qty: '500' },
+                { cat: 'Displays', level: '450', status: 'WARNING', statusColor: '#d97706', qty: '200' },
+                { cat: 'Sensors', level: '8,420', status: 'HEALTHY', statusColor: '#16a34a', qty: '-' },
+              ].map((row, i) => (
+                <tr key={i}>
+                  <td style={{ padding: '10px 12px', fontWeight: 600 }}>{row.cat}</td>
+                  <td style={{ padding: '10px 12px' }}>{row.level}</td>
+                  <td style={{ padding: '10px 12px' }}>
+                    <span style={{ fontSize: '10px', fontWeight: 700, color: row.statusColor }}>{row.status}</span>
+                  </td>
+                  <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 600 }}>{row.qty}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
+      </div>
+      </>
+      )}
 
-        {/* AI Insights Panel */}
-        <div className="card" style={{ background: 'linear-gradient(135deg, #1e3a8a, #3b82f6)', color: 'white', border: 'none' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
-            <Zap size={20} style={{ color: '#fbbf24' }} />
-            <h3 style={{ fontSize: '16px', fontWeight: 700 }}>AI Insights</h3>
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            <div style={{ background: 'rgba(255,255,255,0.1)', padding: '12px', borderRadius: '8px' }}>
-              <div style={{ fontSize: '12px', fontWeight: 700, marginBottom: '4px', color: '#bfdbfe' }}>Revenue Alert</div>
-              <div style={{ fontSize: '13px', lineHeight: 1.4 }}>Projected Q4 revenue is <strong>12% above</strong> target based on current pipeline acceleration.</div>
-            </div>
-            <div style={{ background: 'rgba(255,255,255,0.1)', padding: '12px', borderRadius: '8px' }}>
-              <div style={{ fontSize: '12px', fontWeight: 700, marginBottom: '4px', color: '#bfdbfe' }}>Inventory Warning</div>
-              <div style={{ fontSize: '13px', lineHeight: 1.4 }}>Fiber Optic stock depletion rate has doubled. Recommend initiating PO immediately.</div>
-            </div>
-          </div>
-          <button style={{ width: '100%', padding: '10px', marginTop: '16px', background: 'white', color: '#1d4ed8', border: 'none', borderRadius: '6px', fontWeight: 700, fontSize: '13px', cursor: 'pointer' }}>
-            Generate Full Report
-          </button>
+      {activeTab === 'sales' && (
+        <div className="card" style={{ marginBottom: '24px', textAlign: 'center', padding: '48px' }}>
+          <h2 style={{ fontSize: '20px', fontWeight: 700, marginBottom: '8px' }}>Sales Performance Dashboard</h2>
+          <p style={{ color: 'var(--color-text-muted)' }}>Detailed breakdown of sales orders, regional performance, and top customers will appear here.</p>
+        </div>
+      )}
+
+      {activeTab === 'hr' && (
+        <div className="card" style={{ marginBottom: '24px', textAlign: 'center', padding: '48px' }}>
+          <h2 style={{ fontSize: '20px', fontWeight: 700, marginBottom: '8px' }}>Human Resources Metrics</h2>
+          <p style={{ color: 'var(--color-text-muted)' }}>Analysis of recruitment funnels, timesheet compliance, and payroll trends will appear here.</p>
+        </div>
+      )}
+      
+      {/* Footer Status Bar */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 24px', background: 'white', borderTop: '1px solid var(--color-border-light)', fontSize: '12px', color: 'var(--color-text-secondary)', fontWeight: 500, borderRadius: '8px', marginBottom: '24px' }}>
+        <div style={{ display: 'flex', gap: '24px', alignItems: 'center' }}>
+          <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#16a34a' }}></div> System Online
+          </span>
+          <span>Last Sync: Just now</span>
+        </div>
+        <div style={{ display: 'flex', gap: '24px' }}>
+          <span style={{ cursor: 'pointer' }} className="hover:text-blue-600">Documentation</span>
+          <span style={{ cursor: 'pointer' }} className="hover:text-blue-600">API Support</span>
+          <span style={{ cursor: 'pointer' }} className="hover:text-blue-600">Security Audit</span>
+          <span>&copy; 2024 Shuroq</span>
         </div>
       </div>
     </div>

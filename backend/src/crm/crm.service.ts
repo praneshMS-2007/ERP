@@ -1,9 +1,11 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { Prisma } from '@prisma/client';
 
 @Injectable()
 export class CrmService {
+  private readonly logger = new Logger(CrmService.name);
+
   constructor(private prisma: PrismaService) {}
 
   // ========== LEADS ==========
@@ -29,11 +31,15 @@ export class CrmService {
     return { message: 'Lead deleted.' };
   }
 
+  /**
+   * BUSINESS LOGIC: Convert lead to customer AND auto-create an Opportunity.
+   */
   async convertLeadToCustomer(id: string) {
     const lead = await this.prisma.lead.findUnique({ where: { id } });
     if (!lead) throw new NotFoundException('Lead not found.');
 
-    const customer = await this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
+      // 1. Create customer from lead
       const newCustomer = await tx.customer.create({
         data: {
           name: lead.name,
@@ -43,13 +49,28 @@ export class CrmService {
           convertedFromLeadId: lead.id,
         },
       });
+
+      // 2. Update lead status
       await tx.lead.update({
         where: { id: lead.id },
         data: { status: 'CONVERTED' },
       });
+
+      // 3. Auto-create an Opportunity for the new customer
+      await tx.opportunity.create({
+        data: {
+          customerId: newCustomer.id,
+          value: 0, // Initial value, to be updated by sales team
+          stage: 'DISCOVERY',
+          expectedCloseDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days out
+        },
+      });
+
+      this.logger.log(`Lead "${lead.name}" converted to customer with auto-created opportunity.`);
       return newCustomer;
     });
-    return { message: 'Lead converted to customer.', customer };
+
+    return { message: 'Lead converted to customer with opportunity created.', customer: result };
   }
 
   // ========== CUSTOMERS ==========
@@ -81,5 +102,65 @@ export class CrmService {
       include: { customer: { select: { name: true, company: true } } },
       orderBy: { createdAt: 'desc' },
     });
+  }
+
+  // ========== SUPPORT TICKETS ==========
+  async getSupportTickets(status?: any) {
+    const where = status ? { status } : {};
+    return this.prisma.supportTicket.findMany({
+      where,
+      include: { customer: { select: { name: true, company: true } } },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  /**
+   * BUSINESS LOGIC: When a support ticket is created,
+   * auto-create a FollowUp entry for the customer with a 3-day follow-up date.
+   */
+  async createSupportTicket(data: Prisma.SupportTicketUncheckedCreateInput) {
+    return this.prisma.$transaction(async (tx) => {
+      // 1. Create the ticket
+      const ticket = await tx.supportTicket.create({ data });
+
+      // 2. Auto-create a follow-up for 3 business days later
+      const nextActionDate = new Date();
+      nextActionDate.setDate(nextActionDate.getDate() + 3);
+      // Skip weekends
+      while (nextActionDate.getDay() === 0 || nextActionDate.getDay() === 6) {
+        nextActionDate.setDate(nextActionDate.getDate() + 1);
+      }
+
+      await tx.followUp.create({
+        data: {
+          customerId: data.customerId,
+          date: new Date(),
+          notes: `Follow up on support ticket: ${data.subject}`,
+          nextActionDate,
+        },
+      });
+
+      this.logger.log(`Support ticket created with auto follow-up for ${nextActionDate.toDateString()}`);
+      return ticket;
+    });
+  }
+
+  async updateSupportTicketStatus(id: string, status: any) {
+    return this.prisma.supportTicket.update({
+      where: { id },
+      data: { status },
+    });
+  }
+
+  // ========== FOLLOW UPS ==========
+  async getFollowUps() {
+    return this.prisma.followUp.findMany({
+      include: { customer: { select: { name: true, company: true } }, lead: { select: { name: true, company: true } } },
+      orderBy: { date: 'asc' },
+    });
+  }
+
+  async createFollowUp(data: Prisma.FollowUpUncheckedCreateInput) {
+    return this.prisma.followUp.create({ data });
   }
 }

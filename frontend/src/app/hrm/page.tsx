@@ -1,287 +1,401 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import {
-  Users,
-  CalendarCheck,
-  UserX,
-  Star,
-  TrendingUp,
-  Download,
-  UserPlus,
-  MoreVertical,
-  ChevronLeft,
-  ChevronRight,
-  ExternalLink,
-  X,
-  Check,
+  Users, UserMinus, UserPlus2, Star, TrendingUp, TrendingDown,
+  Briefcase, Calendar, FileText, ChevronLeft, ChevronRight, Download,
 } from 'lucide-react';
-import { hrmApi } from '../../services/api';
+import { hrmApi, exportApi } from '../../services/api';
+import ExportButton from '../../components/ExportButton';
 
 export default function HRManagement() {
+  // Core data
   const [employees, setEmployees] = useState<any[]>([]);
-  const [stats, setStats] = useState({
-    total: 0,
-    onLeave: 0,
-    openPositions: 15, // Mock value since we don't have recruitment data
-  });
+  const [allLeaves, setAllLeaves] = useState<any[]>([]);
+  const [jobPostings, setJobPostings] = useState<any[]>([]);
+  const [applicants, setApplicants] = useState<any[]>([]);
+  const [perfReviews, setPerfReviews] = useState<any[]>([]);
 
-  useEffect(() => {
-    async function fetchData() {
-      try {
-        const [empData] = await Promise.all([
-          hrmApi.getEmployees(),
-        ]);
+  // Date-driven state
+  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [calMonth, setCalMonth] = useState(new Date().getMonth());
+  const [calYear, setCalYear] = useState(new Date().getFullYear());
 
-        let onLeave = 0;
+  // Attendance stats for selected date
+  const [attStats, setAttStats] = useState({ present: 0, absent: 0, total: 0 });
 
-        const formattedEmployees = empData.map((e: any) => {
-          let status = 'ACTIVE';
-          
-          if (e.status === 'INACTIVE') {
-            status = 'PROBATION';
-          }
-          
-          // Generate a color based on department or name length for variety
-          const colors = ['#2563eb', '#7c3aed', '#059669', '#d97706', '#ec4899', '#14b8a6'];
-          const color = colors[(e.firstName.length + e.lastName.length) % colors.length];
+  // Monthly trend for chart
+  const [trendData, setTrendData] = useState<{ year: number; totalEmployees: number; data: { month: number; monthName: string; present: number; absent: number }[] }>({ year: 2026, totalEmployees: 0, data: [] });
 
-          return {
-            initials: `${e.firstName.charAt(0)}${e.lastName.charAt(0)}`.toUpperCase(),
-            name: `${e.firstName} ${e.lastName}`,
-            id: `ERP-${e.id.substring(0, 4)}`,
-            dept: e.department?.name || 'Unassigned',
-            position: e.position,
-            status,
-            color,
-          };
-        });
-
-        // Add some mock data to show leaves because there's no leave logic built out
-        if (formattedEmployees.length > 1) {
-          formattedEmployees[1].status = 'ON LEAVE';
-          onLeave++;
-        }
-
-        setStats({
-          total: empData.length,
-          onLeave,
-          openPositions: 15,
-        });
-
-        setEmployees(formattedEmployees);
-      } catch (e) {
-        console.error('Failed to fetch HRM data:', e);
-      }
+  async function fetchCoreData() {
+    try {
+      const [empData, leaveData, jobData, appData, perfData] = await Promise.all([
+        hrmApi.getEmployees(),
+        hrmApi.getLeaves(),
+        hrmApi.getJobPostings(),
+        hrmApi.getApplicants(),
+        hrmApi.getPerformanceReviews(),
+      ]);
+      setEmployees(Array.isArray(empData) ? empData : []);
+      setAllLeaves(Array.isArray(leaveData) ? leaveData : []);
+      setJobPostings(Array.isArray(jobData) ? jobData : []);
+      setApplicants(Array.isArray(appData) ? appData : []);
+      setPerfReviews(Array.isArray(perfData) ? perfData : []);
+    } catch (e) {
+      console.error('Failed to fetch HRM data:', e);
     }
-    fetchData();
-  }, []);
+  }
 
-  const badgeClass = (s: string) => {
-    if (s === 'ACTIVE') return 'badge badge-active';
-    if (s === 'ON LEAVE') return 'badge badge-on-leave';
-    if (s === 'PROBATION') return 'badge badge-probation';
-    return 'badge';
+  async function fetchAttendanceStats(date: Date) {
+    try {
+      const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+      const stats = await hrmApi.getAttendanceStats(dateStr);
+      if (stats && typeof stats.present === 'number') {
+        setAttStats(stats);
+      }
+    } catch (e) {
+      console.error('Failed to fetch attendance stats:', e);
+    }
+  }
+
+  async function fetchTrend(year: number) {
+    try {
+      const data = await hrmApi.getAttendanceTrend(year);
+      if (data && data.data) setTrendData(data);
+    } catch (e) {
+      console.error('Failed to fetch trend:', e);
+    }
+  }
+
+  useEffect(() => { fetchCoreData(); }, []);
+  useEffect(() => { fetchAttendanceStats(selectedDate); }, [selectedDate]);
+  useEffect(() => { fetchTrend(calYear); }, [calYear]);
+
+  // ========== COMPUTED KPIs ==========
+  const activeEmployees = employees.filter(e => e.status !== 'INACTIVE');
+  const resignedCount = employees.filter(e => e.status === 'INACTIVE').length;
+
+  // Resignations this month
+  const resignedThisMonth = employees.filter(e => {
+    if (e.status !== 'INACTIVE') return false;
+    const updated = new Date(e.updatedAt);
+    return updated.getMonth() === calMonth && updated.getFullYear() === calYear;
+  }).length;
+
+  // Workforce growth
+  const now = new Date();
+  const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  const hiredThisMonth = employees.filter(e => new Date(e.joinDate) >= thisMonthStart).length;
+  const hiredBeforeThisMonth = employees.length - hiredThisMonth;
+  const growthPct = hiredBeforeThisMonth > 0 ? Math.round((hiredThisMonth / hiredBeforeThisMonth) * 100) : (hiredThisMonth > 0 ? 100 : 0);
+
+  // Open positions
+  const openJobs = jobPostings.filter(j => j.status === 'OPEN');
+  const highPriorityJobs = openJobs.filter(j => j.priority === 'HIGH').length;
+
+  // Avg performance
+  const avgPerf = perfReviews.length > 0 ? perfReviews.reduce((sum: number, r: any) => sum + r.rating, 0) / perfReviews.length : 0;
+  const perfLabel = (avg: number) => {
+    if (avg >= 4.5) return '☆ Excellent rating';
+    if (avg >= 4.0) return '☆ Good rating';
+    if (avg >= 3.0) return '☆ Average rating';
+    return '☆ Needs improvement';
   };
 
-  const attendanceCalendar = [
-    { day: 28, type: 'inactive' }, { day: 29, type: 'inactive' }, { day: 30, type: 'inactive' },
-    { day: 1, type: 'present' }, { day: 2, type: 'today' }, { day: 3, type: 'present' }, { day: 4, type: '' },
-    { day: 5, type: '' }, { day: 6, type: 'present' }, { day: 7, type: 'holiday' }, { day: 8, type: 'present' },
-    { day: 9, type: 'present' }, { day: 10, type: 'present' }, { day: 11, type: '' },
-  ];
+  // Request KPIs
+  const pendingLeaves = allLeaves.filter(l => l.status === 'PENDING').length;
+  const approvedThisMonth = allLeaves.filter(l => {
+    if (l.status !== 'APPROVED') return false;
+    const d = new Date(l.updatedAt);
+    return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+  }).length;
+  const pendingApplicants = applicants.filter((a: any) => a.status === 'APPLIED' || a.status === 'INTERVIEW').length;
+  const totalApplicants = applicants.length;
+
+  // ========== CALENDAR LOGIC ==========
+  const daysInMonth = new Date(calYear, calMonth + 1, 0).getDate();
+  const firstDayOffset = new Date(calYear, calMonth, 1).getDay();
+  const prevMonthDays = new Date(calYear, calMonth, 0).getDate();
+  const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+
+  const calendarDays = useMemo(() => {
+    const days: { day: number; type: string; date: Date }[] = [];
+    // Previous month padding
+    for (let i = firstDayOffset - 1; i >= 0; i--) {
+      days.push({ day: prevMonthDays - i, type: 'inactive', date: new Date(calYear, calMonth - 1, prevMonthDays - i) });
+    }
+    const today = new Date();
+    for (let d = 1; d <= daysInMonth; d++) {
+      const date = new Date(calYear, calMonth, d);
+      const isToday = d === today.getDate() && calMonth === today.getMonth() && calYear === today.getFullYear();
+      const isSelected = d === selectedDate.getDate() && calMonth === selectedDate.getMonth() && calYear === selectedDate.getFullYear();
+      days.push({ day: d, type: isToday ? 'today' : isSelected ? 'selected' : '', date });
+    }
+    // Next month padding to complete the grid
+    const remaining = 7 - (days.length % 7);
+    if (remaining < 7) {
+      for (let i = 1; i <= remaining; i++) {
+        days.push({ day: i, type: 'inactive', date: new Date(calYear, calMonth + 1, i) });
+      }
+    }
+    return days;
+  }, [calYear, calMonth, selectedDate, daysInMonth, firstDayOffset, prevMonthDays]);
+
+  function navigateMonth(dir: number) {
+    let newMonth = calMonth + dir;
+    let newYear = calYear;
+    if (newMonth < 0) { newMonth = 11; newYear--; }
+    if (newMonth > 11) { newMonth = 0; newYear++; }
+    setCalMonth(newMonth);
+    setCalYear(newYear);
+    setSelectedDate(new Date(newYear, newMonth, 1));
+  }
+
+  function selectDay(date: Date) {
+    setSelectedDate(date);
+  }
+
+  // ========== SVG CHART ==========
+  const chartWidth = 720;
+  const chartHeight = 260;
+  const chartPadX = 50;
+  const chartPadY = 30;
+  const innerW = chartWidth - chartPadX * 2;
+  const innerH = chartHeight - chartPadY * 2;
+  const maxY = trendData.totalEmployees || 20;
+
+  function toChartX(i: number) { return chartPadX + (i / 11) * innerW; }
+  function toChartY(val: number) { return chartPadY + innerH - (val / maxY) * innerH; }
+
+  const presentLine = trendData.data.map((d, i) => `${i === 0 ? 'M' : 'L'} ${toChartX(i)} ${toChartY(d.present)}`).join(' ');
+  const absentLine = trendData.data.map((d, i) => `${i === 0 ? 'M' : 'L'} ${toChartX(i)} ${toChartY(d.absent)}`).join(' ');
+
+  // Format selected date for display
+  const selectedDateStr = selectedDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
 
   return (
     <div className="fade-in">
       {/* Page Header */}
       <div className="page-header">
         <div>
-          <h1>Employee Management</h1>
+          <h1>HR Overview</h1>
           <p>Monitor workforce performance, attendance, and organizational growth.</p>
         </div>
         <div className="page-header-actions">
-          <button className="btn btn-secondary">
-            <Download size={16} /> Export
-          </button>
-          <button className="btn btn-primary">
-            <UserPlus size={16} /> Add Employee
-          </button>
+          <ExportButton onExport={(format) => exportApi.exportEmployees(format)} label="Export Employees" />
         </div>
       </div>
 
-      {/* KPI Grid */}
+      {/* KPI Row 1 — Top Metrics */}
       <div className="kpi-grid">
+        {/* Total Workforce */}
         <div className="kpi-card">
-          <div className="kpi-card-header">
-            <div className="kpi-card-label">Total Workforce</div>
-            <div className="kpi-card-icon" style={{ background: '#eff6ff', color: '#2563eb' }}><Users size={20} /></div>
+          <div className="kpi-card-top">
+            <div className="kpi-card-label">TOTAL WORKFORCE</div>
+            <div className="kpi-card-icon" style={{ background: '#eff6ff', color: '#2563eb' }}><Users size={22} /></div>
           </div>
-          <div className="kpi-card-value">{stats.total}</div>
-          <div className="kpi-card-trend up"><TrendingUp size={14} /> Tracking organization</div>
+          <div className="kpi-card-value">{activeEmployees.length}</div>
+          <div className="kpi-card-trend up" style={{ fontSize: '12px' }}>
+            <TrendingUp size={14} /> +{growthPct}% from last month
+          </div>
         </div>
+
+        {/* Resigned */}
         <div className="kpi-card">
-          <div className="kpi-card-header">
-            <div className="kpi-card-label">Active Leave</div>
-            <div className="kpi-card-icon" style={{ background: '#f0fdf4', color: '#16a34a' }}><CalendarCheck size={20} /></div>
+          <div className="kpi-card-top">
+            <div className="kpi-card-label">RESIGNED</div>
+            <div className="kpi-card-icon" style={{ background: '#fef2f2', color: '#dc2626' }}><UserMinus size={22} /></div>
           </div>
-          <div className="kpi-card-value">{stats.onLeave}</div>
-          <div className="kpi-card-trend neutral" style={{color: 'var(--color-text-muted)'}}>8 pending approval</div>
+          <div className="kpi-card-value">{resignedCount}</div>
+          <div style={{ fontSize: '12px', color: resignedThisMonth > 0 ? '#dc2626' : 'var(--color-text-muted)', display: 'flex', alignItems: 'center', gap: '4px' }}>
+            {resignedThisMonth > 0 && <TrendingDown size={13} />} {resignedThisMonth} this month
+          </div>
         </div>
+
+        {/* Open Positions */}
         <div className="kpi-card">
-          <div className="kpi-card-header">
-            <div className="kpi-card-label">Open Positions</div>
-            <div className="kpi-card-icon" style={{ background: '#fef2f2', color: '#dc2626' }}><UserX size={20} /></div>
+          <div className="kpi-card-top">
+            <div className="kpi-card-label">OPEN POSITIONS</div>
+            <div className="kpi-card-icon" style={{ background: '#f0fdf4', color: '#16a34a' }}><UserPlus2 size={22} /></div>
           </div>
-          <div className="kpi-card-value">{stats.openPositions}</div>
-          <div className="kpi-card-trend down"><span>3 high priority</span></div>
+          <div className="kpi-card-value">{openJobs.length}</div>
+          <div style={{ fontSize: '12px', color: '#ea580c', display: 'flex', alignItems: 'center', gap: '4px' }}>
+            <Briefcase size={13} /> {highPriorityJobs} high priority
+          </div>
         </div>
+
+        {/* Avg Performance */}
         <div className="kpi-card">
-          <div className="kpi-card-header">
-            <div className="kpi-card-label">Avg Performance</div>
-            <div className="kpi-card-icon" style={{ background: '#fef3c7', color: '#d97706' }}><Star size={20} /></div>
+          <div className="kpi-card-top">
+            <div className="kpi-card-label">AVG PERFORMANCE</div>
+            <div className="kpi-card-icon" style={{ background: '#fffbeb', color: '#d97706' }}><Star size={22} /></div>
           </div>
-          <div className="kpi-card-value">4.8</div>
-          <div className="kpi-card-trend neutral" style={{color: 'var(--color-text-muted)'}}>☆ Excellent rating</div>
+          <div className="kpi-card-value">{avgPerf.toFixed(1)}</div>
+          <div style={{ fontSize: '12px', color: 'var(--color-text-muted)' }}>
+            {perfLabel(avgPerf)}
+          </div>
         </div>
       </div>
 
-      {/* Main Content Grid */}
-      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '16px' }}>
-        {/* Employee Directory */}
-        <div className="card">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-            <h3 style={{ fontSize: '16px', fontWeight: 700 }}>Employee Directory</h3>
-            <div style={{ display: 'flex', gap: '8px' }}>
-              <button className="btn btn-secondary btn-sm">Filters</button>
-              <button className="btn btn-secondary btn-sm">Sort</button>
+      {/* Row 2 — Calendar + Compact Present/Absent & Request KPIs (Parallel Layout) */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1.1fr 1fr', gap: '20px', marginTop: '20px' }}>
+
+        {/* Left Column: Attendance Calendar */}
+        <div className="card" style={{ height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+            <h3 style={{ fontSize: '15px', fontWeight: 700 }}>Attendance Calendar</h3>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <button onClick={() => navigateMonth(-1)} style={{ border: '1px solid var(--color-border)', background: 'var(--color-card)', borderRadius: '6px', cursor: 'pointer', padding: '3px 6px', display: 'flex', alignItems: 'center' }}><ChevronLeft size={14} /></button>
+              <span style={{ fontSize: '13px', fontWeight: 600, minWidth: '120px', textAlign: 'center' }}>{monthNames[calMonth]} {calYear}</span>
+              <button onClick={() => navigateMonth(1)} style={{ border: '1px solid var(--color-border)', background: 'var(--color-card)', borderRadius: '6px', cursor: 'pointer', padding: '3px 6px', display: 'flex', alignItems: 'center' }}><ChevronRight size={14} /></button>
             </div>
           </div>
-
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>Employee</th>
-                <th>Department</th>
-                <th>Position</th>
-                <th>Status</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {employees.length === 0 ? (
-                <tr><td colSpan={5} style={{ textAlign: 'center', padding: '20px' }}>Loading or no data...</td></tr>
-              ) : employees.map((emp) => (
-                <tr key={emp.id}>
-                  <td>
-                    <div className="employee-cell">
-                      <div className="employee-avatar" style={{ background: emp.color }}>{emp.initials}</div>
-                      <div>
-                        <div className="employee-name">{emp.name}</div>
-                        <div className="employee-id">ID: {emp.id}</div>
-                      </div>
-                    </div>
-                  </td>
-                  <td>{emp.dept}</td>
-                  <td>{emp.position}</td>
-                  <td><span className={badgeClass(emp.status)}>{emp.status}</span></td>
-                  <td><button style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--color-text-muted)' }}><MoreVertical size={16} /></button></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-
-          <div className="pagination">
-            <span>Showing {Math.min(4, employees.length)} of {employees.length} employees</span>
-            <div className="pagination-buttons">
-              <button className="pagination-btn"><ChevronLeft size={14} /></button>
-              <button className="pagination-btn"><ChevronRight size={14} /></button>
-            </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '4px', textAlign: 'center', marginBottom: '8px' }}>
+            {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d, i) => (
+              <div key={i} style={{ fontSize: '11px', fontWeight: 700, color: 'var(--color-text-muted)', padding: '4px 0' }}>{d}</div>
+            ))}
+            {calendarDays.map((d, i) => (
+              <div
+                key={i}
+                onClick={() => d.type !== 'inactive' && selectDay(d.date)}
+                style={{
+                  padding: '6px 0', fontSize: '12px', borderRadius: '6px', cursor: d.type !== 'inactive' ? 'pointer' : 'default',
+                  fontWeight: d.type === 'today' || d.type === 'selected' ? 700 : 500,
+                  color: d.type === 'inactive' ? '#d1d5db' : d.type === 'today' ? '#fff' : d.type === 'selected' ? '#2563eb' : 'var(--color-text)',
+                  background: d.type === 'today' ? '#2563eb' : d.type === 'selected' ? '#dbeafe' : 'transparent',
+                  border: d.type === 'selected' ? '2px solid #2563eb' : '2px solid transparent',
+                  transition: 'all 0.15s ease',
+                }}
+              >
+                {d.day}
+              </div>
+            ))}
           </div>
         </div>
 
-        {/* Right Column */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          {/* Attendance Calendar */}
-          <div className="card">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-              <h3 style={{ fontSize: '16px', fontWeight: 700 }}>Attendance</h3>
-              <span className="badge badge-in-progress">MAY 2024</span>
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '4px', textAlign: 'center', marginBottom: '12px' }}>
-              {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, i) => (
-                <div key={i} style={{ fontSize: '11px', fontWeight: 700, color: 'var(--color-text-muted)', padding: '6px 0' }}>{d}</div>
-              ))}
-              {attendanceCalendar.map((d, i) => (
-                <div key={i} style={{
-                  padding: '6px 0',
-                  fontSize: '13px',
-                  fontWeight: d.type === 'today' ? 700 : 500,
-                  color: d.type === 'inactive' ? '#d1d5db' : d.type === 'today' ? 'white' : d.type === 'holiday' ? '#dc2626' : '#111827',
-                  background: d.type === 'today' ? '#2563eb' : d.type === 'present' ? '#eff6ff' : 'transparent',
-                  borderRadius: '6px',
-                }}>
-                  {d.day}
-                </div>
-              ))}
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: '12px', borderTop: '1px solid var(--color-border-light)' }}>
-              <div>
-                <div style={{ fontSize: '11px', color: 'var(--color-text-muted)', fontWeight: 700, textTransform: 'uppercase' }}>Present</div>
-                <div style={{ fontSize: '20px', fontWeight: 800, color: '#16a34a' }}>94.2%</div>
+        {/* Right Column: Present/Absent + Request KPIs stacked vertically */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', justifyContent: 'space-between' }}>
+          
+          {/* Present / Absent Stats (Compact) */}
+          <div className="card" style={{ padding: '16px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 600, color: 'var(--color-text-secondary)' }}>
+                <Calendar size={16} style={{ color: '#2563eb' }} />
+                <span>{selectedDateStr}</span>
               </div>
-              <div style={{ textAlign: 'right' }}>
-                <div style={{ fontSize: '11px', color: 'var(--color-text-muted)', fontWeight: 700, textTransform: 'uppercase' }}>Absent</div>
-                <div style={{ fontSize: '20px', fontWeight: 800, color: '#dc2626' }}>5.8%</div>
+              <span style={{ fontSize: '11px', color: 'var(--color-text-muted)', fontWeight: 600 }}>
+                Total Active: {attStats.total}
+              </span>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'space-around', alignItems: 'center', background: 'var(--color-bg-secondary)', padding: '12px', borderRadius: '8px' }}>
+              {/* Present */}
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: '28px', fontWeight: 800, color: '#2563eb', lineHeight: 1 }}>{attStats.present}</div>
+                <div style={{ fontSize: '11px', fontWeight: 700, color: '#2563eb', textTransform: 'uppercase', marginTop: '4px' }}>Present</div>
+                <div style={{ fontSize: '11px', color: 'var(--color-text-muted)', marginTop: '2px' }}>
+                  {attStats.total > 0 ? ((attStats.present / attStats.total) * 100).toFixed(1) : '0.0'}%
+                </div>
+              </div>
+              
+              <div style={{ width: '1px', height: '40px', background: 'var(--color-border)' }}></div>
+
+              {/* Absent */}
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: '28px', fontWeight: 800, color: '#dc2626', lineHeight: 1 }}>{attStats.absent}</div>
+                <div style={{ fontSize: '11px', fontWeight: 700, color: '#dc2626', textTransform: 'uppercase', marginTop: '4px' }}>Absent</div>
+                <div style={{ fontSize: '11px', color: 'var(--color-text-muted)', marginTop: '2px' }}>
+                  {attStats.total > 0 ? ((attStats.absent / attStats.total) * 100).toFixed(1) : '0.0'}%
+                </div>
               </div>
             </div>
           </div>
 
-          {/* Leave Requests */}
-          <div className="card">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-              <h3 style={{ fontSize: '16px', fontWeight: 700 }}>Leave Requests</h3>
-              <button style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--color-text-muted)' }}><ExternalLink size={16} /></button>
-            </div>
-
-            {/* Leave 1 */}
-            <div style={{ padding: '12px 0', borderBottom: '1px solid var(--color-border-light)' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                <span style={{ fontWeight: 600, fontSize: '13.5px' }}>Liam Peterson</span>
-                <span className="badge badge-sick-leave">SICK LEAVE</span>
+          {/* Sub-grid: Job Applications & Leave Requests */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+            {/* Job Applications KPI */}
+            <div className="kpi-card" style={{ padding: '14px' }}>
+              <div className="kpi-card-top" style={{ marginBottom: '8px' }}>
+                <div className="kpi-card-label" style={{ fontSize: '11px' }}>JOB APPLICATIONS</div>
+                <div className="kpi-card-icon" style={{ background: '#f0fdf4', color: '#16a34a', width: '32px', height: '32px' }}><Briefcase size={16} /></div>
               </div>
-              <div style={{ fontSize: '12px', color: 'var(--color-text-secondary)', fontStyle: 'italic', marginBottom: '6px' }}>&ldquo;Medical recovery from flu symptoms...&rdquo;</div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontSize: '12px', color: 'var(--color-text-muted)' }}>May 24 - May 26</span>
-                <div style={{ display: 'flex', gap: '8px' }}>
-                  <button style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#dc2626' }}><X size={18} /></button>
-                  <button style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#16a34a' }}><Check size={18} /></button>
-                </div>
+              <div className="kpi-card-value" style={{ fontSize: '22px' }}>{totalApplicants}</div>
+              <div style={{ fontSize: '11px', color: 'var(--color-text-muted)', display: 'flex', alignItems: 'center', gap: '4px', marginTop: '4px' }}>
+                <FileText size={12} /> {pendingApplicants} pending
               </div>
             </div>
 
-            {/* Leave 2 */}
-            <div style={{ padding: '12px 0' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                <span style={{ fontWeight: 600, fontSize: '13.5px' }}>Sarah Jenkins</span>
-                <span className="badge badge-vacation">VACATION</span>
+            {/* Leave Requests KPI */}
+            <div className="kpi-card" style={{ padding: '14px' }}>
+              <div className="kpi-card-top" style={{ marginBottom: '8px' }}>
+                <div className="kpi-card-label" style={{ fontSize: '11px' }}>LEAVE REQUESTS</div>
+                <div className="kpi-card-icon" style={{ background: '#f5f3ff', color: '#7c3aed', width: '32px', height: '32px' }}><Calendar size={16} /></div>
               </div>
-              <div style={{ fontSize: '12px', color: 'var(--color-text-secondary)', fontStyle: 'italic', marginBottom: '6px' }}>&ldquo;Family trip to coastal region...&rdquo;</div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontSize: '12px', color: 'var(--color-text-muted)' }}>Jun 10 - Jun 17</span>
-                <div style={{ display: 'flex', gap: '8px' }}>
-                  <button style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#dc2626' }}><X size={18} /></button>
-                  <button style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#16a34a' }}><Check size={18} /></button>
-                </div>
+              <div className="kpi-card-value" style={{ fontSize: '22px' }}>{pendingLeaves}</div>
+              <div style={{ fontSize: '11px', color: 'var(--color-text-muted)', display: 'flex', alignItems: 'center', gap: '4px', marginTop: '4px' }}>
+                <TrendingUp size={12} /> {approvedThisMonth} approved
               </div>
             </div>
+          </div>
 
-            <div style={{ textAlign: 'center', paddingTop: '12px', borderTop: '1px solid var(--color-border-light)' }}>
-              <button className="btn btn-secondary btn-sm" style={{ width: '100%', justifyContent: 'center', textTransform: 'uppercase', fontSize: '11px', fontWeight: 700, letterSpacing: '0.05em' }}>
-                View All Requests
-              </button>
+        </div>
+
+      </div>
+
+      {/* Row 4 — Monthly Attendance Trend Chart */}
+      <div className="card" style={{ marginTop: '20px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+          <div>
+            <h3 style={{ fontSize: '16px', fontWeight: 700 }}>Monthly Attendance Trend</h3>
+            <span style={{ fontSize: '12px', color: 'var(--color-text-muted)' }}>{calYear} · Max Employees: {trendData.totalEmployees}</span>
+          </div>
+          <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <div style={{ width: 12, height: 3, borderRadius: 2, background: '#2563eb' }}></div>
+              <span style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>Present</span>
             </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <div style={{ width: 12, height: 3, borderRadius: 2, background: '#dc2626' }}></div>
+              <span style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>Absent</span>
+            </div>
+            <ExportButton onExport={(format) => exportApi.exportAttendance(format, calMonth + 1, calYear)} label="Export" />
           </div>
         </div>
+
+        <svg viewBox={`0 0 ${chartWidth} ${chartHeight}`} style={{ width: '100%', height: 'auto' }}>
+          {/* Y-axis Title Label */}
+          <text transform={`rotate(-90, 15, ${chartPadY + innerH / 2})`} x={15} y={chartPadY + innerH / 2} textAnchor="middle" fontSize={10} fontWeight={700} fill="var(--color-text-muted)">No. of Employees</text>
+
+          {/* Y-axis grid lines */}
+          {[0, 0.25, 0.5, 0.75, 1].map((frac, i) => {
+            const y = chartPadY + innerH * (1 - frac);
+            return (
+              <g key={i}>
+                <line x1={chartPadX} x2={chartWidth - chartPadX} y1={y} y2={y} stroke="var(--color-border-light)" strokeWidth={1} strokeDasharray={i === 0 ? '' : '4,4'} />
+                <text x={chartPadX - 8} y={y + 4} textAnchor="end" fontSize={10} fill="var(--color-text-muted)">{Math.round(maxY * frac)}</text>
+              </g>
+            );
+          })}
+
+          {/* X-axis labels */}
+          {trendData.data.map((d, i) => (
+            <text key={i} x={toChartX(i)} y={chartHeight - 5} textAnchor="middle" fontSize={10} fill="var(--color-text-muted)" fontWeight={d.month === calMonth + 1 ? 700 : 400}>{d.monthName}</text>
+          ))}
+
+          {/* Present line */}
+          {presentLine && <path d={presentLine} fill="none" stroke="#2563eb" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />}
+          {/* Absent line */}
+          {absentLine && <path d={absentLine} fill="none" stroke="#dc2626" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" strokeDasharray="6,3" />}
+
+          {/* Data points */}
+          {trendData.data.map((d, i) => (
+            <g key={i}>
+              <circle cx={toChartX(i)} cy={toChartY(d.present)} r={4} fill="#2563eb" />
+              <circle cx={toChartX(i)} cy={toChartY(d.absent)} r={4} fill="#dc2626" />
+            </g>
+          ))}
+        </svg>
       </div>
     </div>
   );

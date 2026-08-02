@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { APP_GUARD } from '@nestjs/core';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { PrismaModule } from './prisma/prisma.module';
@@ -10,10 +11,38 @@ import { InventoryModule } from './inventory/inventory.module';
 import { ProjectsModule } from './projects/projects.module';
 import { AnalyticsModule } from './analytics/analytics.module';
 import { AiModule } from './ai/ai.module';
+import { FinanceModule } from './finance/finance.module';
+import { ExportModule } from './export/export.module';
+import { JwtAuthGuard } from './auth/jwt-auth.guard';
+import { RolesGuard } from './auth/roles.guard';
 
 @Module({
-  imports: [PrismaModule, UsersModule, AuthModule, HrmModule, CrmModule, InventoryModule, ProjectsModule, AnalyticsModule, AiModule],
+  imports: [
+    PrismaModule,
+    UsersModule,
+    AuthModule,
+    HrmModule,
+    CrmModule,
+    InventoryModule,
+    ProjectsModule,
+    AnalyticsModule,
+    AiModule,
+    FinanceModule,
+    ExportModule,
+  ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [
+    AppService,
+    // Global JWT guard — ALL routes require authentication unless @Public()
+    {
+      provide: APP_GUARD,
+      useClass: JwtAuthGuard,
+    },
+    // Global Roles guard — checks @RequirePermission() on protected routes
+    {
+      provide: APP_GUARD,
+      useClass: RolesGuard,
+    },
+  ],
 })
 export class AppModule {}
