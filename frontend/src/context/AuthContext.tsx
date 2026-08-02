@@ -61,8 +61,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [isLoading, user, pathname, router]);
 
+  const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+
   const login = useCallback(async (email: string, password: string) => {
-    const res = await fetch('http://localhost:5000/api/auth/login', {
+    const res = await fetch(`${API_BASE}/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password }),
@@ -89,7 +91,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const logout = useCallback(() => {
     // Call backend logout
     if (token) {
-      fetch('http://localhost:5000/api/auth/logout', {
+      fetch(`${API_BASE}/auth/logout`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
