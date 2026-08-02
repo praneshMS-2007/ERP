@@ -41,9 +41,14 @@ const path_1 = require("path");
 async function bootstrap() {
     const app = await core_1.NestFactory.create(app_module_1.AppModule);
     app.setGlobalPrefix('api');
-    app.enableCors();
+    app.enableCors({
+        origin: true,
+        credentials: true,
+    });
     app.use('/uploads', express.static((0, path_1.join)(process.cwd(), 'uploads')));
-    await app.listen(5000);
+    const port = process.env.PORT || 5000;
+    await app.listen(port, '0.0.0.0');
+    console.log(`🚀 NestJS ERP Backend server running on port ${port}`);
 }
 bootstrap();
 //# sourceMappingURL=main.js.map

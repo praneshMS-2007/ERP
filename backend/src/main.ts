@@ -7,8 +7,13 @@ import { join } from 'path';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   app.setGlobalPrefix('api');
-  app.enableCors();
+  app.enableCors({
+    origin: true,
+    credentials: true,
+  });
   app.use('/uploads', express.static(join(process.cwd(), 'uploads')));
-  await app.listen(5000);
+  const port = process.env.PORT || 5000;
+  await app.listen(port, '0.0.0.0');
+  console.log(`🚀 NestJS ERP Backend server running on port ${port}`);
 }
 bootstrap();

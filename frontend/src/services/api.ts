@@ -1,4 +1,4 @@
-const API_BASE = 'http://localhost:5000/api';
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
 
 // Fetch wrapper with JWT auth header and 401 handling
 async function fetchApi(endpoint: string, options: RequestInit = {}) {
