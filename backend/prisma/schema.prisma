@@ -114,7 +114,23 @@ model Employee {
   joinDate      DateTime     @default(now()) @map("join_date")
   empType       EmpType      @map("emp_type")
   status        EmpStatus
-  
+
+  // Statutory & payout identity — required to generate a payslip.
+  // Kept nullable so existing rows stay valid; the payslip generator
+  // refuses to run until they are filled for that employee.
+  pan             String?    @map("pan")              // format AAAAA9999A, validated on write
+  bankAccountNo   String?    @map("bank_account_no")
+  bankIfsc        String?    @map("bank_ifsc")
+  personalEmail   String?    @map("personal_email")   // the address they applied from
+  workMode        WorkMode   @default(ONSITE) @map("work_mode")
+
+  reportingManagerId String?   @map("reporting_manager_id")
+  reportingManager   Employee? @relation(name: "ReportsTo", fields: [reportingManagerId], references: [id])
+  directReports      Employee[] @relation(name: "ReportsTo")
+
+  // Fixed-term engagements (internships, contracts) end on a known date.
+  engagementEndDate DateTime? @map("engagement_end_date")
+
   departmentId  String       @map("department_id")
   department    Department   @relation(fields: [departmentId], references: [id])
   
@@ -129,6 +145,7 @@ model Employee {
   performanceReviewsGiven PerformanceReview[] @relation(name: "EmployeeReviewers")
   payrolls                Payroll[]
   timeLogs                TimeLog[]
+  salaryStructures        SalaryStructure[]
   
   createdAt     DateTime     @default(now()) @map("created_at")
   updatedAt     DateTime     @updatedAt @map("updated_at")
@@ -504,23 +521,56 @@ model Payroll {
   payPeriod   String        @map("pay_period")
   status      PayrollStatus @default(DRAFT)
   paymentDate DateTime?     @map("payment_date")
+
+  // ---- Earnings (payslip section A) ----
+  hra              Float @default(0) @map("hra")
+  specialAllowance Float @default(0) @map("special_allowance")
+  // grossTotal = baseSalary + hra + specialAllowance + bonus  — computed, never stored
+
+  // ---- Deductions (payslip section B) ----
+  tds             Float @default(0) @map("tds")
+  providentFund   Float @default(0) @map("provident_fund")
+  professionalTax Float @default(0) @map("professional_tax")
+  lossOfPay       Float @default(0) @map("loss_of_pay")
+  // totalDeductions = tds + providentFund + professionalTax + lossOfPay
+  // netPay          = grossTotal - totalDeductions
+
+  // ---- Attendance record (payslip footer) ----
+  // Snapshotted at generation time so a reprinted payslip never changes.
+  totalDaysInMonth   Int @default(0) @map("total_days_in_month")   // calendar days
+  workingDaysInMonth Int @default(0) @map("working_days_in_month") // minus weekends & holidays
+  leavesTaken        Int @default(0) @map("leaves_taken")
+  effectiveWorkDays  Int @default(0) @map("effective_work_days")   // workingDays - leavesTaken
+
+  // ---- Approval chain: HR prepares, Finance approves ----
+  preparedById   String?   @map("prepared_by_id")
+  approvedById   String?   @map("approved_by_id")
+  approvedAt     DateTime? @map("approved_at")
+  rejectedReason String?   @map("rejected_reason")
+
+  payslipDocumentId String?   @unique @map("payslip_document_id")
+  payslipDocument   Document? @relation(fields: [payslipDocumentId], references: [id])
+
   createdAt   DateTime      @default(now()) @map("created_at")
   updatedAt   DateTime      @updatedAt @map("updated_at")
 
+  @@unique([employeeId, payPeriod])
   @@map("payrolls")
 }
 
 model JobPosting {
-  id          String      @id @default(uuid())
-  title       String
-  department  String
-  location    String
-  description String
-  priority    Priority    @default(MEDIUM)
-  status      JobStatus   @default(OPEN)
-  applicants  Applicant[]
-  createdAt   DateTime    @default(now()) @map("created_at")
-  updatedAt   DateTime    @updatedAt @map("updated_at")
+  id             String      @id @default(uuid())
+  title          String
+  department     String
+  location       String
+  description    String
+  employmentType EmpType     @default(FULL_TIME) @map("employment_type")
+  workMode       WorkMode    @default(ONSITE) @map("work_mode")
+  priority       Priority    @default(MEDIUM)
+  status         JobStatus   @default(OPEN)
+  applicants     Applicant[]
+  createdAt      DateTime    @default(now()) @map("created_at")
+  updatedAt      DateTime    @updatedAt @map("updated_at")
 
   @@map("job_postings")
 }
@@ -533,11 +583,102 @@ model Applicant {
   email     String
   phone     String?
   resumeUrl String?         @map("resume_url")
+  coverNote String?         @map("cover_note")
+  source    ApplicantSource @default(WEB_FORM)
   status    ApplicantStatus @default(APPLIED)
+
+  // Terms agreed at offer time. These carry straight onto the first payslip,
+  // so the offer letter and the payslip can never disagree.
+  offeredBasic            Float?    @map("offered_basic")
+  offeredHra              Float?    @map("offered_hra")
+  offeredSpecialAllowance Float?    @map("offered_special_allowance")
+  engagementStartDate     DateTime? @map("engagement_start_date")
+  engagementEndDate       DateTime? @map("engagement_end_date") // internships & contracts
+
+  offerSentAt     DateTime? @map("offer_sent_at")
+  offerRespondedAt DateTime? @map("offer_responded_at")
+  offerDocumentId String?   @unique @map("offer_document_id")
+  offerDocument   Document? @relation(fields: [offerDocumentId], references: [id])
+
+  hiredEmployeeId String? @unique @map("hired_employee_id")
+
   appliedAt DateTime        @default(now()) @map("applied_at")
   updatedAt DateTime        @updatedAt @map("updated_at")
 
+  @@index([status, jobId])
   @@map("applicants")
+}
+
+/// An employee's agreed salary split, with history.
+/// Payroll reads whichever row was in force during the pay period, so a raise
+/// never silently rewrites what last month's payslip said.
+model SalaryStructure {
+  id               String   @id @default(uuid())
+  employeeId       String   @map("employee_id")
+  employee         Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  basic            Float
+  hra              Float    @default(0)
+  specialAllowance Float    @default(0) @map("special_allowance")
+  // gross = basic + hra + specialAllowance — computed, never stored
+
+  effectiveFrom DateTime  @map("effective_from")
+  effectiveTo   DateTime? @map("effective_to") // null = currently in force
+  note          String?
+
+  createdById String?  @map("created_by_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([employeeId, effectiveFrom])
+  @@map("salary_structures")
+}
+
+/// Generated PDFs — payslips, offer letters, leave receipts, profile exports.
+/// Hashed so a reissued document supersedes rather than silently overwrites.
+model Document {
+  id           String       @id @default(uuid())
+  kind         DocumentKind
+  ownerUserId  String?      @map("owner_user_id")
+  storagePath  String       @map("storage_path")
+  fileName     String       @map("file_name")
+  sha256       String
+  issuedAt     DateTime     @default(now()) @map("issued_at")
+  supersedesId String?      @unique @map("supersedes_id")
+  supersedes   Document?    @relation(name: "Supersedes", fields: [supersedesId], references: [id])
+  supersededBy Document?    @relation(name: "Supersedes")
+
+  payroll   Payroll?
+  applicant Applicant?
+
+  @@index([ownerUserId, kind])
+  @@map("documents")
+}
+
+/// Company-wide policy values. These exist so nothing in the offer letter or
+/// payroll engine is hardcoded — HR edits them once and every document follows.
+model CompanyPolicy {
+  id    String @id @default(uuid())
+  key   String @unique
+  value String
+  label String            // human-readable, shown on the HR settings screen
+  unit  String?           // "months", "days", "percent"
+  notes String?
+
+  updatedById String?   @map("updated_by_id")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  @@map("company_policies")
+}
+
+/// Non-working days beyond weekends. Working-day maths in India is wrong
+/// without these — Republic Day, Diwali, regional Telangana holidays.
+model Holiday {
+  id       String   @id @default(uuid())
+  date     DateTime @unique
+  name     String
+  isOptional Boolean @default(false) @map("is_optional")
+
+  @@index([date])
+  @@map("holidays")
 }
 
 model LedgerEntry {
@@ -655,6 +796,28 @@ enum EmpType {
   FULL_TIME
   PART_TIME
   CONTRACT
+  INTERN
+}
+
+enum WorkMode {
+  ONSITE
+  REMOTE
+  HYBRID
+}
+
+enum ApplicantSource {
+  WEB_FORM
+  EMAIL
+  REFERRAL
+}
+
+enum DocumentKind {
+  PAYSLIP
+  OFFER_LETTER
+  CONFIRMATION_LETTER
+  LEAVE_APPROVAL
+  EMPLOYEE_PROFILE
+  COMPLETION_CERTIFICATE
 }
 
 enum EmpStatus {
@@ -793,8 +956,10 @@ enum PaymentStatus {
 
 enum PayrollStatus {
   DRAFT
+  PENDING_APPROVAL
   APPROVED
   PAID
+  REJECTED
 }
 
 enum JobStatus {
@@ -808,6 +973,8 @@ enum ApplicantStatus {
   SCREENING
   INTERVIEWING
   OFFERED
+  OFFER_ACCEPTED
+  OFFER_DECLINED
   HIRED
   REJECTED
 }

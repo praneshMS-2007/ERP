@@ -1,6 +1,87 @@
-import { Injectable, NotFoundException, Logger } from '@nestjs/common';
+import { Injectable, NotFoundException, Logger, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { Prisma } from '@prisma/client';
+import { normalisePan, normaliseBankAccount, normaliseIfsc, normaliseEmail } from '../common/validators';
+
+export interface RequestUser {
+  id: string;
+  email: string;
+  role: string;
+  permissions?: { module: string; action: string }[];
+}
+
+/** Salary is visible to HR, Finance and super admins — nobody else. */
+const COMPENSATION_ROLES = new Set(['SUPER_ADMIN', 'HR_MANAGER', 'FINANCE_MANAGER']);
+
+function canViewCompensation(viewer?: RequestUser): boolean {
+  return !!viewer && COMPENSATION_ROLES.has(viewer.role);
+}
+
+/** Fields a human may edit through the HR screen. Anything else is discarded. */
+const EDITABLE_EMPLOYEE_FIELDS = [
+  'firstName', 'lastName', 'gender', 'dob', 'contact', 'address', 'city', 'state', 'country',
+  'joinDate', 'empType', 'status', 'departmentId', 'designationId',
+  'pan', 'bankAccountNo', 'bankIfsc', 'personalEmail', 'workMode',
+  'reportingManagerId', 'engagementEndDate',
+] as const;
+
+const DATE_FIELDS = new Set(['dob', 'joinDate', 'engagementEndDate']);
+
+/**
+ * Copies across only permitted fields, normalising and validating as it goes.
+ * Empty strings become null so clearing a field actually clears it.
+ */
+function sanitiseEmployeeInput(input: Record<string, any>): Record<string, any> {
+  const out: Record<string, any> = {};
+
+  for (const field of EDITABLE_EMPLOYEE_FIELDS) {
+    if (!(field in input)) continue;
+    const raw = input[field];
+
+    if (raw === null || raw === undefined || raw === '') {
+      out[field] = null;
+      continue;
+    }
+
+    if (DATE_FIELDS.has(field)) {
+      const d = new Date(raw);
+      if (Number.isNaN(d.getTime())) {
+        throw new BadRequestException(`${field} is not a valid date.`);
+      }
+      out[field] = d;
+      continue;
+    }
+
+    switch (field) {
+      case 'pan':           out.pan = normalisePan(String(raw)); break;
+      case 'bankAccountNo': out.bankAccountNo = normaliseBankAccount(String(raw)); break;
+      case 'bankIfsc':      out.bankIfsc = normaliseIfsc(String(raw)); break;
+      case 'personalEmail': out.personalEmail = normaliseEmail(String(raw)); break;
+      default:              out[field] = typeof raw === 'string' ? raw.trim() : raw;
+    }
+  }
+
+  // firstName and lastName are required by the schema — never null them out.
+  for (const required of ['firstName', 'lastName'] as const) {
+    if (required in out && !out[required]) {
+      throw new BadRequestException(`${required === 'firstName' ? 'First' : 'Last'} name cannot be empty.`);
+    }
+  }
+
+  return out;
+}
+
+/** Non-nullable columns Prisma needs present when creating a row. */
+function requiredCreateFields(data: Record<string, any>) {
+  if (!data.departmentId) throw new BadRequestException('Department is required.');
+  if (!data.designationId) throw new BadRequestException('Designation is required.');
+  return {
+    empType: data.empType ?? 'FULL_TIME',
+    status: data.status ?? 'ACTIVE',
+    departmentId: data.departmentId,
+    designationId: data.designationId,
+  };
+}
 
 @Injectable()
 export class HrmService {
@@ -25,29 +106,162 @@ export class HrmService {
     });
   }
 
-  async getEmployeeById(id: string) {
+  /**
+   * Full record for the HR detail view.
+   *
+   * Compensation is omitted entirely for roles that may not see it — it is left
+   * out of the response, not hidden in the UI, so it cannot be read by calling
+   * the API directly.
+   */
+  async getEmployeeById(id: string, viewer?: RequestUser) {
     const employee = await this.prisma.employee.findUnique({
       where: { id },
       include: {
         department: true,
         designation: true,
-        attendances: { take: 5, orderBy: { date: 'desc' } },
-        leaves: { take: 5, orderBy: { startDate: 'desc' } },
+        reportingManager: {
+          select: { id: true, firstName: true, lastName: true, empCode: true },
+        },
+        user: { select: { email: true, role: { select: { name: true } } } },
+        attendances: { take: 10, orderBy: { date: 'desc' } },
+        leaves: { take: 10, orderBy: { startDate: 'desc' } },
       },
     });
     if (!employee) throw new NotFoundException('Employee not found');
-    return employee;
+
+    if (!canViewCompensation(viewer)) {
+      return { ...employee, compensation: null, canViewCompensation: false };
+    }
+
+    const salaryHistory = await this.prisma.salaryStructure.findMany({
+      where: { employeeId: id },
+      orderBy: { effectiveFrom: 'desc' },
+    });
+    const current = salaryHistory.find((s) => s.effectiveTo === null) ?? null;
+
+    return {
+      ...employee,
+      canViewCompensation: true,
+      compensation: {
+        current: current && {
+          ...current,
+          gross: current.basic + current.hra + current.specialAllowance,
+        },
+        history: salaryHistory,
+      },
+    };
   }
 
-  async createEmployee(data: Prisma.EmployeeUncheckedCreateInput) {
-    // Auto-generate empCode (ERP-XXXX)
-    const count = await this.prisma.employee.count();
-    const empCode = `ERP-${String(count + 1).padStart(4, '0')}`;
-    return this.prisma.employee.create({ data: { ...data, empCode } });
+  async createEmployee(data: Record<string, any>) {
+    const clean = sanitiseEmployeeInput(data);
+
+    if (!clean.firstName) throw new BadRequestException('First name is required.');
+    if (!clean.lastName) throw new BadRequestException('Last name is required.');
+
+    const empCode = await this.nextEmpCode(
+      clean.joinDate instanceof Date ? clean.joinDate : new Date(),
+    );
+
+    return this.prisma.employee.create({
+      data: {
+        ...clean,
+        ...requiredCreateFields(data),
+        firstName: clean.firstName,
+        lastName: clean.lastName,
+        empCode,
+      } as Prisma.EmployeeUncheckedCreateInput,
+    });
   }
 
-  async updateEmployee(id: string, data: Prisma.EmployeeUncheckedUpdateInput) {
-    return this.prisma.employee.update({ where: { id }, data });
+  /**
+   * Employee codes follow the format on Shuroq's own documents: SHR-26-003.
+   *
+   * Derived from the highest existing suffix for that year rather than a row
+   * count, so deleting an employee cannot cause the next hire to collide with
+   * a code that has already been printed on a payslip.
+   */
+  private async nextEmpCode(joinDate: Date): Promise<string> {
+    const yy = String(joinDate.getFullYear()).slice(-2);
+    const prefix = `SHR-${yy}-`;
+
+    const existing = await this.prisma.employee.findMany({
+      where: { empCode: { startsWith: prefix } },
+      select: { empCode: true },
+    });
+
+    const highest = existing.reduce((max, { empCode }) => {
+      const n = parseInt(empCode?.slice(prefix.length) ?? '', 10);
+      return Number.isFinite(n) && n > max ? n : max;
+    }, 0);
+
+    return `${prefix}${String(highest + 1).padStart(3, '0')}`;
+  }
+
+  /**
+   * Only fields a human is allowed to edit are written. Previously this passed
+   * the raw request body straight to Prisma, so a crafted request could rewrite
+   * id, userId or createdAt.
+   */
+  async updateEmployee(id: string, data: Record<string, any>) {
+    const exists = await this.prisma.employee.findUnique({ where: { id }, select: { id: true } });
+    if (!exists) throw new NotFoundException('Employee not found');
+
+    return this.prisma.employee.update({
+      where: { id },
+      data: sanitiseEmployeeInput(data),
+    });
+  }
+
+  /**
+   * Records a new salary split and closes off the previous one, so history is
+   * preserved. Both writes happen together or neither does.
+   */
+  async setSalaryStructure(
+    employeeId: string,
+    input: { basic: number; hra?: number; specialAllowance?: number; effectiveFrom?: string; note?: string },
+    actorId?: string,
+  ) {
+    const employee = await this.prisma.employee.findUnique({
+      where: { id: employeeId },
+      select: { id: true },
+    });
+    if (!employee) throw new NotFoundException('Employee not found');
+
+    const basic = Number(input.basic);
+    const hra = Number(input.hra ?? 0);
+    const specialAllowance = Number(input.specialAllowance ?? 0);
+
+    for (const [label, v] of Object.entries({ basic, hra, 'special allowance': specialAllowance })) {
+      if (!Number.isFinite(v) || v < 0) {
+        throw new BadRequestException(`${label} must be a number of zero or more.`);
+      }
+    }
+    if (basic <= 0) throw new BadRequestException('Basic salary must be greater than zero.');
+
+    const effectiveFrom = input.effectiveFrom ? new Date(input.effectiveFrom) : new Date();
+    if (Number.isNaN(effectiveFrom.getTime())) {
+      throw new BadRequestException('Effective-from date is not a valid date.');
+    }
+
+    const [, created] = await this.prisma.$transaction([
+      this.prisma.salaryStructure.updateMany({
+        where: { employeeId, effectiveTo: null },
+        data: { effectiveTo: effectiveFrom },
+      }),
+      this.prisma.salaryStructure.create({
+        data: {
+          employeeId,
+          basic,
+          hra,
+          specialAllowance,
+          effectiveFrom,
+          note: input.note?.trim() || null,
+          createdById: actorId ?? null,
+        },
+      }),
+    ]);
+
+    return { ...created, gross: created.basic + created.hra + created.specialAllowance };
   }
 
   async deleteEmployee(id: string) {

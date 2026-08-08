@@ -8,6 +8,7 @@ import {
 import { hrmApi, exportApi } from '../../../services/api';
 import ExportButton from '../../../components/ExportButton';
 import Modal, { FormField } from '../../../components/Modal';
+import EmployeeDetailModal from '../../../components/modals/EmployeeDetailModal';
 
 export default function EmployeeDirectory() {
   const [employees, setEmployees] = useState<any[]>([]);
@@ -23,6 +24,9 @@ export default function EmployeeDirectory() {
   const [filterDept, setFilterDept] = useState('');
   const [sortBy, setSortBy] = useState('name');
   const [actionMenuId, setActionMenuId] = useState<string | null>(null);
+
+  // Detail / edit modal
+  const [detailId, setDetailId] = useState<string | null>(null);
 
   // Add Employee Modal
   const [showAddModal, setShowAddModal] = useState(false);
@@ -227,7 +231,12 @@ export default function EmployeeDirectory() {
               const present = isPresent(emp.id);
 
               return (
-                <tr key={emp.id}>
+                <tr
+                  key={emp.id}
+                  onClick={() => setDetailId(emp.id)}
+                  style={{ cursor: 'pointer' }}
+                  title="Open full record"
+                >
                   <td style={{ color: 'var(--color-text-muted)', fontSize: '13px' }}>{page * pageSize + idx + 1}</td>
                   <td>
                     <div className="employee-cell">
@@ -253,7 +262,7 @@ export default function EmployeeDirectory() {
                       </span>
                     </td>
                   )}
-                  <td style={{ position: 'relative' }}>
+                  <td style={{ position: 'relative' }} onClick={(e) => e.stopPropagation()}>
                     <button onClick={() => setActionMenuId(actionMenuId === emp.id ? null : emp.id)} style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--color-text-muted)' }}>
                       <MoreVertical size={16} />
                     </button>
@@ -263,7 +272,7 @@ export default function EmployeeDirectory() {
                         background: 'var(--color-card)', border: '1px solid var(--color-border)', borderRadius: '8px',
                         boxShadow: '0 4px 12px rgba(0,0,0,0.15)', padding: '4px', minWidth: '120px',
                       }}>
-                        <button onClick={() => setActionMenuId(null)} style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%', padding: '8px 12px', border: 'none', background: 'transparent', cursor: 'pointer', borderRadius: '6px', fontSize: '13px', color: 'var(--color-text)' }}>
+                        <button onClick={() => { setActionMenuId(null); setDetailId(emp.id); }} style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%', padding: '8px 12px', border: 'none', background: 'transparent', cursor: 'pointer', borderRadius: '6px', fontSize: '13px', color: 'var(--color-text)' }}>
                           <Edit size={14} /> Edit
                         </button>
                         {activeTab === 'ACTIVE' && (
@@ -308,6 +317,15 @@ export default function EmployeeDirectory() {
           <button className="btn btn-primary" onClick={handleAddEmployee}>Add Employee</button>
         </div>
       </Modal>
+
+      {/* EMPLOYEE DETAIL / EDIT */}
+      <EmployeeDetailModal
+        employeeId={detailId}
+        onClose={() => setDetailId(null)}
+        onSaved={fetchAll}
+        departments={departments}
+        designations={designations}
+      />
     </div>
   );
 }

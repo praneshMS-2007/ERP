@@ -44,6 +44,47 @@ async function fetchApi(endpoint: string, options: RequestInit = {}) {
   }
 }
 
+/**
+ * Like fetchApi, but throws instead of returning [] when something goes wrong.
+ *
+ * fetchApi swallows every failure into an empty array, which is survivable when
+ * you are painting a list and disastrous when you are saving — a failed write
+ * would look identical to a successful one. Use this for anything that changes
+ * data, and surface the message to the user.
+ */
+async function mutateApi(endpoint: string, options: RequestInit = {}) {
+  const url = `${API_BASE}${endpoint}`;
+  const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+
+  const res = await fetch(url, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...options.headers,
+    },
+  });
+
+  if (res.status === 401) {
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      window.location.href = '/login';
+    }
+    throw new Error('Your session has expired. Please sign in again.');
+  }
+
+  const body = await res.json().catch(() => null);
+
+  if (!res.ok) {
+    // NestJS puts the useful text in `message`; it may be a string or an array.
+    const detail = Array.isArray(body?.message) ? body.message.join(', ') : body?.message;
+    throw new Error(detail || `Request failed (${res.status})`);
+  }
+
+  return body;
+}
+
 export const crmApi = {
   getCustomers: () => fetchApi('/crm/customers'),
   getLeads: () => fetchApi('/crm/leads'),
@@ -60,6 +101,11 @@ export const crmApi = {
 
 export const hrmApi = {
   getEmployees: () => fetchApi('/hrm/employees'),
+  getEmployee: (id: string) => mutateApi(`/hrm/employees/${id}`),
+  updateEmployee: (id: string, data: any) =>
+    mutateApi(`/hrm/employees/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  setSalary: (id: string, data: any) =>
+    mutateApi(`/hrm/employees/${id}/salary`, { method: 'PUT', body: JSON.stringify(data) }),
   getAttendance: () => fetchApi('/hrm/attendance'),
   getPayrolls: () => fetchApi('/hrm/payrolls'),
   getJobPostings: () => fetchApi('/hrm/jobs'),

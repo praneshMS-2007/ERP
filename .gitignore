@@ -1,4 +1,12 @@
 node_modules/
-.env
 .next/
 *.log
+
+# Secrets — never commit. The bare ".env" pattern does NOT cover variants
+# like ".env.supabase.backup" or ".env.local", so match them explicitly.
+.env
+.env.*
+!.env.example
+
+# Build output — generated from src, should not be tracked.
+backend/dist/

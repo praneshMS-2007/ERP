@@ -1,7 +1,8 @@
 import { Controller, Get, Post, Body, Param, Put, Delete, Query } from '@nestjs/common';
 import { HrmService } from './hrm.service';
+import type { RequestUser } from './hrm.service';
 import { Prisma } from '@prisma/client';
-import { RequirePermission } from '../auth/decorators';
+import { RequirePermission, CurrentUser } from '../auth/decorators';
 
 @Controller('hrm')
 export class HrmController {
@@ -15,20 +16,35 @@ export class HrmController {
 
   @Get('employees/:id')
   @RequirePermission('HR', 'READ')
-  getEmployeeById(@Param('id') id: string) {
-    return this.hrmService.getEmployeeById(id);
+  getEmployeeById(@Param('id') id: string, @CurrentUser() user: RequestUser) {
+    return this.hrmService.getEmployeeById(id, user);
   }
 
   @Post('employees')
   @RequirePermission('HR', 'WRITE')
-  createEmployee(@Body() data: Prisma.EmployeeUncheckedCreateInput) {
+  createEmployee(@Body() data: Record<string, any>) {
     return this.hrmService.createEmployee(data);
   }
 
   @Put('employees/:id')
   @RequirePermission('HR', 'WRITE')
-  updateEmployee(@Param('id') id: string, @Body() data: Prisma.EmployeeUncheckedUpdateInput) {
+  updateEmployee(@Param('id') id: string, @Body() data: Record<string, any>) {
     return this.hrmService.updateEmployee(id, data);
+  }
+
+  /**
+   * Salary is a separate route from the rest of the profile so it can carry a
+   * stricter permission — HR may edit a phone number without being able to
+   * change pay.
+   */
+  @Put('employees/:id/salary')
+  @RequirePermission('HR', 'WRITE')
+  setSalaryStructure(
+    @Param('id') id: string,
+    @Body() body: { basic: number; hra?: number; specialAllowance?: number; effectiveFrom?: string; note?: string },
+    @CurrentUser() user: RequestUser,
+  ) {
+    return this.hrmService.setSalaryStructure(id, body, user?.id);
   }
 
   @Delete('employees/:id')
