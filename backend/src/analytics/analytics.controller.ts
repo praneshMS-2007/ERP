@@ -17,4 +17,10 @@ export class AnalyticsController {
   getRevenueTrend() {
     return this.analyticsService.getRevenueTrend();
   }
+
+  @Get('retention')
+  @RequirePermission('ANALYTICS', 'READ')
+  getRetention() {
+    return this.analyticsService.getRetention();
+  }
 }

@@ -19,7 +19,6 @@ import { analyticsApi } from '../../services/api';
 export default function AnalyticsPage() {
   const [metrics, setMetrics] = useState({
     totalRevenue: 0,
-    employeeRetention: 0,
     inventoryTurnover: 0,
     projectSuccessRate: 0,
     departmentCosts: {
@@ -27,6 +26,11 @@ export default function AnalyticsPage() {
       data: [45, 20, 15, 12, 8]
     }
   });
+
+  // Real math from actual join/departure dates — see AnalyticsService.getRetention.
+  // null while loading; { insufficientData: true } is a legitimate, honest
+  // result for a dataset with no 12-month history yet, not an error.
+  const [retention, setRetention] = useState<{ insufficientData: boolean; retentionPercent: number | null; headcountAtPeriodStart: number; leaversInPeriod: number } | null>(null);
 
   const [revenueTrend, setRevenueTrend] = useState({
     labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep'],
@@ -36,15 +40,18 @@ export default function AnalyticsPage() {
   useEffect(() => {
     async function fetchData() {
       try {
-        const [dashMetrics, revTrend] = await Promise.all([
+        const [dashMetrics, revTrend, retentionData] = await Promise.all([
           analyticsApi.getDashboardMetrics(),
           analyticsApi.getRevenueTrend(),
+          analyticsApi.getRetention(),
         ]);
 
         if (dashMetrics && !Array.isArray(dashMetrics)) {
           setMetrics({
             totalRevenue: dashMetrics.revenueYTD || dashMetrics.totalRevenue || 0,
-            employeeRetention: dashMetrics.employees ? Math.min(99, 90 + dashMetrics.employees) : 94.2,
+            // Inventory Turnover and Project Success Rate below are still the
+            // fabricated formulas flagged in the 14 Aug audit — Employee
+            // Retention is the only tile fixed so far; the rest is Phase 5.
             inventoryTurnover: dashMetrics.inventoryValue ? Math.round((dashMetrics.inventoryValue / 100000) * 10) / 10 : 4.8,
             projectSuccessRate: dashMetrics.activeProjects ? Math.min(98, 85 + dashMetrics.activeProjects * 2) : 91,
             departmentCosts: dashMetrics.departmentCosts || {
@@ -59,6 +66,10 @@ export default function AnalyticsPage() {
             labels: revTrend.labels,
             data: revTrend.data,
           });
+        }
+
+        if (retentionData && !Array.isArray(retentionData)) {
+          setRetention(retentionData);
         }
       } catch (e) {
         console.error('Failed to fetch analytics data:', e);
@@ -126,8 +137,23 @@ export default function AnalyticsPage() {
             <div className="kpi-card-label">Employee Retention</div>
             <div className="kpi-card-icon" style={{ background: '#eff6ff', color: '#2563eb' }}><Users size={20} /></div>
           </div>
-          <div className="kpi-card-value">{metrics.employeeRetention}%</div>
-          <div className="kpi-card-trend up"><TrendingUp size={14} /> +2.1% from Q2</div>
+          {!retention ? (
+            <div className="kpi-card-value" style={{ color: 'var(--color-text-muted)', fontSize: '20px' }}>Loading…</div>
+          ) : retention.insufficientData ? (
+            <>
+              <div className="kpi-card-value" style={{ fontSize: '20px', color: 'var(--color-text-muted)' }}>Insufficient data</div>
+              <div className="kpi-card-trend" style={{ color: 'var(--color-text-muted)' }}>
+                Needs 12 months of employment history — no one in this dataset had joined that far back yet
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="kpi-card-value">{retention.retentionPercent}%</div>
+              <div className="kpi-card-trend" style={{ color: 'var(--color-text-muted)' }}>
+                {retention.leaversInPeriod} left of {retention.headcountAtPeriodStart} employed 12 months ago
+              </div>
+            </>
+          )}
         </div>
         <div className="kpi-card">
           <div className="kpi-card-header">

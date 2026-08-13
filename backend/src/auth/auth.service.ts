@@ -11,9 +11,15 @@ export class AuthService {
     private jwtService: JwtService,
   ) {}
 
-  async login(email: string, passwordPlain: string) {
-    const user = await this.prisma.user.findUnique({
-      where: { email },
+  /**
+   * `identifier` is either an email (the original demo accounts) or a
+   * generated username (ERP-provisioned employee accounts have no mailbox
+   * yet — see credentials.ts). Both live in unique columns, so one lookup
+   * covers both without ambiguity.
+   */
+  async login(identifier: string, passwordPlain: string) {
+    const user = await this.prisma.user.findFirst({
+      where: { OR: [{ email: identifier }, { username: identifier }] },
       include: {
         role: {
           include: { permissions: true },
@@ -29,6 +35,15 @@ export class AuthService {
     const isMatch = await bcrypt.compare(passwordPlain, user.passwordHash);
     if (!isMatch) {
       throw new UnauthorizedException('Invalid credentials');
+    }
+
+    // Checked after the password match so a wrong password always reads as
+    // "invalid credentials" — this message only reaches someone who already
+    // knows the right password, not a stranger probing for account names.
+    if (!user.isActive) {
+      throw new UnauthorizedException(
+        'This account has been deactivated. Contact HR if you believe this is a mistake.',
+      );
     }
 
     // Build JWT payload with permissions

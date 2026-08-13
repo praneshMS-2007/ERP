@@ -1,7 +1,14 @@
 import { Injectable, NotFoundException, Logger, BadRequestException } from '@nestjs/common';
+import * as crypto from 'crypto';
+import * as fs from 'fs';
+import * as path from 'path';
 import { PrismaService } from '../prisma/prisma.service';
 import { Prisma } from '@prisma/client';
-import { normalisePan, normaliseBankAccount, normaliseIfsc, normaliseEmail } from '../common/validators';
+import * as bcrypt from 'bcryptjs';
+import { normalisePan, normaliseAadhaar, normaliseUan, normaliseEsic, normaliseBankAccount, normaliseIfsc, normaliseEmail } from '../common/validators';
+import { generateUsername, generateTemporaryPassword } from '../common/credentials';
+import { encryptField, decryptField } from '../common/field-encryption';
+import { OfferLetterService } from './offer-letter.service';
 
 export interface RequestUser {
   id: string;
@@ -17,19 +24,60 @@ function canViewCompensation(viewer?: RequestUser): boolean {
   return !!viewer && COMPENSATION_ROLES.has(viewer.role);
 }
 
+/**
+ * Government ID numbers (PAN, Aadhaar) are narrower than compensation —
+ * "strictly HR role-based authorization" per the team lead, so Finance is
+ * deliberately excluded here even though it can see salary. If Finance ever
+ * needs PAN for TDS filing, that's a decision to make explicitly, not a
+ * side effect of reusing the compensation gate.
+ */
+const SENSITIVE_IDENTITY_ROLES = new Set(['SUPER_ADMIN', 'HR_MANAGER']);
+
+function canViewSensitiveIdentity(viewer?: RequestUser): boolean {
+  return !!viewer && SENSITIVE_IDENTITY_ROLES.has(viewer.role);
+}
+
+/**
+ * Same role set as the identity gate, kept as a separate named function
+ * because it governs a different, broader concept — "can see a colleague's
+ * full HR record" (DOB, address, emergency contact, education, nominee…)
+ * rather than specifically government ID numbers. They happen to share a
+ * role set today; that's a coincidence worth keeping separately named in
+ * case the two ever need to diverge (e.g. a future HR_ASSISTANT role that
+ * can see full profiles but not statutory numbers).
+ */
+function canViewFullProfile(viewer?: RequestUser): boolean {
+  return !!viewer && SENSITIVE_IDENTITY_ROLES.has(viewer.role);
+}
+
 /** Fields a human may edit through the HR screen. Anything else is discarded. */
 const EDITABLE_EMPLOYEE_FIELDS = [
   'firstName', 'lastName', 'gender', 'dob', 'contact', 'address', 'city', 'state', 'country',
   'joinDate', 'empType', 'status', 'departmentId', 'designationId',
-  'pan', 'bankAccountNo', 'bankIfsc', 'personalEmail', 'workMode',
+  'pan', 'aadhaarNumber', 'bankAccountNo', 'bankIfsc', 'personalEmail', 'workMode',
   'reportingManagerId', 'engagementEndDate',
+  'sameAsCurrentAddress', 'permanentAddress',
+  'emergencyContactName', 'emergencyContactPhone', 'emergencyContactRelation',
+  'highestQualification', 'institutionName', 'yearOfPassing',
+  'previousCompany', 'previousDesignation', 'totalExperienceYears',
+  'uanNumber', 'pfNumber', 'esicNumber',
+  'nomineeName', 'nomineeRelation', 'nomineeDob', 'nomineePhone',
+  'taxRegime', 'taxDeclarationNotes',
 ] as const;
 
-const DATE_FIELDS = new Set(['dob', 'joinDate', 'engagementEndDate']);
+// dob and engagementEndDate are DateTime? — nullable, so an empty form field
+// legitimately clears them. joinDate is DateTime with @default(now()) and no
+// "?": passing it as null explicitly asks Prisma to write NULL into a NOT
+// NULL column, which the database (correctly) rejects. An empty joinDate
+// must be *omitted* from the payload instead, so create falls back to the
+// column default and update leaves whatever value is already there alone.
+const NULLABLE_DATE_FIELDS = new Set(['dob', 'engagementEndDate', 'nomineeDob']);
+const REQUIRED_DATE_FIELDS = new Set(['joinDate']);
 
 /**
  * Copies across only permitted fields, normalising and validating as it goes.
- * Empty strings become null so clearing a field actually clears it.
+ * Empty strings become null so clearing an optional field actually clears it
+ * — except the required date field above, which is omitted instead.
  */
 function sanitiseEmployeeInput(input: Record<string, any>): Record<string, any> {
   const out: Record<string, any> = {};
@@ -39,11 +87,12 @@ function sanitiseEmployeeInput(input: Record<string, any>): Record<string, any> 
     const raw = input[field];
 
     if (raw === null || raw === undefined || raw === '') {
+      if (REQUIRED_DATE_FIELDS.has(field)) continue; // omit, don't null
       out[field] = null;
       continue;
     }
 
-    if (DATE_FIELDS.has(field)) {
+    if (NULLABLE_DATE_FIELDS.has(field) || REQUIRED_DATE_FIELDS.has(field)) {
       const d = new Date(raw);
       if (Number.isNaN(d.getTime())) {
         throw new BadRequestException(`${field} is not a valid date.`);
@@ -53,10 +102,44 @@ function sanitiseEmployeeInput(input: Record<string, any>): Record<string, any> 
     }
 
     switch (field) {
-      case 'pan':           out.pan = normalisePan(String(raw)); break;
+      // Validate the plaintext shape first — an encrypted blob of garbage
+      // input would be undetectable as wrong once it's ciphertext — then
+      // encrypt before it ever reaches the database.
+      case 'pan':           out.pan = encryptField(normalisePan(String(raw))); break;
+      case 'aadhaarNumber': out.aadhaarNumber = encryptField(normaliseAadhaar(String(raw))); break;
+      case 'uanNumber':     out.uanNumber = encryptField(normaliseUan(String(raw))); break;
+      case 'esicNumber':    out.esicNumber = encryptField(normaliseEsic(String(raw))); break;
+      // No fixed national format for PF numbers — encrypted, but not
+      // format-checked, so a legitimate real number is never rejected.
+      case 'pfNumber':      out.pfNumber = encryptField(String(raw).trim()); break;
       case 'bankAccountNo': out.bankAccountNo = normaliseBankAccount(String(raw)); break;
       case 'bankIfsc':      out.bankIfsc = normaliseIfsc(String(raw)); break;
       case 'personalEmail': out.personalEmail = normaliseEmail(String(raw)); break;
+      case 'taxRegime': {
+        const regime = String(raw).trim().toUpperCase();
+        if (regime !== 'OLD' && regime !== 'NEW') {
+          throw new BadRequestException('Tax regime must be "OLD" or "NEW".');
+        }
+        out.taxRegime = regime;
+        break;
+      }
+      case 'yearOfPassing': {
+        const year = Number(raw);
+        const currentYear = new Date().getFullYear();
+        if (!Number.isInteger(year) || year < 1950 || year > currentYear + 1) {
+          throw new BadRequestException(`Year of passing must be between 1950 and ${currentYear + 1}.`);
+        }
+        out.yearOfPassing = year;
+        break;
+      }
+      case 'totalExperienceYears': {
+        const years = Number(raw);
+        if (!Number.isFinite(years) || years < 0 || years > 60) {
+          throw new BadRequestException('Total experience must be a number of years between 0 and 60.');
+        }
+        out.totalExperienceYears = years;
+        break;
+      }
       default:              out[field] = typeof raw === 'string' ? raw.trim() : raw;
     }
   }
@@ -87,23 +170,109 @@ function requiredCreateFields(data: Record<string, any>) {
 export class HrmService {
   private readonly logger = new Logger(HrmService.name);
 
-  constructor(private prisma: PrismaService) {}
+  private readonly avatarDir = path.join(process.cwd(), 'uploads', 'avatars');
+
+  constructor(
+    private prisma: PrismaService,
+    private offerLetterService: OfferLetterService,
+  ) {
+    fs.mkdirSync(this.avatarDir, { recursive: true });
+  }
 
   // ========== EMPLOYEES ==========
-  async getEmployees(departmentId?: string, status?: any) {
+
+  /**
+   * A directory headshot — public (served from uploads/, not
+   * private-uploads/) because it's meant to be visible to every colleague,
+   * unlike the Aadhaar/PAN scans in EmployeeDocumentsService. Confidentiality
+   * here relies on the same unguessable-filename convention as offer
+   * letters, which is an appropriate level of protection for a photo that's
+   * supposed to be broadly visible anyway.
+   */
+  async setAvatar(employeeId: string, file: { buffer: Buffer; mimetype: string; size: number }) {
+    const ALLOWED = new Set(['image/jpeg', 'image/png', 'image/webp']);
+    if (!ALLOWED.has(file.mimetype)) {
+      throw new BadRequestException('Only JPG, PNG or WEBP images are accepted.');
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      throw new BadRequestException('Image is larger than the 5MB limit.');
+    }
+
+    const employee = await this.prisma.employee.findUnique({ where: { id: employeeId }, select: { id: true } });
+    if (!employee) throw new NotFoundException('Employee not found');
+
+    const ext = file.mimetype === 'image/png' ? '.png' : file.mimetype === 'image/webp' ? '.webp' : '.jpg';
+    const fileName = `${crypto.randomBytes(16).toString('hex')}${ext}`;
+    fs.writeFileSync(path.join(this.avatarDir, fileName), file.buffer);
+    const avatarUrl = `/uploads/avatars/${fileName}`;
+
+    await this.prisma.employee.update({ where: { id: employeeId }, data: { avatarUrl } });
+    return { avatarUrl };
+  }
+
+  /**
+   * Directory-safe fields visible to any authenticated colleague — name,
+   * photo, department, designation, ERP login. Explicitly NOT personal
+   * email, personal phone, address, DOB, gender, or anything from the
+   * Background/Statutory tabs (education, previous employment, emergency
+   * contact, nominee) — those are third-party or personal-life details a
+   * colleague browsing the directory has no business seeing about someone
+   * else, per the strict-RBAC directory spec.
+   *
+   * There is no separate "work email"/"work phone" field yet — Workspace is
+   * on hold, so the only login identifier is the generated ERP username,
+   * surfaced here as exactly that rather than mislabelled "work email".
+   */
+  private stripToDirectorySafe(employee: any) {
+    const {
+      gender, dob, contact, personalEmail, address, city, state, country,
+      permanentAddress, sameAsCurrentAddress,
+      emergencyContactName, emergencyContactPhone, emergencyContactRelation,
+      highestQualification, institutionName, yearOfPassing,
+      previousCompany, previousDesignation, totalExperienceYears,
+      nomineeName, nomineeRelation, nomineeDob, nomineePhone,
+      ...safe
+    } = employee;
+    return safe;
+  }
+
+  /**
+   * The directory list. Deliberately a `select`, not an `include` — `include`
+   * returns every scalar column on Employee, which used to mean PAN, Aadhaar
+   * and bank details rode along in the list response to anyone holding
+   * HR:READ. Those two fields only ever leave the server via getEmployeeById
+   * (never selected here at all). Everything else in the select below is
+   * still filtered per-viewer after the query — see stripToDirectorySafe.
+   */
+  async getEmployees(departmentId?: string, status?: any, viewer?: RequestUser) {
     const where: any = {};
     if (departmentId) where.departmentId = departmentId;
     if (status) where.status = status;
 
-    return this.prisma.employee.findMany({
+    const employees = await this.prisma.employee.findMany({
       where,
-      include: {
+      select: {
+        id: true, empCode: true, firstName: true, lastName: true, avatarUrl: true,
+        gender: true, dob: true, contact: true, personalEmail: true,
+        address: true, city: true, state: true, country: true,
+        permanentAddress: true, sameAsCurrentAddress: true,
+        emergencyContactName: true, emergencyContactPhone: true, emergencyContactRelation: true,
+        highestQualification: true, institutionName: true, yearOfPassing: true,
+        previousCompany: true, previousDesignation: true, totalExperienceYears: true,
+        nomineeName: true, nomineeRelation: true, nomineeDob: true, nomineePhone: true,
+        joinDate: true, empType: true, status: true, workMode: true, lastWorkingDay: true,
+        engagementEndDate: true, departmentId: true, designationId: true,
+        reportingManagerId: true, userId: true,
+        createdAt: true, updatedAt: true,
         department: true,
         designation: true,
-        user: { select: { email: true, role: { select: { name: true } } } },
+        user: { select: { email: true, username: true, role: { select: { name: true } } } },
       },
       orderBy: { joinDate: 'desc' },
     });
+
+    if (canViewFullProfile(viewer)) return employees;
+    return employees.map((e) => this.stripToDirectorySafe(e));
   }
 
   /**
@@ -122,15 +291,60 @@ export class HrmService {
         reportingManager: {
           select: { id: true, firstName: true, lastName: true, empCode: true },
         },
-        user: { select: { email: true, role: { select: { name: true } } } },
+        user: { select: { email: true, username: true, role: { select: { name: true } } } },
         attendances: { take: 10, orderBy: { date: 'desc' } },
         leaves: { take: 10, orderBy: { startDate: 'desc' } },
       },
     });
     if (!employee) throw new NotFoundException('Employee not found');
 
-    if (!canViewCompensation(viewer)) {
-      return { ...employee, compensation: null, canViewCompensation: false };
+    // Per team decision: PAN/Aadhaar/UAN/PF/ESIC are encrypted at rest, and
+    // this is the ONLY endpoint that ever decrypts and returns them, gated
+    // to a narrower set than general HR:READ. The frontend masks by default
+    // and reveals on an explicit toggle — but the real value has to reach
+    // the browser for that toggle to work, so the gate here is what
+    // actually protects the data, not the masking.
+    const identityVisible = canViewSensitiveIdentity(viewer);
+    const identity = {
+      pan: identityVisible && employee.pan ? decryptField(employee.pan) : null,
+      aadhaarNumber: identityVisible && employee.aadhaarNumber ? decryptField(employee.aadhaarNumber) : null,
+      uanNumber: identityVisible && employee.uanNumber ? decryptField(employee.uanNumber) : null,
+      pfNumber: identityVisible && employee.pfNumber ? decryptField(employee.pfNumber) : null,
+      esicNumber: identityVisible && employee.esicNumber ? decryptField(employee.esicNumber) : null,
+    };
+
+    const compensationVisible = canViewCompensation(viewer);
+    // Tax declaration isn't encrypted (see schema comment) but follows the
+    // same gate as salary — it's a financial disclosure Finance needs for
+    // payroll, not a government identifier.
+    const tax = {
+      taxRegime: compensationVisible ? employee.taxRegime : null,
+      taxDeclarationNotes: compensationVisible ? employee.taxDeclarationNotes : null,
+    };
+
+    // Same directory-safe cut as the list endpoint — DOB, address, emergency
+    // contact, education, nominee etc. are a colleague's business only if
+    // they're HR/Admin. A general employee clicking into someone else's
+    // profile from the directory must land on the same restricted shape the
+    // list already promised, not the full record via a different door.
+    const profileVisible = canViewFullProfile(viewer);
+    const baseEmployee = profileVisible ? employee : this.stripToDirectorySafe(employee);
+    // Attendance/leave history is similarly not a general colleague's business.
+    if (!profileVisible) {
+      (baseEmployee as any).attendances = [];
+      (baseEmployee as any).leaves = [];
+    }
+
+    if (!compensationVisible) {
+      return {
+        ...baseEmployee,
+        ...identity,
+        ...tax,
+        canViewSensitiveIdentity: identityVisible,
+        canViewFullProfile: profileVisible,
+        compensation: null,
+        canViewCompensation: false,
+      };
     }
 
     const salaryHistory = await this.prisma.salaryStructure.findMany({
@@ -140,7 +354,11 @@ export class HrmService {
     const current = salaryHistory.find((s) => s.effectiveTo === null) ?? null;
 
     return {
-      ...employee,
+      ...baseEmployee,
+      ...identity,
+      ...tax,
+      canViewSensitiveIdentity: identityVisible,
+      canViewFullProfile: profileVisible,
       canViewCompensation: true,
       compensation: {
         current: current && {
@@ -152,24 +370,204 @@ export class HrmService {
     };
   }
 
+  /**
+   * Onboards an employee and provisions their ERP login in the same
+   * transaction. There is no Google Workspace mailbox yet, so the generated
+   * username is the account's only identifier — HR sees the password exactly
+   * once in the response and must note it down before closing the dialog.
+   */
   async createEmployee(data: Record<string, any>) {
     const clean = sanitiseEmployeeInput(data);
 
     if (!clean.firstName) throw new BadRequestException('First name is required.');
     if (!clean.lastName) throw new BadRequestException('Last name is required.');
+    if (!clean.personalEmail) {
+      throw new BadRequestException(
+        'An email address is required — it is how the offer letter and any future ' +
+          'communication reach this person.',
+      );
+    }
 
     const empCode = await this.nextEmpCode(
       clean.joinDate instanceof Date ? clean.joinDate : new Date(),
     );
 
-    return this.prisma.employee.create({
-      data: {
-        ...clean,
-        ...requiredCreateFields(data),
-        firstName: clean.firstName,
-        lastName: clean.lastName,
-        empCode,
-      } as Prisma.EmployeeUncheckedCreateInput,
+    const employeeRole = await this.prisma.role.findUnique({ where: { name: 'EMPLOYEE' } });
+    if (!employeeRole) {
+      // Should never happen against a seeded database — fail loudly rather
+      // than silently onboard someone with no permissions at all.
+      throw new BadRequestException('The EMPLOYEE role is missing from this database. Run the seed first.');
+    }
+
+    const username = await generateUsername(this.prisma, clean.firstName, clean.lastName);
+    const temporaryPassword = generateTemporaryPassword();
+    const passwordHash = await bcrypt.hash(temporaryPassword, 10);
+
+    const employee = await this.prisma.$transaction(async (tx) => {
+      const user = await tx.user.create({
+        data: { username, passwordHash, roleId: employeeRole.id, isActive: true },
+      });
+
+      return tx.employee.create({
+        data: {
+          ...clean,
+          ...requiredCreateFields(data),
+          firstName: clean.firstName,
+          lastName: clean.lastName,
+          empCode,
+          userId: user.id,
+        } as Prisma.EmployeeUncheckedCreateInput,
+      });
+    });
+
+    this.logger.log(`Provisioned ERP account "${username}" for new employee ${empCode}`);
+
+    // Deliberately outside the transaction and never allowed to throw: a slow
+    // mail server or a PDF rendering hiccup must not undo an employee HR
+    // already successfully created. HR sees the outcome in the response and
+    // can retry the send later if it failed.
+    const offerLetter = await this.offerLetterService.issueAndSend(employee.id).catch((err) => {
+      this.logger.error(`Offer letter pipeline threw for ${employee.id}: ${err.message}`);
+      return { documentId: null, fileUrl: null, emailed: false, error: err.message as string };
+    });
+
+    // temporaryPassword exists only in memory and this response — the database
+    // holds nothing but its bcrypt hash. There is no way to recover it later;
+    // a lost password means HR runs "reset password" in User Management.
+    // Same reasoning as updateEmployee — never echo encrypted-field
+    // ciphertext, even though the onboarding form doesn't collect these yet.
+    const { pan, aadhaarNumber, uanNumber, pfNumber, esicNumber, ...safeEmployee } = employee;
+    return { ...safeEmployee, credentials: { username, temporaryPassword }, offerLetter };
+  }
+
+  /**
+   * Moves an employee to Former Employees and revokes their ERP access.
+   *
+   * This is a soft removal, not a delete — the record stays for payroll and
+   * audit history. Revocation is immediate: isActive=false is checked by
+   * JwtStrategy on every request, so a session that is already open stops
+   * working on its very next call, not merely on next login.
+   *
+   * lastWorkingDay is mandatory here, not optional metadata — real
+   * retention math (see AnalyticsService.getRetention) depends on every
+   * departure having a real date. Defaults to today only if HR doesn't
+   * supply one; never left null.
+   */
+  async removeEmployee(id: string, lastWorkingDay?: string) {
+    const employee = await this.prisma.employee.findUnique({
+      where: { id },
+      include: { user: true },
+    });
+    if (!employee) throw new NotFoundException('Employee not found');
+    if (employee.status === 'INACTIVE') {
+      throw new BadRequestException('This employee has already been removed.');
+    }
+
+    const departureDate = lastWorkingDay ? new Date(lastWorkingDay) : new Date();
+    if (Number.isNaN(departureDate.getTime())) {
+      throw new BadRequestException('Last working day is not a valid date.');
+    }
+    if (departureDate > new Date()) {
+      throw new BadRequestException('Last working day cannot be in the future.');
+    }
+
+    await this.prisma.$transaction([
+      this.prisma.employee.update({
+        where: { id },
+        data: { status: 'INACTIVE', lastWorkingDay: departureDate },
+      }),
+      ...(employee.userId
+        ? [this.prisma.user.update({ where: { id: employee.userId }, data: { isActive: false } })]
+        : []),
+    ]);
+
+    this.logger.log(`Removed employee ${employee.empCode} and revoked their ERP access`);
+    return { message: 'Employee removed and ERP access revoked.' };
+  }
+
+  // ========== USER MANAGEMENT (HR / Admin only) ==========
+
+  async getUsers() {
+    const users = await this.prisma.user.findMany({
+      include: {
+        role: { select: { name: true } },
+        employee: { select: { firstName: true, lastName: true, empCode: true, department: { select: { name: true } } } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+    // passwordHash never leaves this service.
+    return users.map(({ passwordHash, resetToken, resetTokenExpiry, ...safe }) => safe);
+  }
+
+  async resetUserPassword(userId: string) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new NotFoundException('Account not found');
+
+    const temporaryPassword = generateTemporaryPassword();
+    const passwordHash = await bcrypt.hash(temporaryPassword, 10);
+    await this.prisma.user.update({ where: { id: userId }, data: { passwordHash } });
+
+    this.logger.log(`Password reset for account "${user.username ?? user.email}"`);
+    return { username: user.username ?? user.email, temporaryPassword };
+  }
+
+  // ========== IT ACCESS ==========
+  // Existing identifiers + an internal checklist HR/IT tick off by hand.
+  // Deliberately does not call any Slack/GitHub/AWS API — see the model
+  // comment in schema.prisma for why.
+
+  async getItAccessProfile(employeeId: string) {
+    const employee = await this.prisma.employee.findUnique({ where: { id: employeeId }, select: { id: true } });
+    if (!employee) throw new NotFoundException('Employee not found');
+
+    const existing = await this.prisma.itAccessProfile.findUnique({ where: { employeeId } });
+    return existing ?? {
+      employeeId, githubUsername: null, slackEmail: null, corporateEmail: null,
+      laptopAssigned: false, laptopAssetTag: null, softwareNotes: null,
+      slackInvited: false, githubAccessGranted: false, jiraAccessGranted: false, awsAccessGranted: false,
+      notes: null,
+    };
+  }
+
+  async upsertItAccessProfile(employeeId: string, data: Record<string, any>, actorId?: string) {
+    const employee = await this.prisma.employee.findUnique({ where: { id: employeeId }, select: { id: true } });
+    if (!employee) throw new NotFoundException('Employee not found');
+
+    const fields = [
+      'githubUsername', 'slackEmail', 'corporateEmail', 'laptopAssigned', 'laptopAssetTag',
+      'softwareNotes', 'slackInvited', 'githubAccessGranted', 'jiraAccessGranted', 'awsAccessGranted', 'notes',
+    ] as const;
+    const clean: Record<string, any> = {};
+    for (const f of fields) if (f in data) clean[f] = data[f];
+
+    return this.prisma.itAccessProfile.upsert({
+      where: { employeeId },
+      create: { employeeId, ...clean, updatedById: actorId },
+      update: { ...clean, updatedById: actorId },
+    });
+  }
+
+  // ========== AGREEMENTS & POLICIES ==========
+  // Deliberately a separate endpoint from the general profile update: the
+  // *At timestamp needs to reflect the moment this was actually toggled,
+  // not just whenever someone happened to save the Personal tab.
+
+  async setAgreementStatus(
+    employeeId: string,
+    field: 'ndaSigned' | 'policyAcknowledged',
+    value: boolean,
+  ) {
+    const employee = await this.prisma.employee.findUnique({ where: { id: employeeId }, select: { id: true } });
+    if (!employee) throw new NotFoundException('Employee not found');
+
+    const timestampField = field === 'ndaSigned' ? 'ndaSignedAt' : 'policyAcknowledgedAt';
+    return this.prisma.employee.update({
+      where: { id: employeeId },
+      data: { [field]: value, [timestampField]: value ? new Date() : null },
+      select: {
+        id: true, ndaSigned: true, ndaSignedAt: true,
+        policyAcknowledged: true, policyAcknowledgedAt: true,
+      },
     });
   }
 
@@ -203,13 +601,29 @@ export class HrmService {
    * id, userId or createdAt.
    */
   async updateEmployee(id: string, data: Record<string, any>) {
-    const exists = await this.prisma.employee.findUnique({ where: { id }, select: { id: true } });
+    const exists = await this.prisma.employee.findUnique({ where: { id }, select: { id: true, status: true } });
     if (!exists) throw new NotFoundException('Employee not found');
 
-    return this.prisma.employee.update({
+    // status=INACTIVE has its own endpoint (removeEmployee) precisely because
+    // it must also record lastWorkingDay and revoke the login — routing it
+    // through this generic path would silently skip both, leaving a former
+    // employee's account still active.
+    if (data.status === 'INACTIVE' && exists.status !== 'INACTIVE') {
+      throw new BadRequestException(
+        'Use the "Remove" action to deactivate an employee — it also revokes their ERP login and records a last working day, neither of which happens through a general edit.',
+      );
+    }
+
+    const updated = await this.prisma.employee.update({
       where: { id },
       data: sanitiseEmployeeInput(data),
     });
+
+    // These hold ciphertext at this point — never echo that back. The
+    // frontend re-fetches via getEmployeeById after a save anyway, which is
+    // the one endpoint that decrypts, and only for the roles allowed to see it.
+    const { pan, aadhaarNumber, uanNumber, pfNumber, esicNumber, ...safe } = updated;
+    return safe;
   }
 
   /**

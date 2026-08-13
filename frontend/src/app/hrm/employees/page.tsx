@@ -5,10 +5,11 @@ import {
   Users, UserPlus, MoreVertical, ChevronLeft, ChevronRight,
   Trash2, Edit, Search,
 } from 'lucide-react';
-import { hrmApi, exportApi } from '../../../services/api';
+import { hrmApi, exportApi, API_ORIGIN } from '../../../services/api';
 import ExportButton from '../../../components/ExportButton';
 import Modal, { FormField } from '../../../components/Modal';
 import EmployeeDetailModal from '../../../components/modals/EmployeeDetailModal';
+import CredentialsPanel from '../../../components/modals/CredentialsPanel';
 
 export default function EmployeeDirectory() {
   const [employees, setEmployees] = useState<any[]>([]);
@@ -30,9 +31,24 @@ export default function EmployeeDirectory() {
 
   // Add Employee Modal
   const [showAddModal, setShowAddModal] = useState(false);
-  const [form, setForm] = useState({ firstName: '', lastName: '', contact: '', departmentId: '', designationId: '', empType: 'FULL_TIME' });
+  const [addError, setAddError] = useState<string | null>(null);
+  const [adding, setAdding] = useState(false);
+  const [form, setForm] = useState({
+    firstName: '', lastName: '', personalEmail: '', contact: '',
+    departmentId: '', designationId: '', empType: 'FULL_TIME', joinDate: '',
+  });
   const [departments, setDepartments] = useState<any[]>([]);
   const [designations, setDesignations] = useState<any[]>([]);
+
+  // Credentials, shown exactly once right after an account is created
+  const [newCredentials, setNewCredentials] = useState<{ name: string; username: string; password: string } | null>(null);
+
+  // Remove Employee — asks for a real last working day rather than assuming
+  // "today," since offboarding is often processed after the fact.
+  const [removeTarget, setRemoveTarget] = useState<{ id: string; name: string } | null>(null);
+  const [lastWorkingDay, setLastWorkingDay] = useState('');
+  const [removing, setRemoving] = useState(false);
+  const [removeError, setRemoveError] = useState<string | null>(null);
 
   async function fetchAll() {
     try {
@@ -111,24 +127,53 @@ export default function EmployeeDirectory() {
     return 'badge';
   }
 
-  // Add Employee
+  // Add Employee — also provisions their ERP login. The API throws with a
+  // specific message (e.g. "email is required") rather than failing silently,
+  // so surface whatever it says instead of just giving up.
   async function handleAddEmployee() {
     if (!form.firstName || !form.lastName) return;
-    await hrmApi.createEmployee({ ...form } as any);
-    setShowAddModal(false);
-    setForm({ firstName: '', lastName: '', contact: '', departmentId: '', designationId: '', empType: 'FULL_TIME' });
-    fetchAll();
+    setAddError(null);
+    setAdding(true);
+    try {
+      const created = await hrmApi.createEmployee({ ...form });
+      setShowAddModal(false);
+      setForm({ firstName: '', lastName: '', personalEmail: '', contact: '', departmentId: '', designationId: '', empType: 'FULL_TIME', joinDate: '' });
+      fetchAll();
+      if (created?.credentials) {
+        setNewCredentials({
+          name: `${created.firstName} ${created.lastName}`,
+          username: created.credentials.username,
+          password: created.credentials.temporaryPassword,
+        });
+      }
+    } catch (e: any) {
+      setAddError(e.message || 'Could not add this employee.');
+    } finally {
+      setAdding(false);
+    }
   }
 
-  // Delete employee
-  async function handleDelete(id: string) {
-    if (confirm('Delete this employee?')) {
-      await fetch(`http://localhost:5000/api/hrm/employees/${id}`, {
-        method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` },
-      });
-      setActionMenuId(null);
+  // Remove employee — moves them to Former Employees and revokes their ERP
+  // login. Not a delete: their record, payroll and leave history stay intact.
+  function handleRemove(id: string, name: string) {
+    setActionMenuId(null);
+    setRemoveError(null);
+    setLastWorkingDay(new Date().toISOString().slice(0, 10));
+    setRemoveTarget({ id, name });
+  }
+
+  async function confirmRemove() {
+    if (!removeTarget) return;
+    setRemoving(true);
+    setRemoveError(null);
+    try {
+      await hrmApi.removeEmployee(removeTarget.id, lastWorkingDay);
+      setRemoveTarget(null);
       fetchAll();
+    } catch (e: any) {
+      setRemoveError(e.message || 'Could not remove this employee.');
+    } finally {
+      setRemoving(false);
     }
   }
 
@@ -240,7 +285,16 @@ export default function EmployeeDirectory() {
                   <td style={{ color: 'var(--color-text-muted)', fontSize: '13px' }}>{page * pageSize + idx + 1}</td>
                   <td>
                     <div className="employee-cell">
-                      <div className="employee-avatar" style={{ background: color }}>{initials}</div>
+                      {emp.avatarUrl ? (
+                        <img
+                          src={`${API_ORIGIN}${emp.avatarUrl}`}
+                          alt=""
+                          className="employee-avatar"
+                          style={{ objectFit: 'cover' }}
+                        />
+                      ) : (
+                        <div className="employee-avatar" style={{ background: color }}>{initials}</div>
+                      )}
                       <div>
                         <div className="employee-name">{emp.firstName} {emp.lastName}</div>
                         <div className="employee-id">ID: {emp.empCode || emp.id.slice(0, 8)}</div>
@@ -276,8 +330,8 @@ export default function EmployeeDirectory() {
                           <Edit size={14} /> Edit
                         </button>
                         {activeTab === 'ACTIVE' && (
-                          <button onClick={() => handleDelete(emp.id)} style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%', padding: '8px 12px', border: 'none', background: 'transparent', cursor: 'pointer', borderRadius: '6px', fontSize: '13px', color: '#dc2626' }}>
-                            <Trash2 size={14} /> Delete
+                          <button onClick={() => handleRemove(emp.id, `${emp.firstName} ${emp.lastName}`)} style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%', padding: '8px 12px', border: 'none', background: 'transparent', cursor: 'pointer', borderRadius: '6px', fontSize: '13px', color: '#dc2626' }}>
+                            <Trash2 size={14} /> Remove
                           </button>
                         )}
                       </div>
@@ -301,20 +355,72 @@ export default function EmployeeDirectory() {
         </div>
       </div>
 
-      {/* ADD EMPLOYEE MODAL */}
-      <Modal isOpen={showAddModal} onClose={() => setShowAddModal(false)} title="Add New Employee">
+      {/* ADD EMPLOYEE MODAL — this also provisions the ERP login, referencing
+          the standard onboarding fields until the team lead's exact form
+          arrives (see the "type" column below, already wired to empType). */}
+      <Modal isOpen={showAddModal} onClose={() => { setShowAddModal(false); setAddError(null); }} title="Add New Employee">
+        {addError && (
+          <div style={{ padding: '10px 14px', marginBottom: 14, background: '#fef2f2', border: '1px solid #fecaca', color: '#dc2626', borderRadius: 8, fontSize: 13, fontWeight: 600 }}>
+            {addError}
+          </div>
+        )}
         <FormField label="First Name" value={form.firstName} onChange={(v) => setForm({ ...form, firstName: v })} required placeholder="e.g. John" />
         <FormField label="Last Name" value={form.lastName} onChange={(v) => setForm({ ...form, lastName: v })} required placeholder="e.g. Smith" />
+        <FormField label="Email" type="email" value={form.personalEmail} onChange={(v) => setForm({ ...form, personalEmail: v })} required placeholder="the address they applied from" />
         <FormField label="Contact" value={form.contact} onChange={(v) => setForm({ ...form, contact: v })} placeholder="+1 555-0123" />
+        <FormField label="Date of Joining" type="date" value={form.joinDate} onChange={(v) => setForm({ ...form, joinDate: v })} />
         <FormField label="Department" type="select" value={form.departmentId} onChange={(v) => setForm({ ...form, departmentId: v })}
           options={departments.map((d: any) => ({ label: d.name, value: d.id }))} />
         <FormField label="Designation" type="select" value={form.designationId} onChange={(v) => setForm({ ...form, designationId: v })}
           options={designations.map((d: any) => ({ label: d.title, value: d.id }))} />
         <FormField label="Employment Type" type="select" value={form.empType} onChange={(v) => setForm({ ...form, empType: v })}
           options={[{ label: 'Full Time', value: 'FULL_TIME' }, { label: 'Part Time', value: 'PART_TIME' }, { label: 'Contract', value: 'CONTRACT' }, { label: 'Intern', value: 'INTERN' }]} />
+        <p style={{ fontSize: 12.5, color: 'var(--color-text-muted)', margin: '2px 0 14px' }}>
+          An ERP username and password are generated automatically once this is saved.
+        </p>
         <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', marginTop: '8px' }}>
-          <button className="btn btn-secondary" onClick={() => setShowAddModal(false)}>Cancel</button>
-          <button className="btn btn-primary" onClick={handleAddEmployee}>Add Employee</button>
+          <button className="btn btn-secondary" onClick={() => { setShowAddModal(false); setAddError(null); }}>Cancel</button>
+          <button className="btn btn-primary" onClick={handleAddEmployee} disabled={adding}>
+            {adding ? 'Creating…' : 'Add Employee'}
+          </button>
+        </div>
+      </Modal>
+
+      {/* CREDENTIALS — shown exactly once, right after creation */}
+      {newCredentials && (
+        <CredentialsPanel
+          isOpen={true}
+          onClose={() => setNewCredentials(null)}
+          personName={newCredentials.name}
+          username={newCredentials.username}
+          password={newCredentials.password}
+        />
+      )}
+
+      {/* REMOVE EMPLOYEE — asks for a real last working day */}
+      <Modal isOpen={!!removeTarget} onClose={() => setRemoveTarget(null)} title={`Remove ${removeTarget?.name ?? ''}`} width="440px">
+        {removeError && (
+          <div style={{ padding: '10px 14px', marginBottom: 14, background: '#fef2f2', border: '1px solid #fecaca', color: '#dc2626', borderRadius: 8, fontSize: 13, fontWeight: 600 }}>
+            {removeError}
+          </div>
+        )}
+        <p style={{ fontSize: 13.5, color: 'var(--color-text-muted)', marginBottom: 16, lineHeight: 1.5 }}>
+          {removeTarget?.name} will move to Former Employees and immediately lose access to the ERP —
+          any session they have open stops working on their very next request.
+        </p>
+        <FormField
+          label="Last working day"
+          type="date"
+          value={lastWorkingDay}
+          onChange={setLastWorkingDay}
+          required
+        />
+        <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', marginTop: '8px' }}>
+          <button className="btn btn-secondary" onClick={() => setRemoveTarget(null)} disabled={removing}>Cancel</button>
+          <button className="btn btn-primary" onClick={confirmRemove} disabled={removing || !lastWorkingDay}
+                  style={{ background: '#dc2626', borderColor: '#dc2626' }}>
+            {removing ? 'Removing…' : 'Remove employee'}
+          </button>
         </div>
       </Modal>
 

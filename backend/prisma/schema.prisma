@@ -14,8 +14,17 @@ datasource db {
 
 model User {
   id                   String           @id @default(uuid())
-  email                String           @unique
+  // Nullable: ERP-generated accounts log in by username until a real company
+  // mailbox exists (see username below). Postgres allows multiple NULLs under
+  // a unique index, so this coexists with the seeded demo accounts' emails.
+  email                String?          @unique
+  // The credential shown once to HR at account creation. firstname.lastname,
+  // deduplicated with a numeric suffix on collision.
+  username             String?          @unique
   passwordHash         String           @map("password_hash")
+  // Login is refused, and every existing session is rejected on its very next
+  // request (JwtStrategy re-checks this per-request), when false.
+  isActive             Boolean          @default(true) @map("is_active")
   resetToken           String?          @map("reset_token")
   resetTokenExpiry     DateTime?        @map("reset_token_expiry")
   roleId               String           @map("role_id")
@@ -107,10 +116,54 @@ model Employee {
   gender        String?
   dob           DateTime?
   contact       String?
-  address       String?
+  address       String?      // "current address" in the onboarding form
   city          String?
   state         String?
   country       String?
+
+  // Set the moment status becomes INACTIVE (see hrm.service.ts — the
+  // transition is refused without it). Real retention math depends on this
+  // existing; before this field, "leaving" recorded no date at all, which
+  // is why Employee Retention on Analytics could never be a real number.
+  lastWorkingDay DateTime? @map("last_working_day")
+
+  // A directory headshot, deliberately separate from the strictly-gated
+  // identity Documents pipeline (Aadhaar/PAN scans etc.) — this is meant to
+  // be visible to every colleague, not locked to HR/Admin. Stored under the
+  // public uploads/ path like offer letters, not private-uploads/.
+  avatarUrl String? @map("avatar_url")
+
+  // Most people's permanent address matches their current one — the
+  // checkbox is the common case, permanentAddress only needs filling when
+  // it's unchecked. A single free-text field rather than a full
+  // city/state/country breakdown, matching how the team lead's list treats
+  // it as one line item, not a structured sub-form.
+  sameAsCurrentAddress Boolean @default(true) @map("same_as_current_address")
+  permanentAddress     String? @map("permanent_address")
+
+  emergencyContactName     String? @map("emergency_contact_name")
+  emergencyContactPhone    String? @map("emergency_contact_phone")
+  emergencyContactRelation String? @map("emergency_contact_relation")
+
+  // Education — certificates/mark sheets themselves are a Document
+  // (EDUCATION_CERTIFICATE kind), not a field.
+  highestQualification String? @map("highest_qualification")
+  institutionName       String? @map("institution_name")
+  yearOfPassing         Int?    @map("year_of_passing")
+
+  // Previous employment — experience/relieving letters and past payslips
+  // are Documents, not fields, same reasoning as education above.
+  previousCompany       String? @map("previous_company")
+  previousDesignation   String? @map("previous_designation")
+  totalExperienceYears  Float?  @map("total_experience_years")
+
+  // Agreements & policies. The employment agreement itself is the offer
+  // letter (offerLetterDocumentId below) — no separate field needed for it.
+  ndaSigned            Boolean   @default(false) @map("nda_signed")
+  ndaSignedAt          DateTime? @map("nda_signed_at")
+  policyAcknowledged   Boolean   @default(false) @map("policy_acknowledged")
+  policyAcknowledgedAt DateTime? @map("policy_acknowledged_at")
+
   joinDate      DateTime     @default(now()) @map("join_date")
   empType       EmpType      @map("emp_type")
   status        EmpStatus
@@ -118,11 +171,46 @@ model Employee {
   // Statutory & payout identity — required to generate a payslip.
   // Kept nullable so existing rows stay valid; the payslip generator
   // refuses to run until they are filled for that employee.
-  pan             String?    @map("pan")              // format AAAAA9999A, validated on write
+  //
+  // pan and aadhaarNumber hold AES-256-GCM ciphertext, not plaintext — see
+  // backend/src/common/field-encryption.ts. Format validation (regex) runs
+  // on the plaintext BEFORE encryption, at the service layer; the format
+  // comments below describe what HR types in, not what the column contains.
+  pan             String?    @map("pan")              // format AAAAA9999A, validated then encrypted
+  aadhaarNumber   String?    @map("aadhaar_number")    // 12 digits, validated then encrypted
   bankAccountNo   String?    @map("bank_account_no")
   bankIfsc        String?    @map("bank_ifsc")
   personalEmail   String?    @map("personal_email")   // the address they applied from
   workMode        WorkMode   @default(ONSITE) @map("work_mode")
+
+  // UAN/PF/ESIC are government-issued statutory tracking numbers — the same
+  // *category* of data as PAN/Aadhaar (a persistent identifier that could
+  // aid identity correlation if leaked), so they get the same treatment:
+  // encrypted ciphertext here, decrypted only for the same HR/Admin gate.
+  // NOTE: UAN is exactly 12 digits, structurally identical to Aadhaar — there
+  // is no format-based way to catch the two being swapped, unlike the
+  // PAN/bank-account distinction elsewhere in this file.
+  uanNumber  String? @map("uan_number")  // EPFO Universal Account Number, 12 digits, validated then encrypted
+  pfNumber   String? @map("pf_number")   // no fixed national format — encrypted, not format-validated
+  esicNumber String? @map("esic_number") // loosely validated then encrypted
+
+  // Nominee — a third party the employee named, not the employee's own
+  // identity. Treated like Emergency Contact / Bank Account: visible to
+  // general HR access, not the stricter identity gate, since these are
+  // personal facts rather than a government-issued identifier.
+  nomineeName     String?   @map("nominee_name")
+  nomineeRelation String?   @map("nominee_relation")
+  nomineeDob      DateTime? @map("nominee_dob")
+  nomineePhone    String?   @map("nominee_phone")
+
+  // Tax declaration for TDS — a financial disclosure, not an identifier, so
+  // it follows the compensation gate (HR/Finance/Admin) rather than the
+  // identity gate, matching how salary itself is already scoped. Not a full
+  // investment-declaration workflow (Section 80C/80D/24b line items, old vs
+  // new regime comparison) — that's a materially bigger feature. This is
+  // the honest minimum: which regime, plus free-text notes.
+  taxRegime           String? @map("tax_regime") // "OLD" or "NEW"
+  taxDeclarationNotes String? @map("tax_declaration_notes")
 
   reportingManagerId String?   @map("reporting_manager_id")
   reportingManager   Employee? @relation(name: "ReportsTo", fields: [reportingManagerId], references: [id])
@@ -130,6 +218,18 @@ model Employee {
 
   // Fixed-term engagements (internships, contracts) end on a known date.
   engagementEndDate DateTime? @map("engagement_end_date")
+
+  offerLetterDocumentId String?   @unique @map("offer_letter_document_id")
+  offerLetterDocument   Document? @relation(name: "EmployeeOfferLetter", fields: [offerLetterDocumentId], references: [id])
+
+  // Onboarding identity documents (Aadhaar scan, PAN card, cancelled cheque,
+  // certificates, previous employment letters). Deliberately a direct
+  // employee link, not routed through userId — an employee has these files
+  // whether or not they hold an ERP login, and several pre-existing seeded
+  // employees have no linked User at all.
+  identityDocuments Document[] @relation(name: "EmployeeIdentityDocuments")
+  offerLetterSentAt     DateTime? @map("offer_letter_sent_at")
+  offerLetterSendError  String?   @map("offer_letter_send_error")
 
   departmentId  String       @map("department_id")
   department    Department   @relation(fields: [departmentId], references: [id])
@@ -146,6 +246,7 @@ model Employee {
   payrolls                Payroll[]
   timeLogs                TimeLog[]
   salaryStructures        SalaryStructure[]
+  itAccessProfile         ItAccessProfile?
   
   createdAt     DateTime     @default(now()) @map("created_at")
   updatedAt     DateTime     @updatedAt @map("updated_at")
@@ -646,8 +747,13 @@ model Document {
   supersedes   Document?    @relation(name: "Supersedes", fields: [supersedesId], references: [id])
   supersededBy Document?    @relation(name: "Supersedes")
 
-  payroll   Payroll?
-  applicant Applicant?
+  // See Employee.identityDocuments — the direct link identity documents use.
+  employeeId String?   @map("employee_id")
+  employee   Employee? @relation(name: "EmployeeIdentityDocuments", fields: [employeeId], references: [id])
+
+  payroll         Payroll?
+  applicant       Applicant?
+  offerLetterFor  Employee? @relation(name: "EmployeeOfferLetter")
 
   @@index([ownerUserId, kind])
   @@map("documents")
@@ -667,6 +773,37 @@ model CompanyPolicy {
   updatedAt   DateTime  @updatedAt @map("updated_at")
 
   @@map("company_policies")
+}
+
+/// IT onboarding: existing account identifiers the employee already has
+/// (GitHub, Slack) plus an internal checklist HR/IT tick off by hand.
+/// Deliberately does not call Slack/GitHub/AWS APIs to create anything —
+/// per team decision, this tracks provisioning that happens outside the ERP,
+/// it doesn't perform it.
+model ItAccessProfile {
+  id         String   @id @default(uuid())
+  employeeId String   @unique @map("employee_id")
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  githubUsername String? @map("github_username")
+  slackEmail     String? @map("slack_email")
+  corporateEmail String? @map("corporate_email") // if distinct from their ERP login
+
+  laptopAssigned Boolean @default(false) @map("laptop_assigned")
+  laptopAssetTag String? @map("laptop_asset_tag")
+  softwareNotes  String? @map("software_notes") // free text, e.g. "VS Code, Docker, Figma"
+
+  slackInvited        Boolean @default(false) @map("slack_invited")
+  githubAccessGranted Boolean @default(false) @map("github_access_granted")
+  jiraAccessGranted   Boolean @default(false) @map("jira_access_granted")
+  awsAccessGranted    Boolean @default(false) @map("aws_access_granted")
+
+  notes       String?
+  updatedById String?  @map("updated_by_id")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@map("it_access_profiles")
 }
 
 /// Non-working days beyond weekends. Working-day maths in India is wrong
@@ -818,6 +955,23 @@ enum DocumentKind {
   LEAVE_APPROVAL
   EMPLOYEE_PROFILE
   COMPLETION_CERTIFICATE
+  // Onboarding documents — stored outside the public /uploads static path
+  // (see EmployeeDocumentsController) because these carry real PII, unlike
+  // an offer letter whose only secret is that it exists.
+  AADHAAR_CARD
+  PAN_CARD
+  PASSPORT
+  DRIVING_LICENCE
+  ADDRESS_PROOF
+  PROFILE_PHOTO
+  CANCELLED_CHEQUE
+  EDUCATION_CERTIFICATE
+  EXPERIENCE_LETTER
+  RELIEVING_LETTER
+  PREVIOUS_PAYSLIP
+  NDA_SIGNED
+  POLICY_ACKNOWLEDGEMENT
+  OTHER
 }
 
 enum EmpStatus {

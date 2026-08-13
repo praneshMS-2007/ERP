@@ -26,12 +26,18 @@ interface SidebarProps {
   toggleSidebar: () => void;
 }
 
+interface SubNavItem {
+  name: string;
+  path: string;
+  requiredAction?: string; // defaults to READ — set 'WRITE' for HR/admin-only screens
+}
+
 interface NavItem {
   name: string;
   path: string;
   icon: any;
   requiredModule?: string; // Module permission required to see this item
-  subItems?: { name: string; path: string }[];
+  subItems?: SubNavItem[];
 }
 
 const allNavItems: NavItem[] = [
@@ -42,8 +48,13 @@ const allNavItems: NavItem[] = [
     { name: 'Employee Directory', path: '/hrm/employees' },
     { name: 'Attendance', path: '/hrm/attendance' },
     { name: 'Leave Management', path: '/hrm/leaves' },
-    { name: 'Payroll', path: '/hrm/payroll' },
+    // Payroll and User Management both require WRITE — an EMPLOYEE only
+    // holds HR:READ, so neither link renders for them. (Employee Directory
+    // above stays READ-visible on purpose: it's how the org looks up who's
+    // who; salary itself is withheld server-side regardless of who's looking.)
+    { name: 'Payroll', path: '/hrm/payroll', requiredAction: 'WRITE' },
     { name: 'Recruitment', path: '/hrm/recruitment' },
+    { name: 'User Management', path: '/hrm/user-management', requiredAction: 'WRITE' },
   ]},
   { name: 'CRM', path: '/crm', icon: Globe, requiredModule: 'CRM', subItems: [
     { name: 'Sales Pipeline', path: '/crm' },
@@ -74,11 +85,20 @@ export default function Sidebar({ isOpen, toggleSidebar }: SidebarProps) {
   const { user, hasPermission, logout } = useAuth();
   const [expandedMenus, setExpandedMenus] = useState<Record<string, boolean>>({});
 
-  // Filter nav items based on user permissions
-  const navItems = allNavItems.filter((item) => {
-    if (!item.requiredModule) return true; // Dashboard, AI — always visible
-    return hasPermission(item.requiredModule);
-  });
+  // Filter both the top-level items AND their sub-items. A group can be
+  // visible (e.g. HR Management, because Employee Directory is READable)
+  // while individual entries inside it stay hidden (Payroll, User
+  // Management — WRITE only). Checking only the parent module was the exact
+  // gap that let an EMPLOYEE see and open Payroll from the sidebar.
+  const navItems = allNavItems
+    .filter((item) => !item.requiredModule || hasPermission(item.requiredModule))
+    .map((item) => {
+      if (!item.subItems) return item;
+      const visibleSubItems = item.subItems.filter(
+        (sub) => !item.requiredModule || hasPermission(item.requiredModule, sub.requiredAction ?? 'READ'),
+      );
+      return { ...item, subItems: visibleSubItems };
+    });
 
   const isActive = (path: string) => {
     if (path === '/') return pathname === '/';

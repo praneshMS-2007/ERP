@@ -160,16 +160,19 @@ export default function LoginPage() {
               </div>
             )}
 
-            {/* Corporate Email Input */}
+            {/* Email or ERP username — employees provisioned locally log in
+                with a username like "lucas.scott", not an email address, so
+                this must accept plain text rather than HTML5 email validation. */}
             <div>
               <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: '#4b5563', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '6px' }}>
-                CORPORATE EMAIL
+                EMAIL OR USERNAME
               </label>
               <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
                 <Mail size={18} style={{ position: 'absolute', left: '14px', color: '#9ca3af' }} />
                 <input
-                  type="email"
-                  placeholder="name@company.com"
+                  type="text"
+                  autoComplete="username"
+                  placeholder="name@company.com or your.username"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required

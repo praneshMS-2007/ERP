@@ -17,6 +17,13 @@ const IFSC_RE = /^[A-Z]{4}0[A-Z0-9]{6}$/;
 /** Indian bank account numbers run 9–18 digits across banks. */
 const BANK_ACCOUNT_RE = /^[0-9]{9,18}$/;
 
+/**
+ * Aadhaar: exactly 12 digits. This checks the shape only, not the official
+ * Verhoeff checksum UIDAI uses internally — good enough to catch a
+ * mistyped/wrong-length number, not a guarantee the number is real.
+ */
+const AADHAAR_RE = /^[0-9]{12}$/;
+
 export function normalisePan(input: string): string {
   const pan = input.trim().toUpperCase();
 
@@ -62,6 +69,50 @@ export function normaliseIfsc(input: string): string {
     );
   }
   return ifsc;
+}
+
+export function normaliseAadhaar(input: string): string {
+  const aadhaar = input.trim().replace(/[\s-]/g, '');
+  if (!AADHAAR_RE.test(aadhaar)) {
+    throw new BadRequestException('An Aadhaar number must be exactly 12 digits, with no letters.');
+  }
+  return aadhaar;
+}
+
+/**
+ * UAN (EPFO Universal Account Number): exactly 12 digits — structurally
+ * identical to Aadhaar. There is no public rule that distinguishes a valid
+ * UAN from a valid Aadhaar by shape alone, so unlike normalisePan/
+ * normaliseBankAccount above, this cannot detect the two being swapped.
+ * The mitigation is keeping them in clearly separate, clearly labelled
+ * fields — not a format check.
+ */
+const UAN_RE = /^[0-9]{12}$/;
+
+export function normaliseUan(input: string): string {
+  const uan = input.trim().replace(/[\s-]/g, '');
+  if (!UAN_RE.test(uan)) {
+    throw new BadRequestException('A UAN must be exactly 12 digits, with no letters.');
+  }
+  return uan;
+}
+
+/**
+ * ESIC numbers vary in length across schemes and eras (commonly 10 or 17
+ * digits) and there is no single canonical public format to check against
+ * confidently. This only rejects obviously-wrong input (too short, or
+ * containing anything but digits) rather than asserting an exact length —
+ * a wrong strict rule would reject real ESIC numbers, which is worse than a
+ * loose one that lets a typo through.
+ */
+const ESIC_RE = /^[0-9]{9,17}$/;
+
+export function normaliseEsic(input: string): string {
+  const esic = input.trim().replace(/[\s-]/g, '');
+  if (!ESIC_RE.test(esic)) {
+    throw new BadRequestException('An ESIC number should be 9 to 17 digits, with no letters.');
+  }
+  return esic;
 }
 
 /** Loose but useful: catches typos without rejecting unusual real addresses. */

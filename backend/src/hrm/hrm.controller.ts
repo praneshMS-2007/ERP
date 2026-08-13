@@ -1,4 +1,6 @@
-import { Controller, Get, Post, Body, Param, Put, Delete, Query } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Put, Delete, Query, BadRequestException, UploadedFile, UseInterceptors } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { memoryStorage } from 'multer';
 import { HrmService } from './hrm.service';
 import type { RequestUser } from './hrm.service';
 import { Prisma } from '@prisma/client';
@@ -10,8 +12,12 @@ export class HrmController {
 
   @Get('employees')
   @RequirePermission('HR', 'READ')
-  getEmployees(@Query('departmentId') departmentId?: string, @Query('status') status?: string) {
-    return this.hrmService.getEmployees(departmentId, status);
+  getEmployees(
+    @Query('departmentId') departmentId?: string,
+    @Query('status') status?: string,
+    @CurrentUser() user?: RequestUser,
+  ) {
+    return this.hrmService.getEmployees(departmentId, status, user);
   }
 
   @Get('employees/:id')
@@ -51,6 +57,41 @@ export class HrmController {
   @RequirePermission('HR', 'DELETE')
   deleteEmployee(@Param('id') id: string) {
     return this.hrmService.deleteEmployee(id);
+  }
+
+  /**
+   * The button HR actually uses day to day: moves the employee to Former
+   * Employees and revokes their ERP login. Not a delete — the record and
+   * every history table (payroll, leave, attendance) stays intact.
+   */
+  @Put('employees/:id/remove')
+  @RequirePermission('HR', 'WRITE')
+  removeEmployee(@Param('id') id: string, @Body('lastWorkingDay') lastWorkingDay?: string) {
+    return this.hrmService.removeEmployee(id, lastWorkingDay);
+  }
+
+  @Post('employees/:id/avatar')
+  @RequirePermission('HR', 'WRITE')
+  @UseInterceptors(FileInterceptor('file', { storage: memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } }))
+  setAvatar(@Param('id') id: string, @UploadedFile() file: Express.Multer.File) {
+    if (!file) throw new BadRequestException('No image was uploaded.');
+    return this.hrmService.setAvatar(id, file);
+  }
+
+  // ========== USER MANAGEMENT ==========
+  // Gated on HR:WRITE, same as payroll and salary — only SUPER_ADMIN and
+  // HR_MANAGER hold that permission, matching "admin or HR only" exactly.
+
+  @Get('users')
+  @RequirePermission('HR', 'WRITE')
+  getUsers() {
+    return this.hrmService.getUsers();
+  }
+
+  @Put('users/:id/reset-password')
+  @RequirePermission('HR', 'WRITE')
+  resetUserPassword(@Param('id') id: string) {
+    return this.hrmService.resetUserPassword(id);
   }
 
   // ========== ATTENDANCE STATS & TREND (Subpaths placed first for NestJS router precedence) ==========
@@ -151,5 +192,32 @@ export class HrmController {
   @RequirePermission('HR', 'READ')
   getPerformanceReviews() {
     return this.hrmService.getPerformanceReviews();
+  }
+
+  // ========== IT ACCESS ==========
+  @Get('employees/:id/it-access')
+  @RequirePermission('HR', 'READ')
+  getItAccessProfile(@Param('id') id: string) {
+    return this.hrmService.getItAccessProfile(id);
+  }
+
+  @Put('employees/:id/it-access')
+  @RequirePermission('HR', 'WRITE')
+  upsertItAccessProfile(@Param('id') id: string, @Body() data: Record<string, any>, @CurrentUser() user: RequestUser) {
+    return this.hrmService.upsertItAccessProfile(id, data, user?.id);
+  }
+
+  // ========== AGREEMENTS & POLICIES ==========
+  @Put('employees/:id/agreements/:field')
+  @RequirePermission('HR', 'WRITE')
+  setAgreementStatus(
+    @Param('id') id: string,
+    @Param('field') field: string,
+    @Body('value') value: boolean,
+  ) {
+    if (field !== 'ndaSigned' && field !== 'policyAcknowledged') {
+      throw new BadRequestException(`"${field}" is not a recognised agreement.`);
+    }
+    return this.hrmService.setAgreementStatus(id, field, !!value);
   }
 }

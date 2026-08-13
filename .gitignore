@@ -10,3 +10,14 @@ node_modules/
 
 # Build output — generated from src, should not be tracked.
 backend/dist/
+
+# Generated files that hold real PII once this runs against production data
+# (offer letters, payslips, uploaded ID documents) — never belongs in git.
+backend/uploads/
+!backend/uploads/.gitkeep
+
+# Identity documents (Aadhaar, PAN scans, cancelled cheques, certificates) —
+# never public, never in git. Kept outside backend/uploads/ on purpose so it
+# can never be reached through the static /uploads mount in main.ts.
+backend/private-uploads/
+!backend/private-uploads/.gitkeep

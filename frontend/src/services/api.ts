@@ -1,5 +1,10 @@
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
 
+/** Backend origin without the /api suffix — for building src URLs to static
+ * files (avatars, offer letters) that the backend serves directly, not
+ * through a JSON endpoint. */
+export const API_ORIGIN = API_BASE.replace(/\/api\/?$/, '');
+
 // Fetch wrapper with JWT auth header and 401 handling
 async function fetchApi(endpoint: string, options: RequestInit = {}) {
   const url = `${API_BASE}${endpoint}`;
@@ -106,12 +111,70 @@ export const hrmApi = {
     mutateApi(`/hrm/employees/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   setSalary: (id: string, data: any) =>
     mutateApi(`/hrm/employees/${id}/salary`, { method: 'PUT', body: JSON.stringify(data) }),
+  removeEmployee: (id: string, lastWorkingDay?: string) =>
+    mutateApi(`/hrm/employees/${id}/remove`, { method: 'PUT', body: JSON.stringify({ lastWorkingDay }) }),
+  getUsers: () => mutateApi('/hrm/users'),
+  resetUserPassword: (id: string) =>
+    mutateApi(`/hrm/users/${id}/reset-password`, { method: 'PUT' }),
+  getItAccess: (employeeId: string) => mutateApi(`/hrm/employees/${employeeId}/it-access`),
+  setItAccess: (employeeId: string, data: any) =>
+    mutateApi(`/hrm/employees/${employeeId}/it-access`, { method: 'PUT', body: JSON.stringify(data) }),
+  setAgreementStatus: (employeeId: string, field: 'ndaSigned' | 'policyAcknowledged', value: boolean) =>
+    mutateApi(`/hrm/employees/${employeeId}/agreements/${field}`, { method: 'PUT', body: JSON.stringify({ value }) }),
+  getDocuments: (employeeId: string) => mutateApi(`/hrm/employees/${employeeId}/documents`),
+  uploadDocument: async (employeeId: string, kind: string, file: File) => {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+    const body = new FormData();
+    body.append('kind', kind);
+    body.append('file', file);
+    const res = await fetch(`${API_BASE}/hrm/employees/${employeeId}/documents`, {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      body,
+    });
+    const json = await res.json().catch(() => null);
+    if (!res.ok) throw new Error(json?.message || `Upload failed (${res.status})`);
+    return json;
+  },
+  deleteDocument: (employeeId: string, documentId: string) =>
+    mutateApi(`/hrm/employees/${employeeId}/documents/${documentId}`, { method: 'DELETE' }),
+  setAvatar: async (employeeId: string, file: File) => {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+    const body = new FormData();
+    body.append('file', file);
+    const res = await fetch(`${API_BASE}/hrm/employees/${employeeId}/avatar`, {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      body,
+    });
+    const json = await res.json().catch(() => null);
+    if (!res.ok) throw new Error(json?.message || `Upload failed (${res.status})`);
+    return json;
+  },
+  // The download route requires an Authorization header, which a plain
+  // <a href> can't send — fetch as a blob and trigger the save manually,
+  // same pattern as exportApi.downloadFile below.
+  downloadDocument: async (employeeId: string, documentId: string, fileName: string) => {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+    const res = await fetch(`${API_BASE}/hrm/employees/${employeeId}/documents/${documentId}/download`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    });
+    if (!res.ok) throw new Error('Download failed');
+    const blob = await res.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = fileName;
+    a.click();
+    window.URL.revokeObjectURL(url);
+  },
   getAttendance: () => fetchApi('/hrm/attendance'),
   getPayrolls: () => fetchApi('/hrm/payrolls'),
   getJobPostings: () => fetchApi('/hrm/jobs'),
   getApplicants: () => fetchApi('/hrm/applicants'),
   getLeaves: () => fetchApi('/hrm/leaves'),
-  createEmployee: (data: any) => fetchApi('/hrm/employees', { method: 'POST', body: JSON.stringify(data) }),
+  createEmployee: (data: any) =>
+    mutateApi('/hrm/employees', { method: 'POST', body: JSON.stringify(data) }),
   createPayroll: (data: any) => fetchApi('/hrm/payrolls', { method: 'POST', body: JSON.stringify(data) }),
   updatePayrollStatus: (id: string, status: string) => fetchApi(`/hrm/payrolls/${id}/status`, { method: 'PUT', body: JSON.stringify({ status }) }),
   createJobPosting: (data: any) => fetchApi('/hrm/jobs', { method: 'POST', body: JSON.stringify(data) }),
@@ -157,6 +220,7 @@ export const projectApi = {
 export const analyticsApi = {
   getDashboardMetrics: () => fetchApi('/analytics/dashboard'),
   getRevenueTrend: () => fetchApi('/analytics/revenue-trend'),
+  getRetention: () => fetchApi('/analytics/retention'),
 };
 
 export const authApi = {

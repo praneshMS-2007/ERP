@@ -2,12 +2,15 @@ import { Controller, Post, UseInterceptors, UploadedFile, BadRequestException } 
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { extname } from 'path';
-import { Public } from '../auth/decorators';
 
+// Was @Public() — anyone on the internet could POST arbitrary files to this
+// server with no login at all. Any authenticated user can upload; that is
+// still broad, but it closes the unauthenticated hole. If per-module upload
+// permissions are needed later (e.g. only HR uploading onboarding documents),
+// add @RequirePermission(...) once this is wired to a specific feature.
 @Controller('upload')
 export class UploadController {
   @Post('file')
-  @Public()
   @UseInterceptors(
     FileInterceptor('file', {
       storage: diskStorage({

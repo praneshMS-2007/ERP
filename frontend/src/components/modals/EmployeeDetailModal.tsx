@@ -1,8 +1,11 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import { X, Pencil, Save, RotateCcw, Lock, AlertCircle, CheckCircle2 } from 'lucide-react';
-import { hrmApi } from '../../services/api';
+import {
+  X, Pencil, Save, RotateCcw, Lock, AlertCircle, CheckCircle2,
+  Eye, EyeOff, Upload, Download, Trash2, Laptop,
+} from 'lucide-react';
+import { hrmApi, API_ORIGIN } from '../../services/api';
 
 interface Props {
   employeeId: string | null;
@@ -12,7 +15,40 @@ interface Props {
   designations: any[];
 }
 
-type Section = 'personal' | 'employment' | 'statutory' | 'compensation';
+type Section = 'personal' | 'employment' | 'background' | 'statutory' | 'compensation' | 'it-access' | 'documents';
+
+/** PAN/Aadhaar/UAN/PF/ESIC — the encrypted-at-rest fields, masked by default in the UI. */
+type IdentityFieldKey = 'pan' | 'aadhaarNumber' | 'uanNumber' | 'pfNumber' | 'esicNumber';
+
+/** "ABCDE1234F" -> "XXXXXX234F". Shows only the last 4 characters. */
+function maskIdentity(value: string): string {
+  if (value.length <= 4) return value;
+  return 'X'.repeat(value.length - 4) + value.slice(-4);
+}
+
+/** "234567890123" -> "XXXX XXXX 0123", matching the standard Aadhaar grouping. */
+function maskAadhaar(value: string): string {
+  const masked = maskIdentity(value);
+  return masked.replace(/(.{4})(?=.)/g, '$1 ').trim();
+}
+
+const DOCUMENT_KINDS = [
+  { value: 'AADHAAR_CARD', label: 'Aadhaar Card' },
+  { value: 'PAN_CARD', label: 'PAN Card' },
+  { value: 'PASSPORT', label: 'Passport' },
+  { value: 'DRIVING_LICENCE', label: 'Driving Licence' },
+  { value: 'ADDRESS_PROOF', label: 'Address Proof' },
+  { value: 'PROFILE_PHOTO', label: 'Profile Photo' },
+  { value: 'CANCELLED_CHEQUE', label: 'Cancelled Cheque' },
+  { value: 'EDUCATION_CERTIFICATE', label: 'Education Certificate' },
+  { value: 'EXPERIENCE_LETTER', label: 'Experience Letter' },
+  { value: 'RELIEVING_LETTER', label: 'Relieving Letter' },
+  { value: 'PREVIOUS_PAYSLIP', label: 'Previous Payslip' },
+  { value: 'NDA_SIGNED', label: 'Signed NDA' },
+  { value: 'POLICY_ACKNOWLEDGEMENT', label: 'Policy Acknowledgement' },
+  { value: 'OTHER', label: 'Other' },
+];
+const DOC_LABELS = Object.fromEntries(DOCUMENT_KINDS.map((d) => [d.value, d.label]));
 
 const EMP_TYPES = [
   { value: 'FULL_TIME', label: 'Full Time' },
@@ -20,7 +56,10 @@ const EMP_TYPES = [
   { value: 'CONTRACT', label: 'Contract' },
   { value: 'INTERN', label: 'Intern' },
 ];
-const STATUSES = ['ACTIVE', 'PROBATION', 'ON_LEAVE', 'INACTIVE'];
+// INACTIVE deliberately excluded — that transition only happens through the
+// Remove action in the Employee Directory, which also revokes the login and
+// records a last working day. The backend refuses it here either way.
+const STATUSES = ['ACTIVE', 'PROBATION', 'ON_LEAVE'];
 const WORK_MODES = ['ONSITE', 'REMOTE', 'HYBRID'];
 
 /** yyyy-mm-dd for <input type="date">, empty when absent. */
@@ -53,6 +92,20 @@ export default function EmployeeDetailModal({
   const [form, setForm] = useState<Record<string, any>>({});
   const [salaryForm, setSalaryForm] = useState({ basic: '', hra: '', specialAllowance: '', effectiveFrom: '', note: '' });
 
+  // PAN/Aadhaar: masked by default, revealed only on explicit action.
+  const [revealed, setRevealed] = useState<Set<IdentityFieldKey>>(new Set());
+
+  // IT Access — its own tab, loaded lazily on first visit.
+  const [itAccess, setItAccess] = useState<any>(null);
+  const [itAccessLoaded, setItAccessLoaded] = useState(false);
+
+  // Documents — its own tab, loaded lazily on first visit.
+  const [documents, setDocuments] = useState<any[]>([]);
+  const [documentsLoaded, setDocumentsLoaded] = useState(false);
+  const [uploadKind, setUploadKind] = useState('AADHAAR_CARD');
+  const [uploading, setUploading] = useState(false);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+
   const load = useCallback(async () => {
     if (!employeeId) return;
     setLoading(true);
@@ -70,8 +123,25 @@ export default function EmployeeDetailModal({
         status: data.status ?? 'ACTIVE', workMode: data.workMode ?? 'ONSITE',
         departmentId: data.departmentId ?? '', designationId: data.designationId ?? '',
         engagementEndDate: toDateInput(data.engagementEndDate),
-        pan: data.pan ?? '', bankAccountNo: data.bankAccountNo ?? '', bankIfsc: data.bankIfsc ?? '',
+        pan: data.pan ?? '', aadhaarNumber: data.aadhaarNumber ?? '',
+        bankAccountNo: data.bankAccountNo ?? '', bankIfsc: data.bankIfsc ?? '',
+        sameAsCurrentAddress: data.sameAsCurrentAddress ?? true,
+        permanentAddress: data.permanentAddress ?? '',
+        emergencyContactName: data.emergencyContactName ?? '',
+        emergencyContactPhone: data.emergencyContactPhone ?? '',
+        emergencyContactRelation: data.emergencyContactRelation ?? '',
+        highestQualification: data.highestQualification ?? '',
+        institutionName: data.institutionName ?? '',
+        yearOfPassing: data.yearOfPassing != null ? String(data.yearOfPassing) : '',
+        previousCompany: data.previousCompany ?? '',
+        previousDesignation: data.previousDesignation ?? '',
+        totalExperienceYears: data.totalExperienceYears != null ? String(data.totalExperienceYears) : '',
+        uanNumber: data.uanNumber ?? '', pfNumber: data.pfNumber ?? '', esicNumber: data.esicNumber ?? '',
+        nomineeName: data.nomineeName ?? '', nomineeRelation: data.nomineeRelation ?? '',
+        nomineeDob: toDateInput(data.nomineeDob), nomineePhone: data.nomineePhone ?? '',
+        taxRegime: data.taxRegime ?? '', taxDeclarationNotes: data.taxDeclarationNotes ?? '',
       });
+      setRevealed(new Set());
       const cur = data.compensation?.current;
       setSalaryForm({
         basic: cur?.basic != null ? String(cur.basic) : '',
@@ -88,6 +158,105 @@ export default function EmployeeDetailModal({
   }, [employeeId]);
 
   useEffect(() => { load(); }, [load]);
+
+  // Reset per-employee lazy-load state when the modal opens on someone new,
+  // so switching between two employees doesn't show stale IT/document data.
+  useEffect(() => {
+    setItAccessLoaded(false);
+    setDocumentsLoaded(false);
+    setItAccess(null);
+    setDocuments([]);
+  }, [employeeId]);
+
+  useEffect(() => {
+    if (section !== 'it-access' || itAccessLoaded || !employeeId) return;
+    hrmApi.getItAccess(employeeId)
+      .then((data) => { setItAccess(data); setItAccessLoaded(true); })
+      .catch((e) => setError(e.message || 'Could not load IT access.'));
+  }, [section, itAccessLoaded, employeeId]);
+
+  const loadDocuments = useCallback(() => {
+    if (!employeeId) return;
+    return hrmApi.getDocuments(employeeId)
+      .then((data) => { setDocuments(Array.isArray(data) ? data : []); setDocumentsLoaded(true); })
+      .catch((e) => setError(e.message || 'Could not load documents.'));
+  }, [employeeId]);
+
+  useEffect(() => {
+    if (section !== 'documents' || documentsLoaded) return;
+    loadDocuments();
+  }, [section, documentsLoaded, loadDocuments]);
+
+  async function handleSaveItAccess() {
+    setSaving(true);
+    setError(null);
+    try {
+      const updated = await hrmApi.setItAccess(employeeId!, itAccess);
+      setItAccess(updated);
+      setToast('IT access details saved');
+    } catch (e: any) {
+      setError(e.message || 'Could not save IT access details.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleUploadDocument(file: File) {
+    setUploading(true);
+    setError(null);
+    try {
+      await hrmApi.uploadDocument(employeeId!, uploadKind, file);
+      setToast(`${DOC_LABELS[uploadKind]} uploaded`);
+      await loadDocuments();
+    } catch (e: any) {
+      setError(e.message || 'Could not upload this file.');
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  async function handleUploadAvatar(file: File) {
+    setUploadingAvatar(true);
+    setError(null);
+    try {
+      await hrmApi.setAvatar(employeeId!, file);
+      setToast('Photo updated');
+      await load();
+      onSaved?.();
+    } catch (e: any) {
+      setError(e.message || 'Could not upload this photo.');
+    } finally {
+      setUploadingAvatar(false);
+    }
+  }
+
+  async function handleDeleteDocument(docId: string, label: string) {
+    if (!confirm(`Remove ${label}? This cannot be undone.`)) return;
+    try {
+      await hrmApi.deleteDocument(employeeId!, docId);
+      await loadDocuments();
+    } catch (e: any) {
+      setError(e.message || 'Could not remove this document.');
+    }
+  }
+
+  async function handleToggleAgreement(field: 'ndaSigned' | 'policyAcknowledged', value: boolean) {
+    setError(null);
+    try {
+      const updated = await hrmApi.setAgreementStatus(employeeId!, field, value);
+      setEmp((prev: any) => ({ ...prev, ...updated }));
+    } catch (e: any) {
+      setError(e.message || 'Could not update this.');
+    }
+  }
+
+  function toggleReveal(field: IdentityFieldKey) {
+    setRevealed((prev) => {
+      const next = new Set(prev);
+      next.has(field) ? next.delete(field) : next.add(field);
+      return next;
+    });
+  }
 
   // Escape closes, matching every other dialog people use.
   useEffect(() => {
@@ -142,6 +311,23 @@ export default function EmployeeDetailModal({
     }
   }
 
+  async function handleSaveTaxDeclaration() {
+    setSaving(true);
+    setError(null);
+    try {
+      await hrmApi.updateEmployee(employeeId!, {
+        taxRegime: form.taxRegime || undefined,
+        taxDeclarationNotes: form.taxDeclarationNotes || undefined,
+      });
+      setToast('Tax declaration saved');
+      await load();
+    } catch (e: any) {
+      setError(e.message || 'Could not save the tax declaration.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
   const initials = emp ? `${emp.firstName?.[0] ?? ''}${emp.lastName?.[0] ?? ''}`.toUpperCase() : '';
   const grossPreview =
     Number(salaryForm.basic || 0) + Number(salaryForm.hra || 0) + Number(salaryForm.specialAllowance || 0);
@@ -149,8 +335,11 @@ export default function EmployeeDetailModal({
   const tabs: { id: Section; label: string }[] = [
     { id: 'personal', label: 'Personal' },
     { id: 'employment', label: 'Employment' },
+    { id: 'background', label: 'Education & Experience' },
     { id: 'statutory', label: 'Statutory & Bank' },
     { id: 'compensation', label: 'Compensation' },
+    { id: 'it-access', label: 'IT Access' },
+    { id: 'documents', label: 'Documents' },
   ];
 
   return (
@@ -165,7 +354,23 @@ export default function EmployeeDetailModal({
         {/* ---------- header ---------- */}
         <header className="edm-head">
           <div className="edm-ident">
-            <div className="edm-avatar">{initials || '—'}</div>
+            <div className="edm-avatar-wrap">
+              {emp?.avatarUrl ? (
+                <img src={`${API_ORIGIN}${emp.avatarUrl}`} alt="" className="edm-avatar" style={{ objectFit: 'cover' }} />
+              ) : (
+                <div className="edm-avatar">{initials || '—'}</div>
+              )}
+              {emp?.canViewFullProfile && (
+                <label className="edm-avatar-upload" title="Change photo">
+                  {uploadingAvatar ? '…' : <Pencil size={11} />}
+                  <input
+                    type="file" accept=".jpg,.jpeg,.png,.webp" style={{ display: 'none' }}
+                    disabled={uploadingAvatar}
+                    onChange={(e) => { const f = e.target.files?.[0]; if (f) handleUploadAvatar(f); e.target.value = ''; }}
+                  />
+                </label>
+              )}
+            </div>
             <div>
               <h2 className="edm-name">
                 {loading && !emp ? 'Loading…' : `${emp?.firstName ?? ''} ${emp?.lastName ?? ''}`}
@@ -226,6 +431,12 @@ export default function EmployeeDetailModal({
               {t.id === 'compensation' && emp && !emp.canViewCompensation && (
                 <Lock size={11} style={{ marginLeft: 5, opacity: 0.65 }} />
               )}
+              {(t.id === 'statutory' || t.id === 'documents') && emp && !emp.canViewSensitiveIdentity && (
+                <Lock size={11} style={{ marginLeft: 5, opacity: 0.65 }} />
+              )}
+              {(t.id === 'personal' || t.id === 'background') && emp && !emp.canViewFullProfile && (
+                <Lock size={11} style={{ marginLeft: 5, opacity: 0.65 }} />
+              )}
             </button>
           ))}
         </nav>
@@ -239,6 +450,17 @@ export default function EmployeeDetailModal({
           ) : (
             <>
               {section === 'personal' && (
+                !emp.canViewFullProfile ? (
+                  <div className="edm-locked">
+                    <Lock size={20} />
+                    <p><b>Personal details are restricted</b></p>
+                    <p className="edm-dim">
+                      Only HR and administrators can view a colleague's date of birth, address, or emergency
+                      contact. The directory shows name, department, designation and work login to everyone.
+                    </p>
+                  </div>
+                ) : (
+                <>
                 <div className="edm-grid">
                   <Field label="First name" value={form.firstName} editing={editing} required
                          onChange={(v) => setForm({ ...form, firstName: v })} />
@@ -254,7 +476,7 @@ export default function EmployeeDetailModal({
                   <Field label="Personal email" value={form.personalEmail} editing={editing}
                          hint="The address they applied from"
                          onChange={(v) => setForm({ ...form, personalEmail: v })} />
-                  <Field label="Address" value={form.address} editing={editing} wide
+                  <Field label="Current address" value={form.address} editing={editing} wide
                          onChange={(v) => setForm({ ...form, address: v })} />
                   <Field label="City" value={form.city} editing={editing}
                          onChange={(v) => setForm({ ...form, city: v })} />
@@ -263,6 +485,79 @@ export default function EmployeeDetailModal({
                   <Field label="Country" value={form.country} editing={editing}
                          onChange={(v) => setForm({ ...form, country: v })} />
                 </div>
+
+                {editing ? (
+                  <label className="edm-check-row" style={{ marginTop: 4 }}>
+                    <input
+                      type="checkbox"
+                      checked={form.sameAsCurrentAddress}
+                      onChange={(e) => setForm({ ...form, sameAsCurrentAddress: e.target.checked })}
+                    />
+                    Permanent address is the same as current
+                  </label>
+                ) : (
+                  <p className="edm-note">
+                    Permanent address {emp.sameAsCurrentAddress ? 'is the same as current.' : 'differs from current — see below.'}
+                  </p>
+                )}
+                {(!form.sameAsCurrentAddress || (!editing && !emp.sameAsCurrentAddress)) && (
+                  <div className="edm-grid">
+                    <Field label="Permanent address" value={form.permanentAddress} editing={editing} wide
+                           onChange={(v) => setForm({ ...form, permanentAddress: v })} />
+                  </div>
+                )}
+
+                <p className="edm-label" style={{ marginTop: 14 }}>Emergency contact</p>
+                <div className="edm-grid">
+                  <Field label="Name" value={form.emergencyContactName} editing={editing}
+                         onChange={(v) => setForm({ ...form, emergencyContactName: v })} />
+                  <Field label="Phone" value={form.emergencyContactPhone} editing={editing}
+                         onChange={(v) => setForm({ ...form, emergencyContactPhone: v })} />
+                  <Field label="Relationship" value={form.emergencyContactRelation} editing={editing}
+                         hint="e.g. Parent, Spouse, Sibling"
+                         onChange={(v) => setForm({ ...form, emergencyContactRelation: v })} />
+                </div>
+                </>
+                )
+              )}
+
+              {section === 'background' && (
+                !emp.canViewFullProfile ? (
+                  <div className="edm-locked">
+                    <Lock size={20} />
+                    <p><b>Education &amp; experience are restricted</b></p>
+                    <p className="edm-dim">Only HR and administrators can view this.</p>
+                  </div>
+                ) :
+                <>
+                  <p className="edm-label">Education</p>
+                  <div className="edm-grid">
+                    <Field label="Highest qualification" value={form.highestQualification} editing={editing}
+                           hint="e.g. B.Tech, MBA"
+                           onChange={(v) => setForm({ ...form, highestQualification: v })} />
+                    <Field label="Institution" value={form.institutionName} editing={editing}
+                           onChange={(v) => setForm({ ...form, institutionName: v })} />
+                    <Field label="Year of passing" value={form.yearOfPassing} editing={editing} mono
+                           onChange={(v) => setForm({ ...form, yearOfPassing: v })} />
+                  </div>
+                  <p className="edm-dim" style={{ fontSize: 12.5 }}>
+                    Certificates and mark sheets go in the Documents tab, not here.
+                  </p>
+
+                  <p className="edm-label" style={{ marginTop: 18 }}>Previous employment</p>
+                  <div className="edm-grid">
+                    <Field label="Previous company" value={form.previousCompany} editing={editing}
+                           onChange={(v) => setForm({ ...form, previousCompany: v })} />
+                    <Field label="Previous designation" value={form.previousDesignation} editing={editing}
+                           onChange={(v) => setForm({ ...form, previousDesignation: v })} />
+                    <Field label="Total experience (years)" value={form.totalExperienceYears} editing={editing} mono
+                           hint="Across all previous roles, e.g. 3.5"
+                           onChange={(v) => setForm({ ...form, totalExperienceYears: v })} />
+                  </div>
+                  <p className="edm-dim" style={{ fontSize: 12.5 }}>
+                    Experience letters, relieving letters and past payslips go in the Documents tab.
+                  </p>
+                </>
               )}
 
               {section === 'employment' && (
@@ -307,13 +602,37 @@ export default function EmployeeDetailModal({
               {section === 'statutory' && (
                 <>
                   <p className="edm-note">
-                    These three values print on every payslip. The system checks each format on save, so a
-                    bank account number cannot be stored as a PAN.
+                    PAN and Aadhaar are encrypted in the database and only ever decrypted for HR and
+                    administrators — everyone else gets nothing back for these two fields, not just a
+                    hidden display. They're masked on screen by default; use the eye icon to reveal one.
                   </p>
+
                   <div className="edm-grid">
-                    <Field label="PAN number" value={form.pan} editing={editing} mono
-                           hint="5 letters, 4 digits, 1 letter — e.g. QCKPS2002C"
-                           onChange={(v) => setForm({ ...form, pan: v.toUpperCase() })} />
+                    {emp.canViewSensitiveIdentity ? (
+                      <>
+                        <IdentityField
+                          label="PAN number" fieldKey="pan" editing={editing}
+                          rawValue={emp.pan} formValue={form.pan} revealed={revealed.has('pan')}
+                          onToggleReveal={() => toggleReveal('pan')}
+                          mask={maskIdentity}
+                          hint="5 letters, 4 digits, 1 letter — e.g. QCKPS2002C"
+                          onChange={(v) => setForm({ ...form, pan: v.toUpperCase() })}
+                        />
+                        <IdentityField
+                          label="Aadhaar number" fieldKey="aadhaarNumber" editing={editing}
+                          rawValue={emp.aadhaarNumber} formValue={form.aadhaarNumber} revealed={revealed.has('aadhaarNumber')}
+                          onToggleReveal={() => toggleReveal('aadhaarNumber')}
+                          mask={maskAadhaar}
+                          hint="12 digits"
+                          onChange={(v) => setForm({ ...form, aadhaarNumber: v })}
+                        />
+                      </>
+                    ) : (
+                      <>
+                        <RestrictedField label="PAN number" />
+                        <RestrictedField label="Aadhaar number" />
+                      </>
+                    )}
                     <Field label="Bank account number" value={form.bankAccountNo} editing={editing} mono
                            hint="9 to 18 digits"
                            onChange={(v) => setForm({ ...form, bankAccountNo: v })} />
@@ -321,7 +640,7 @@ export default function EmployeeDetailModal({
                            hint="e.g. HDFC0001234"
                            onChange={(v) => setForm({ ...form, bankIfsc: v.toUpperCase() })} />
                   </div>
-                  {(!emp.pan || !emp.bankAccountNo) && (
+                  {(!emp.pan || !emp.bankAccountNo) && emp.canViewSensitiveIdentity && (
                     <div className="edm-warn">
                       <AlertCircle size={15} />
                       <span>
@@ -330,7 +649,214 @@ export default function EmployeeDetailModal({
                       </span>
                     </div>
                   )}
+
+                  <p className="edm-label" style={{ marginTop: 18 }}>Statutory numbers</p>
+                  <p className="edm-dim" style={{ fontSize: 12.5, marginTop: -4 }}>
+                    UAN is 12 digits, the same shape as Aadhaar — there is no way to detect the two being
+                    swapped by format alone, so double-check before saving.
+                  </p>
+                  <div className="edm-grid">
+                    {emp.canViewSensitiveIdentity ? (
+                      <>
+                        <IdentityField
+                          label="UAN" fieldKey="uanNumber" editing={editing}
+                          rawValue={emp.uanNumber} formValue={form.uanNumber} revealed={revealed.has('uanNumber')}
+                          onToggleReveal={() => toggleReveal('uanNumber')}
+                          mask={maskIdentity}
+                          hint="EPFO Universal Account Number — 12 digits"
+                          onChange={(v) => setForm({ ...form, uanNumber: v })}
+                        />
+                        <IdentityField
+                          label="PF number" fieldKey="pfNumber" editing={editing}
+                          rawValue={emp.pfNumber} formValue={form.pfNumber} revealed={revealed.has('pfNumber')}
+                          onToggleReveal={() => toggleReveal('pfNumber')}
+                          mask={maskIdentity}
+                          hint="No fixed format — entered as-is"
+                          onChange={(v) => setForm({ ...form, pfNumber: v })}
+                        />
+                        <IdentityField
+                          label="ESIC number" fieldKey="esicNumber" editing={editing}
+                          rawValue={emp.esicNumber} formValue={form.esicNumber} revealed={revealed.has('esicNumber')}
+                          onToggleReveal={() => toggleReveal('esicNumber')}
+                          mask={maskIdentity}
+                          hint="9 to 17 digits"
+                          onChange={(v) => setForm({ ...form, esicNumber: v })}
+                        />
+                      </>
+                    ) : (
+                      <>
+                        <RestrictedField label="UAN" />
+                        <RestrictedField label="PF number" />
+                        <RestrictedField label="ESIC number" />
+                      </>
+                    )}
+                  </div>
+
+                  <p className="edm-label" style={{ marginTop: 18 }}>Nominee</p>
+                  <p className="edm-dim" style={{ fontSize: 12.5, marginTop: -4 }}>
+                    For PF, gratuity and insurance purposes — a third party's personal details, so this
+                    follows the same HR/Admin-only gate as the rest of a colleague's personal profile.
+                  </p>
+                  {!emp.canViewFullProfile ? (
+                    <div className="edm-grid">
+                      <RestrictedField label="Name" />
+                      <RestrictedField label="Relationship" />
+                      <RestrictedField label="Phone" />
+                    </div>
+                  ) : (
+                    <div className="edm-grid">
+                      <Field label="Name" value={form.nomineeName} editing={editing}
+                             onChange={(v) => setForm({ ...form, nomineeName: v })} />
+                      <Field label="Relationship" value={form.nomineeRelation} editing={editing}
+                             onChange={(v) => setForm({ ...form, nomineeRelation: v })} />
+                      <Field label="Date of birth" value={form.nomineeDob} display={formatDate(emp.nomineeDob)} type="date"
+                             editing={editing} onChange={(v) => setForm({ ...form, nomineeDob: v })} />
+                      <Field label="Phone" value={form.nomineePhone} editing={editing}
+                             onChange={(v) => setForm({ ...form, nomineePhone: v })} />
+                    </div>
+                  )}
                 </>
+              )}
+
+              {section === 'it-access' && (
+                <>
+                  <p className="edm-note">
+                    Existing account identifiers, plus a checklist IT ticks off by hand. This does not create
+                    or invite accounts in any of these systems — it only tracks that provisioning happened
+                    elsewhere.
+                  </p>
+                  {!itAccess ? (
+                    <p className="edm-dim">Loading…</p>
+                  ) : (
+                    <>
+                      <div className="edm-grid">
+                        <Field label="GitHub username" value={itAccess.githubUsername ?? ''} editing
+                               onChange={(v) => setItAccess({ ...itAccess, githubUsername: v })} />
+                        <Field label="Slack email" value={itAccess.slackEmail ?? ''} editing
+                               onChange={(v) => setItAccess({ ...itAccess, slackEmail: v })} />
+                        <Field label="Corporate email" value={itAccess.corporateEmail ?? ''} editing
+                               hint="Only if different from their ERP login"
+                               onChange={(v) => setItAccess({ ...itAccess, corporateEmail: v })} />
+                        <Field label="Laptop asset tag" value={itAccess.laptopAssetTag ?? ''} editing
+                               onChange={(v) => setItAccess({ ...itAccess, laptopAssetTag: v })} />
+                        <Field label="Required software" value={itAccess.softwareNotes ?? ''} editing wide
+                               hint="Free text — e.g. VS Code, Docker, Figma"
+                               onChange={(v) => setItAccess({ ...itAccess, softwareNotes: v })} />
+                      </div>
+
+                      <div className="edm-checklist">
+                        <span className="edm-label">Provisioning checklist</span>
+                        {[
+                          ['laptopAssigned', 'Laptop assigned'],
+                          ['slackInvited', 'Invited to Slack'],
+                          ['githubAccessGranted', 'GitHub access granted'],
+                          ['jiraAccessGranted', 'Jira access granted'],
+                          ['awsAccessGranted', 'AWS access granted'],
+                        ].map(([key, label]) => (
+                          <label key={key} className="edm-check-row">
+                            <input
+                              type="checkbox"
+                              checked={!!itAccess[key]}
+                              onChange={(e) => setItAccess({ ...itAccess, [key]: e.target.checked })}
+                            />
+                            {label}
+                          </label>
+                        ))}
+                      </div>
+
+                      <button className="edm-btn edm-btn-primary" onClick={handleSaveItAccess} disabled={saving}>
+                        <Save size={14} /> {saving ? 'Saving…' : 'Save IT access details'}
+                      </button>
+                    </>
+                  )}
+                </>
+              )}
+
+              {section === 'documents' && (
+                !emp.canViewSensitiveIdentity ? (
+                  <div className="edm-locked">
+                    <Lock size={20} />
+                    <p><b>Documents are restricted</b></p>
+                    <p className="edm-dim">Only HR and administrators can view or upload identity documents.</p>
+                  </div>
+                ) : (
+                  <>
+                    <p className="edm-note">
+                      PDF, JPG or PNG, up to 10MB. Stored outside the public upload path — every read is
+                      checked against the same HR/Admin role as PAN and Aadhaar above.
+                    </p>
+
+                    <div className="edm-upload-row">
+                      <select className="edm-input" value={uploadKind} onChange={(e) => setUploadKind(e.target.value)}>
+                        {DOCUMENT_KINDS.map((k) => <option key={k.value} value={k.value}>{k.label}</option>)}
+                      </select>
+                      <label className="edm-btn edm-btn-primary" style={{ cursor: uploading ? 'not-allowed' : 'pointer' }}>
+                        <Upload size={14} /> {uploading ? 'Uploading…' : 'Choose file'}
+                        <input
+                          type="file" accept=".pdf,.jpg,.jpeg,.png" style={{ display: 'none' }}
+                          disabled={uploading}
+                          onChange={(e) => { const f = e.target.files?.[0]; if (f) handleUploadDocument(f); e.target.value = ''; }}
+                        />
+                      </label>
+                    </div>
+
+                    {documents.length === 0 ? (
+                      <p className="edm-dim">No documents uploaded yet.</p>
+                    ) : (
+                      <div className="edm-doclist">
+                        {documents.map((d) => (
+                          <div key={d.id} className="edm-doc-row">
+                            <div>
+                              <div style={{ fontWeight: 600, fontSize: 13.5 }}>{DOC_LABELS[d.kind] ?? d.kind}</div>
+                              <div className="edm-dim" style={{ fontSize: 12 }}>
+                                {d.fileName} · {formatDate(d.issuedAt)}
+                              </div>
+                            </div>
+                            <div style={{ display: 'flex', gap: 6 }}>
+                              <button className="edm-icon-btn" title="Download"
+                                      onClick={() => hrmApi.downloadDocument(employeeId!, d.id, d.fileName).catch((e: any) => setError(e.message || 'Download failed.'))}>
+                                <Download size={14} />
+                              </button>
+                              <button className="edm-icon-btn edm-icon-btn-danger" title="Remove"
+                                      onClick={() => handleDeleteDocument(d.id, DOC_LABELS[d.kind] ?? d.kind)}>
+                                <Trash2 size={14} />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    <div className="edm-checklist" style={{ marginTop: 18 }}>
+                      <span className="edm-label">Agreements & policies</span>
+                      <label className="edm-check-row">
+                        <input
+                          type="checkbox"
+                          checked={!!emp.ndaSigned}
+                          onChange={(e) => handleToggleAgreement('ndaSigned', e.target.checked)}
+                        />
+                        NDA / Confidentiality agreement signed
+                        {emp.ndaSigned && emp.ndaSignedAt && (
+                          <span className="edm-dim" style={{ fontSize: 12 }}> — {formatDate(emp.ndaSignedAt)}</span>
+                        )}
+                      </label>
+                      <label className="edm-check-row">
+                        <input
+                          type="checkbox"
+                          checked={!!emp.policyAcknowledged}
+                          onChange={(e) => handleToggleAgreement('policyAcknowledged', e.target.checked)}
+                        />
+                        Company policies acknowledged
+                        {emp.policyAcknowledged && emp.policyAcknowledgedAt && (
+                          <span className="edm-dim" style={{ fontSize: 12 }}> — {formatDate(emp.policyAcknowledgedAt)}</span>
+                        )}
+                      </label>
+                      <span className="edm-dim" style={{ fontSize: 12 }}>
+                        The employment agreement itself is the offer letter, generated automatically at onboarding.
+                      </span>
+                    </div>
+                  </>
+                )
               )}
 
               {section === 'compensation' && (
@@ -408,6 +934,23 @@ export default function EmployeeDetailModal({
                         </table>
                       </div>
                     )}
+
+                    <p className="edm-label" style={{ marginTop: 18 }}>Tax declaration</p>
+                    <p className="edm-dim" style={{ fontSize: 12.5, marginTop: -4 }}>
+                      For TDS purposes. Not a full investment-declaration workflow (Section 80C/80D line
+                      items, old-vs-new comparison) — just the regime and free-text notes for now.
+                    </p>
+                    <div className="edm-grid">
+                      <Field label="Tax regime" value={form.taxRegime} editing type="select"
+                             options={['', 'OLD', 'NEW']}
+                             onChange={(v) => setForm({ ...form, taxRegime: v })} />
+                      <Field label="Declaration notes" value={form.taxDeclarationNotes} editing wide
+                             hint="Free text — e.g. investment proofs submitted, HRA claimed"
+                             onChange={(v) => setForm({ ...form, taxDeclarationNotes: v })} />
+                    </div>
+                    <button className="edm-btn edm-btn-primary" onClick={handleSaveTaxDeclaration} disabled={saving}>
+                      <Save size={14} /> {saving ? 'Saving…' : 'Save tax declaration'}
+                    </button>
                   </>
                 )
               )}
@@ -464,6 +1007,52 @@ function Field({
   );
 }
 
+/**
+ * PAN/Aadhaar specifically: masked by default with an eye-toggle to reveal,
+ * per the team lead's spec. In edit mode it behaves like a normal Field —
+ * masking a value you're actively typing over would be actively unhelpful.
+ */
+function IdentityField({
+  label, fieldKey, editing, rawValue, formValue, revealed, onToggleReveal, mask, hint, onChange,
+}: {
+  label: string; fieldKey: string; editing: boolean;
+  rawValue: string | null; formValue: string; revealed: boolean; onToggleReveal: () => void;
+  mask: (v: string) => string; hint?: string; onChange: (v: string) => void;
+}) {
+  if (editing) {
+    return <Field label={label} value={formValue} editing mono hint={hint} onChange={onChange} />;
+  }
+
+  const hasValue = !!rawValue;
+  return (
+    <div className="edm-field">
+      <label className="edm-label">{label}</label>
+      {!hasValue ? (
+        <span className="edm-value">—</span>
+      ) : (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span className="edm-value is-mono">{revealed ? rawValue : mask(rawValue)}</span>
+          <button type="button" className="edm-icon-btn" onClick={onToggleReveal}
+                  title={revealed ? 'Hide' : 'Reveal'} aria-label={revealed ? `Hide ${label}` : `Reveal ${label}`}>
+            {revealed ? <EyeOff size={14} /> : <Eye size={14} />}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function RestrictedField({ label }: { label: string }) {
+  return (
+    <div className="edm-field">
+      <label className="edm-label">{label}</label>
+      <span className="edm-value" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: 'var(--color-text-muted)' }}>
+        <Lock size={12} /> HR only
+      </span>
+    </div>
+  );
+}
+
 /* ---------------- styles ---------------- */
 
 const EDM_CSS = `
@@ -478,6 +1067,12 @@ const EDM_CSS = `
 .edm-ident{display:flex;align-items:center;gap:13px;min-width:0;}
 .edm-avatar{width:46px;height:46px;border-radius:11px;background:#2563eb;color:#fff;flex-shrink:0;
   display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px;letter-spacing:.02em;}
+.edm-avatar-wrap{position:relative;flex-shrink:0;}
+.edm-avatar-upload{position:absolute;bottom:-3px;right:-3px;width:19px;height:19px;border-radius:50%;
+  background:var(--color-card,#fff);border:1px solid var(--color-border,#e5e7eb);cursor:pointer;
+  display:flex;align-items:center;justify-content:center;color:var(--color-text-muted,#6b7280);
+  font-size:10px;box-shadow:0 1px 3px rgba(0,0,0,.15);}
+.edm-avatar-upload:hover{color:#2563eb;border-color:#2563eb;}
 .edm-name{margin:0;font-size:17px;font-weight:700;letter-spacing:-.01em;}
 .edm-sub{display:flex;flex-wrap:wrap;gap:6px;font-size:12.5px;color:var(--color-text-muted,#6b7280);margin-top:2px;}
 .edm-code{font-family:ui-monospace,Consolas,monospace;font-weight:600;color:var(--color-text,#111);}
@@ -534,5 +1129,19 @@ const EDM_CSS = `
   color:var(--color-text-muted,#6b7280);border-bottom:1px solid var(--color-border,#e5e7eb);}
 .edm-table td{padding:7px 9px;border-bottom:1px solid var(--color-border,#f1f5f9);}
 .edm-num{text-align:right;font-variant-numeric:tabular-nums;font-family:ui-monospace,Consolas,monospace;}
+.edm-icon-btn{width:30px;height:30px;display:inline-flex;align-items:center;justify-content:center;
+  border-radius:7px;border:1px solid var(--color-border,#e5e7eb);background:var(--color-bg-secondary,#f9fafb);
+  color:var(--color-text-muted,#6b7280);cursor:pointer;flex-shrink:0;}
+.edm-icon-btn:hover{border-color:#94a3b8;color:var(--color-text,#111);}
+.edm-icon-btn-danger:hover{border-color:#fca5a5;color:#dc2626;background:#fef2f2;}
+.edm-checklist{display:flex;flex-direction:column;gap:9px;padding:14px 17px;border-radius:10px;
+  background:var(--color-bg-secondary,#f8fafc);border:1px solid var(--color-border,#e5e7eb);}
+.edm-check-row{display:flex;align-items:center;gap:9px;font-size:13.5px;cursor:pointer;}
+.edm-check-row input{width:15px;height:15px;cursor:pointer;}
+.edm-upload-row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
+.edm-upload-row select.edm-input{width:auto;min-width:200px;}
+.edm-doclist{display:flex;flex-direction:column;gap:8px;}
+.edm-doc-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 14px;
+  border-radius:9px;border:1px solid var(--color-border,#e5e7eb);background:var(--color-bg-secondary,#fff);}
 @media (max-width:640px){.edm-backdrop{padding:0;}.edm-panel{border-radius:0;min-height:100vh;}}
 `;
