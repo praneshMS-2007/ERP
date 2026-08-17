@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { Search, Bell, Settings, LogOut, User, Shield } from 'lucide-react';
+import { Search, Bell, Settings, LogOut, User } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '../../context/AuthContext';
@@ -90,10 +90,25 @@ export default function Topbar() {
     }
   };
 
+  // "virtual-" ids are computed fresh on every load (task/deadline
+  // reminders), not real rows — nothing to persist as read, they just stop
+  // appearing once the underlying task/project changes.
+  const handleNotifClick = async (notif: any) => {
+    setShowNotifications(false);
+    if (!String(notif.id).startsWith('virtual-') && !notif.isRead) {
+      try { await notificationApi.markAsRead(notif.id); } catch (e) { console.error('Failed to mark notification read', e); }
+    }
+    if (notif.link) router.push(notif.link);
+    loadNotifications();
+  };
+
   const unreadCount = notifications.filter(n => !n.isRead).length;
 
-  const displayEmail = user?.email || 'pranesh@shuroq.com';
-  const displayName = displayEmail.split('@')[0].toUpperCase();
+  // Never fall back to a hardcoded person's identity — ERP-provisioned
+  // accounts (username + password, no mailbox) have email: null by design.
+  const displayName = (user?.name || 'User').toUpperCase();
+  const displayContact = user?.email || (user?.username ? `@${user.username}` : '');
+  const initials = (user?.name || 'U').trim().split(/\s+/).filter(Boolean).map(w => w[0]).join('').slice(0, 2).toUpperCase() || 'U';
 
   const hasSearchResults = searchResults && (
     (searchResults.employees && searchResults.employees.length > 0) ||
@@ -191,12 +206,21 @@ export default function Topbar() {
                   <span onClick={markAllRead} style={{ fontSize: '12px', color: '#2563eb', cursor: 'pointer', fontWeight: 500 }}>Mark all read</span>
                 )}
               </div>
-              <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
+              <div style={{ maxHeight: '340px', overflowY: 'auto' }}>
                 {notifications.length > 0 ? notifications.map(notif => (
-                  <div key={notif.id} style={{ padding: '12px 16px', borderBottom: '1px solid var(--color-border-light)', cursor: 'pointer', opacity: notif.isRead ? 0.6 : 1 }} className="hover-bg-gray">
-                    <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--color-text-primary)' }}>{notif.title}</div>
-                    <div style={{ fontSize: '12px', color: 'var(--color-text-secondary)', marginTop: '2px' }}>{notif.message}</div>
-                    <div style={{ fontSize: '11px', color: 'var(--color-text-muted)', marginTop: '4px' }}>{new Date(notif.createdAt).toLocaleTimeString()}</div>
+                  <div
+                    key={notif.id}
+                    onClick={() => handleNotifClick(notif)}
+                    style={{ padding: '10px 16px', borderBottom: '1px solid var(--color-border-light)', cursor: 'pointer', opacity: notif.isRead ? 0.6 : 1 }}
+                    className="hover-bg-gray"
+                  >
+                    <div style={{
+                      fontSize: '12.5px', color: 'var(--color-text-primary)',
+                      whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                    }}>
+                      <span style={{ fontWeight: 700 }}>{notif.title}:</span> {notif.message}
+                    </div>
+                    <div style={{ fontSize: '10.5px', color: 'var(--color-text-muted)', marginTop: '3px' }}>{new Date(notif.createdAt).toLocaleString()}</div>
                   </div>
                 )) : (
                   <div style={{ padding: '24px', textAlign: 'center', color: 'var(--color-text-muted)', fontSize: '13px' }}>No notifications</div>
@@ -224,25 +248,22 @@ export default function Topbar() {
           >
             <div style={{ textAlign: 'right' }}>
               <div className="topbar-user-name">{displayName}</div>
-              <div className="topbar-user-role">{typeof user?.role === 'object' ? (user?.role as any)?.name : (user?.role || 'SUPER_ADMIN')}</div>
+              <div className="topbar-user-role">{user?.role || ''}</div>
             </div>
-            <div className="topbar-user-avatar">{displayName.substring(0, 2)}</div>
+            <div className="topbar-user-avatar">{initials}</div>
           </div>
 
           {showProfile && (
             <div style={{ position: 'absolute', top: '100%', right: 0, width: '220px', background: 'var(--color-surface, white)', border: '1px solid var(--color-border)', borderRadius: '8px', marginTop: '8px', boxShadow: '0 10px 25px rgba(0,0,0,0.15)', zIndex: 100, padding: '8px 0' }}>
               <div style={{ padding: '8px 16px', borderBottom: '1px solid var(--color-border-light)', marginBottom: '8px' }}>
                 <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--color-text-primary)' }}>{displayName}</div>
-                <div style={{ fontSize: '12px', color: 'var(--color-text-muted)' }}>{displayEmail}</div>
+                <div style={{ fontSize: '12px', color: 'var(--color-text-muted)' }}>{displayContact}</div>
               </div>
               
-              <Link href="/portal" onClick={() => setShowProfile(false)} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 16px', fontSize: '13px', color: 'var(--color-text-primary)', textDecoration: 'none' }} className="hover-bg-gray">
-                <User size={16} /> My Portal
+              <Link href="/settings" onClick={() => setShowProfile(false)} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 16px', fontSize: '13px', color: 'var(--color-text-primary)', textDecoration: 'none' }} className="hover-bg-gray">
+                <User size={16} /> My Profile
               </Link>
-              <Link href="/admin" onClick={() => setShowProfile(false)} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 16px', fontSize: '13px', color: 'var(--color-text-primary)', textDecoration: 'none' }} className="hover-bg-gray">
-                <Shield size={16} /> Administration
-              </Link>
-              
+
               <div style={{ height: '1px', background: 'var(--color-border-light)', margin: '8px 0' }}></div>
               
               <button 

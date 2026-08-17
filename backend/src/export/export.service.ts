@@ -1,5 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { HrmService } from '../hrm/hrm.service';
+import type { RequestUser } from '../hrm/hrm.service';
 import * as ExcelJS from 'exceljs';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const PDFDocument = require('pdfkit');
@@ -8,7 +10,7 @@ const PDFDocument = require('pdfkit');
 export class ExportService {
   private readonly logger = new Logger(ExportService.name);
 
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService, private hrmService: HrmService) {}
 
   // ========== EXCEL GENERATION ==========
 
@@ -454,6 +456,62 @@ export class ExportService {
 
     const buffer = await workbook.xlsx.writeBuffer();
     return Buffer.from(buffer);
+  }
+
+  // ========== SINGLE-EMPLOYEE ATTENDANCE HISTORY EXPORT ==========
+  // A date-range export of one person's attendance, built from the exact
+  // same day-by-day classification the calendar UI uses (buildAttendanceRange
+  // in HrmService) so a row here always matches what's on screen — not a
+  // second, independently-computed answer. The range itself is already
+  // validated there (can't start before the join date or end after today).
+
+  private readonly ATTENDANCE_STATUS_LABEL: Record<string, string> = {
+    PRESENT: 'Present', ABSENT: 'Absent', HALF_DAY: 'Half Day', LATE: 'Late',
+    WEEKEND: 'Weekend', HOLIDAY: 'Holiday', NOT_MARKED: 'Not marked yet', NOT_JOINED: 'Not joined yet',
+  };
+
+  private async buildAttendanceRangeWorkbook(personLabel: string, days: { date: string; status: string; holidayTitle?: string }[]): Promise<Buffer> {
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = 'Shuroq ERP';
+    const sheet = workbook.addWorksheet('Attendance History');
+
+    sheet.columns = [
+      { header: 'Date', key: 'date', width: 14 },
+      { header: 'Day', key: 'day', width: 12 },
+      { header: 'Status', key: 'status', width: 16 },
+      { header: 'Note', key: 'note', width: 30 },
+    ];
+    sheet.getRow(1).font = { bold: true, color: { argb: 'FFFFFF' } };
+    sheet.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: '2563EB' } };
+    sheet.insertRow(1, [personLabel]);
+    sheet.mergeCells('A1:D1');
+    sheet.getRow(1).font = { bold: true, size: 13 };
+    sheet.getRow(2).font = { bold: true, color: { argb: 'FFFFFF' } };
+    sheet.getRow(2).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: '2563EB' } };
+
+    for (const d of days) {
+      const dateObj = new Date(`${d.date}T00:00:00`);
+      sheet.addRow({
+        date: dateObj.toLocaleDateString(),
+        day: dateObj.toLocaleDateString(undefined, { weekday: 'long' }),
+        status: this.ATTENDANCE_STATUS_LABEL[d.status] || d.status,
+        note: d.holidayTitle || '',
+      });
+    }
+
+    const buffer = await workbook.xlsx.writeBuffer();
+    return Buffer.from(buffer);
+  }
+
+  async exportEmployeeAttendanceRangeExcel(employeeId: string, from: string, to: string): Promise<Buffer> {
+    const employee = await this.prisma.employee.findUnique({ where: { id: employeeId }, select: { firstName: true, lastName: true } });
+    const days = await this.hrmService.getEmployeeAttendanceRange(employeeId, from, to);
+    return this.buildAttendanceRangeWorkbook(`${employee?.firstName ?? ''} ${employee?.lastName ?? ''}`.trim(), days);
+  }
+
+  async exportSelfAttendanceRangeExcel(viewer: RequestUser | undefined, from: string, to: string): Promise<Buffer> {
+    const days = await this.hrmService.getSelfAttendanceRange(viewer, from, to);
+    return this.buildAttendanceRangeWorkbook('My Attendance', days);
   }
 
   async exportAttendancePdf(month: number, year: number): Promise<Buffer> {

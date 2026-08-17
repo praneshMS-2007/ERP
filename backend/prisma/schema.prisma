@@ -22,6 +22,14 @@ model User {
   // deduplicated with a numeric suffix on collision.
   username             String?          @unique
   passwordHash         String           @map("password_hash")
+  // Separate from passwordHash, which is what login actually checks — this
+  // is a reversible copy (AES-256-GCM, see field-encryption.ts) that exists
+  // solely so Admin/HR can look up someone's current password in User
+  // Management. Written alongside the hash at account creation and every
+  // manual reset; never used for authentication itself. Null for any
+  // account whose password predates this field — there is no way to
+  // recover what was never stored, only what gets set from here on.
+  passwordPlain        String?          @map("password_plain")
   // Login is refused, and every existing session is rejected on its very next
   // request (JwtStrategy re-checks this per-request), when false.
   isActive             Boolean          @default(true) @map("is_active")
@@ -33,7 +41,11 @@ model User {
   authSessions         Authentication[]
   auditLogs            AuditLog[]
   notifications        Notification[]
-  
+  sentAnnouncements       Announcement[]           @relation("AnnouncementAuthor")
+  receivedAnnouncements   AnnouncementRecipient[]  @relation("AnnouncementRecipientUser")
+  passwordResetRequests   PasswordResetRequest[]   @relation("PasswordResetRequests")
+  resolvedPasswordResets  PasswordResetRequest[]   @relation("PasswordResetResolvedBy")
+
   // User Preferences
   theme                String           @default("light")
   language             String           @default("English (US)")
@@ -93,6 +105,12 @@ enum Module {
   FINANCE
   ANALYTICS
   ADMIN
+  // Every role holds SELF:ALL — "manage my own leave/attendance/profile"
+  // is not a departmental permission, it's a baseline capability everyone
+  // has regardless of what else they can see. Routes under /self/* derive
+  // the employee from the caller's JWT and never accept a client-supplied
+  // id, so holding SELF:ALL can never be used to reach anyone else's record.
+  SELF
 }
 
 enum Action {
@@ -247,7 +265,13 @@ model Employee {
   timeLogs                TimeLog[]
   salaryStructures        SalaryStructure[]
   itAccessProfile         ItAccessProfile?
-  
+  managedProjects         Project[]              @relation(name: "ProjectManager")
+  authoredAnnouncements   ProjectAnnouncement[]  @relation(name: "AnnouncementAuthor")
+  targetedAnnouncements   ProjectAnnouncement[]  @relation(name: "AnnouncementAudience")
+  uploadedProjectDocuments ProjectDocument[]
+  declaredHolidays ProjectHoliday[]
+  declaredCompanyHolidays Holiday[]
+
   createdAt     DateTime     @default(now()) @map("created_at")
   updatedAt     DateTime     @updatedAt @map("updated_at")
 
@@ -285,6 +309,13 @@ model Attendance {
   checkIn     DateTime?        @map("check_in")
   checkOut    DateTime?        @map("check_out")
   hoursWorked Float?           @map("hours_worked")
+
+  // Set only when this row was auto-created by an approved leave request —
+  // lets revoking that approval delete exactly (and only) the rows it
+  // created, never a day someone marked by hand for an unrelated reason.
+  leaveId String? @map("leave_id")
+  leave   Leave?  @relation(fields: [leaveId], references: [id])
+
   createdAt   DateTime         @default(now()) @map("created_at")
   updatedAt   DateTime         @updatedAt @map("updated_at")
 
@@ -300,6 +331,7 @@ model Leave {
   endDate    DateTime    @map("end_date")
   status     LeaveStatus
   reason     String
+  attendanceMarks Attendance[]
   createdAt  DateTime    @default(now()) @map("created_at")
   updatedAt  DateTime    @updatedAt @map("updated_at")
 
@@ -471,6 +503,18 @@ model Project {
   milestones  Milestone[]
   assignments Assignment[]
   timeLogs    TimeLog[]
+
+  // The project's staffed owner — a direct field, not an Assignment role,
+  // because there is exactly one PM per project (no Team Lead tier) and
+  // only HR/Admin may ever set or change it. Project-scoped authorization
+  // (see projects.service.ts's isProjectManagerOf) checks this field fresh
+  // on every request; it never grants anything outside this one project.
+  projectManagerId String?               @map("project_manager_id")
+  projectManager    Employee?            @relation(name: "ProjectManager", fields: [projectManagerId], references: [id])
+  announcements     ProjectAnnouncement[]
+  documents         ProjectDocument[]
+  holidays          ProjectHoliday[]
+
   createdAt   DateTime      @default(now()) @map("created_at")
   updatedAt   DateTime      @updatedAt @map("updated_at")
 
@@ -508,7 +552,52 @@ model Assignment {
   createdAt  DateTime  @default(now()) @map("created_at")
   updatedAt  DateTime  @updatedAt @map("updated_at")
 
+  // Stops the same person being staffed twice on one project. Only
+  // enforced for project-level rows (projectId set) — task-level
+  // assignment rows (taskId set, projectId null) are unaffected since
+  // Postgres treats NULL as distinct in a unique constraint.
+  @@unique([projectId, employeeId])
   @@map("assignments")
+}
+
+// One row = one announcement. audienceEmployeeId null means "the whole
+// project team"; set means "just this one person" — the same shape as
+// every other optional-recipient field in this schema (no join table
+// exists anywhere else here, so this stays consistent with that).
+model ProjectAnnouncement {
+  id                 String    @id @default(uuid())
+  projectId          String    @map("project_id")
+  project            Project   @relation(fields: [projectId], references: [id])
+  authorEmployeeId   String    @map("author_employee_id")
+  author             Employee  @relation(name: "AnnouncementAuthor", fields: [authorEmployeeId], references: [id])
+  title              String
+  body               String
+  fileUrl            String?   @map("file_url")
+  fileName           String?   @map("file_name")
+  audienceEmployeeId String?   @map("audience_employee_id")
+  audienceEmployee   Employee? @relation(name: "AnnouncementAudience", fields: [audienceEmployeeId], references: [id])
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
+
+  @@map("project_announcements")
+}
+
+// Project-level reference material — PRD, BRD, architecture diagrams,
+// workflow docs. Deliberately separate from the identity-document pipeline
+// in employee-documents.service.ts (different sensitivity class, different
+// audience: everyone staffed on the project, not just HR).
+model ProjectDocument {
+  id                 String   @id @default(uuid())
+  projectId          String   @map("project_id")
+  project            Project  @relation(fields: [projectId], references: [id])
+  uploaderEmployeeId String   @map("uploader_employee_id")
+  uploader           Employee @relation(fields: [uploaderEmployeeId], references: [id])
+  kind               String   // PRD | BRD | ARCHITECTURE | WORKFLOW | OTHER
+  fileUrl            String   @map("file_url")
+  fileName           String   @map("file_name")
+  createdAt          DateTime @default(now()) @map("created_at")
+
+  @@map("project_documents")
 }
 
 model Milestone {
@@ -659,57 +748,6 @@ model Payroll {
   @@map("payrolls")
 }
 
-model JobPosting {
-  id             String      @id @default(uuid())
-  title          String
-  department     String
-  location       String
-  description    String
-  employmentType EmpType     @default(FULL_TIME) @map("employment_type")
-  workMode       WorkMode    @default(ONSITE) @map("work_mode")
-  priority       Priority    @default(MEDIUM)
-  status         JobStatus   @default(OPEN)
-  applicants     Applicant[]
-  createdAt      DateTime    @default(now()) @map("created_at")
-  updatedAt      DateTime    @updatedAt @map("updated_at")
-
-  @@map("job_postings")
-}
-
-model Applicant {
-  id        String          @id @default(uuid())
-  jobId     String          @map("job_id")
-  job       JobPosting      @relation(fields: [jobId], references: [id])
-  name      String
-  email     String
-  phone     String?
-  resumeUrl String?         @map("resume_url")
-  coverNote String?         @map("cover_note")
-  source    ApplicantSource @default(WEB_FORM)
-  status    ApplicantStatus @default(APPLIED)
-
-  // Terms agreed at offer time. These carry straight onto the first payslip,
-  // so the offer letter and the payslip can never disagree.
-  offeredBasic            Float?    @map("offered_basic")
-  offeredHra              Float?    @map("offered_hra")
-  offeredSpecialAllowance Float?    @map("offered_special_allowance")
-  engagementStartDate     DateTime? @map("engagement_start_date")
-  engagementEndDate       DateTime? @map("engagement_end_date") // internships & contracts
-
-  offerSentAt     DateTime? @map("offer_sent_at")
-  offerRespondedAt DateTime? @map("offer_responded_at")
-  offerDocumentId String?   @unique @map("offer_document_id")
-  offerDocument   Document? @relation(fields: [offerDocumentId], references: [id])
-
-  hiredEmployeeId String? @unique @map("hired_employee_id")
-
-  appliedAt DateTime        @default(now()) @map("applied_at")
-  updatedAt DateTime        @updatedAt @map("updated_at")
-
-  @@index([status, jobId])
-  @@map("applicants")
-}
-
 /// An employee's agreed salary split, with history.
 /// Payroll reads whichever row was in force during the pay period, so a raise
 /// never silently rewrites what last month's payslip said.
@@ -752,7 +790,6 @@ model Document {
   employee   Employee? @relation(name: "EmployeeIdentityDocuments", fields: [employeeId], references: [id])
 
   payroll         Payroll?
-  applicant       Applicant?
   offerLetterFor  Employee? @relation(name: "EmployeeOfferLetter")
 
   @@index([ownerUserId, kind])
@@ -812,10 +849,65 @@ model Holiday {
   id       String   @id @default(uuid())
   date     DateTime @unique
   name     String
+  description String? @map("description")
   isOptional Boolean @default(false) @map("is_optional")
+
+  // Nullable, mirrors ProjectHoliday.createdByEmployeeId — degrades
+  // gracefully if the declaring account somehow has no linked Employee.
+  createdByEmployeeId String?   @map("created_by_employee_id")
+  createdBy           Employee? @relation(fields: [createdByEmployeeId], references: [id])
 
   @@index([date])
   @@map("holidays")
+}
+
+/// Company-wide announcements — distinct from ProjectAnnouncement, which
+/// stays project-scoped. Visible to every account; only a "management"
+/// account (any role other than EMPLOYEE) may create one. isBroadcast=true
+/// means everyone sees it; false means only the AnnouncementRecipient rows
+/// do — supports true multi-recipient targeting (several specific accounts
+/// in one message), not just one person.
+model Announcement {
+  id             String                   @id @default(uuid())
+  authorUserId   String                   @map("author_user_id")
+  author         User                     @relation("AnnouncementAuthor", fields: [authorUserId], references: [id])
+  title          String
+  body           String
+  fileUrl        String?                  @map("file_url")
+  fileName       String?                  @map("file_name")
+  isBroadcast    Boolean                  @default(true) @map("is_broadcast")
+  recipients     AnnouncementRecipient[]
+  createdAt      DateTime                 @default(now()) @map("created_at")
+
+  @@map("announcements")
+}
+
+model AnnouncementRecipient {
+  id             String       @id @default(uuid())
+  announcementId String       @map("announcement_id")
+  announcement   Announcement @relation(fields: [announcementId], references: [id])
+  userId         String       @map("user_id")
+  user           User         @relation("AnnouncementRecipientUser", fields: [userId], references: [id])
+  createdAt      DateTime     @default(now()) @map("created_at")
+
+  @@unique([announcementId, userId])
+  @@map("announcement_recipients")
+}
+
+/// An employee-initiated "I forgot my password" request, queued for HR/Admin
+/// to review. Never auto-resets anything — resolving one is just a marker
+/// that HR handled it (via the existing manual reset-password flow).
+model PasswordResetRequest {
+  id             String    @id @default(uuid())
+  userId         String    @map("user_id")
+  user           User      @relation("PasswordResetRequests", fields: [userId], references: [id])
+  status         String    @default("PENDING") // PENDING | RESOLVED
+  resolvedById   String?   @map("resolved_by_id")
+  resolvedBy     User?     @relation("PasswordResetResolvedBy", fields: [resolvedById], references: [id])
+  resolvedAt     DateTime? @map("resolved_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+
+  @@map("password_reset_requests")
 }
 
 model LedgerEntry {
@@ -895,7 +987,31 @@ model TimeLog {
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
+  // One entry per person per project per day — a member can only ever have
+  // a single timesheet row for "today," found by upsert, never picked by
+  // id from the client. Enforced at the DB level too, not just in code.
+  @@unique([employeeId, projectId, date])
   @@map("time_logs")
+}
+
+// A date HR/Admin/PM has declared a non-working day for this specific
+// project — the timesheet "Absent" check skips it, same as it already
+// skips Saturdays/Sundays. Deliberately project-scoped, not a company-wide
+// holiday calendar: a Project Manager can only ever speak for their own
+// project, and building a real shared holiday calendar is a separate,
+// bigger feature nobody has asked for yet.
+model ProjectHoliday {
+  id                  String   @id @default(uuid())
+  projectId           String   @map("project_id")
+  project             Project  @relation(fields: [projectId], references: [id])
+  date                DateTime
+  title               String
+  createdByEmployeeId String   @map("created_by_employee_id")
+  createdBy           Employee @relation(fields: [createdByEmployeeId], references: [id])
+  createdAt           DateTime @default(now()) @map("created_at")
+
+  @@unique([projectId, date])
+  @@map("project_holidays")
 }
 
 // ==========================================
@@ -908,9 +1024,15 @@ model AuditLog {
   user      User?    @relation(fields: [userId], references: [id])
   action    String
   module    String
+  // The id of the record the action touched, e.g. an Employee or Payroll
+  // row — without this, an audit row says "someone edited HR" but not who
+  // or what, which isn't useful for reconstructing what actually happened.
+  entityId  String?  @map("entity_id")
+  ipAddress String?  @map("ip_address")
   details   String?
   timestamp DateTime @default(now())
 
+  @@index([module, timestamp])
   @@map("audit_logs")
 }
 
@@ -921,6 +1043,10 @@ model Notification {
   title     String
   message   String
   type      String   @default("INFO") // INFO, WARNING, SUCCESS, ALERT
+  // Where clicking this notification should take you — e.g. the
+  // announcements feed, or the specific project a deadline reminder is
+  // about. Null for older rows created before this existed.
+  link      String?
   isRead    Boolean  @default(false) @map("is_read")
   createdAt DateTime @default(now()) @map("created_at")
 
@@ -940,12 +1066,6 @@ enum WorkMode {
   ONSITE
   REMOTE
   HYBRID
-}
-
-enum ApplicantSource {
-  WEB_FORM
-  EMAIL
-  REFERRAL
 }
 
 enum DocumentKind {
@@ -1113,23 +1233,6 @@ enum PayrollStatus {
   PENDING_APPROVAL
   APPROVED
   PAID
-  REJECTED
-}
-
-enum JobStatus {
-  OPEN
-  CLOSED
-  DRAFT
-}
-
-enum ApplicantStatus {
-  APPLIED
-  SCREENING
-  INTERVIEWING
-  OFFERED
-  OFFER_ACCEPTED
-  OFFER_DECLINED
-  HIRED
   REJECTED
 }
 

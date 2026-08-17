@@ -1,9 +1,8 @@
 import { Module } from '@nestjs/common';
-import { APP_GUARD } from '@nestjs/core';
+import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { PrismaModule } from './prisma/prisma.module';
-import { UsersModule } from './users/users.module';
 import { AuthModule } from './auth/auth.module';
 import { HrmModule } from './hrm/hrm.module';
 import { CrmModule } from './crm/crm.module';
@@ -18,11 +17,13 @@ import { SearchModule } from './search/search.module';
 import { UploadModule } from './upload/upload.module';
 import { JwtAuthGuard } from './auth/jwt-auth.guard';
 import { RolesGuard } from './auth/roles.guard';
+import { AuditModule } from './audit/audit.module';
+import { AuditInterceptor } from './audit/audit.interceptor';
+import { AnnouncementsModule } from './announcements/announcements.module';
 
 @Module({
   imports: [
     PrismaModule,
-    UsersModule,
     AuthModule,
     HrmModule,
     CrmModule,
@@ -35,6 +36,8 @@ import { RolesGuard } from './auth/roles.guard';
     NotificationModule,
     SearchModule,
     UploadModule,
+    AuditModule,
+    AnnouncementsModule,
   ],
   controllers: [AppController],
   providers: [
@@ -48,6 +51,12 @@ import { RolesGuard } from './auth/roles.guard';
     {
       provide: APP_GUARD,
       useClass: RolesGuard,
+    },
+    // Global audit trail — every successful authenticated mutation gets a
+    // row, app-wide, without each controller having to remember to add one.
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: AuditInterceptor,
     },
   ],
 })

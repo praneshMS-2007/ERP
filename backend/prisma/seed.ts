@@ -1,4 +1,4 @@
-import { PrismaClient, EmpType, EmpStatus, AttendanceStatus, LeaveType, LeaveStatus, LeadStatus, TicketStatus, TicketPriority, ProductStatus, ProjectStatus, Priority, InvoiceStatus, ExpenseCategory, LedgerType, JobStatus, POStatus } from '@prisma/client';
+import { PrismaClient, EmpType, EmpStatus, AttendanceStatus, LeaveType, LeaveStatus, LeadStatus, TicketStatus, TicketPriority, ProductStatus, ProjectStatus, Priority, InvoiceStatus, ExpenseCategory, LedgerType, POStatus } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
@@ -9,7 +9,7 @@ async function main() {
   // ========== 1. ROLES & PERMISSIONS ==========
   const roles = [
     { name: 'SUPER_ADMIN', description: 'Full system access across all enterprise modules' },
-    { name: 'HR_MANAGER', description: 'Human Resources, Payroll, Recruitment, and Employee Portal' },
+    { name: 'HR_MANAGER', description: 'Human Resources, Payroll, and Employee Portal' },
     { name: 'FINANCE_MANAGER', description: 'General Ledger, Invoices, Expenses, and Tax records' },
     { name: 'SALES_MANAGER', description: 'CRM Pipeline, Customer Directory, and Support Tickets' },
     { name: 'INVENTORY_MANAGER', description: 'Product Catalog, Warehouses, Sales & Purchase Orders' },
@@ -38,7 +38,12 @@ async function main() {
       { module: 'ADMIN', action: 'ALL' },
     ],
     HR_MANAGER: [
-      { module: 'HR', action: 'ALL' }, { module: 'PROJECTS', action: 'READ' }, { module: 'ANALYTICS', action: 'READ' },
+      // PROJECTS: ALL — HR is the only role (besides Super Admin) allowed to
+      // create/delete a project or change its staffing, per the project
+      // staffing feature; a narrower READ grant here wouldn't let them do
+      // that even though projects.service.ts's own role checks are the real
+      // gate for those specific actions.
+      { module: 'HR', action: 'ALL' }, { module: 'PROJECTS', action: 'ALL' }, { module: 'ANALYTICS', action: 'READ' },
     ],
     FINANCE_MANAGER: [
       { module: 'FINANCE', action: 'ALL' }, { module: 'ANALYTICS', action: 'ALL' }, { module: 'HR', action: 'READ' },
@@ -52,10 +57,24 @@ async function main() {
     PROJECT_MANAGER: [
       { module: 'PROJECTS', action: 'ALL' }, { module: 'HR', action: 'READ' }, { module: 'ANALYTICS', action: 'READ' },
     ],
+    // Same as PROJECT_MANAGER but without DELETE: explicit READ + WRITE
+    // instead of ALL, since ALL would also satisfy a DELETE check.
+    TEAM_LEAD: [
+      { module: 'PROJECTS', action: 'READ' }, { module: 'PROJECTS', action: 'WRITE' },
+      { module: 'HR', action: 'READ' }, { module: 'ANALYTICS', action: 'READ' },
+    ],
     EMPLOYEE: [
       { module: 'HR', action: 'READ' }, { module: 'PROJECTS', action: 'READ' },
     ],
   };
+
+  // Every role gets SELF:ALL — managing your own leave/attendance/profile
+  // isn't a departmental permission, it's a baseline everyone has. Added
+  // here rather than duplicated in each array above so it can't be
+  // forgotten on the next role that gets added.
+  for (const perms of Object.values(permissionMap)) {
+    perms.push({ module: 'SELF', action: 'ALL' });
+  }
 
   for (const [roleName, perms] of Object.entries(permissionMap)) {
     const roleId = createdRoles[roleName];
@@ -80,6 +99,7 @@ async function main() {
     { email: 'crm@shuroq.com', role: 'SALES_MANAGER' },
     { email: 'inventory@shuroq.com', role: 'INVENTORY_MANAGER' },
     { email: 'project@shuroq.com', role: 'PROJECT_MANAGER' },
+    { email: 'teamlead@shuroq.com', role: 'TEAM_LEAD' },
     { email: 'employee@shuroq.com', role: 'EMPLOYEE' },
   ];
 
@@ -167,16 +187,7 @@ async function main() {
     });
   }
 
-  // Seed Job Postings
-  await prisma.jobPosting.createMany({
-    data: [
-      { title: 'Senior React Developer', department: 'Engineering', location: 'Remote', description: 'Building enterprise ERP frontend modules', priority: Priority.HIGH, status: JobStatus.OPEN },
-      { title: 'DevOps Engineer', department: 'Engineering', location: 'Dubai, UAE', description: 'CI/CD pipelines and cloud infrastructure', priority: Priority.HIGH, status: JobStatus.OPEN },
-    ],
-    skipDuplicates: true,
-  });
-
-  console.log('  ✓ HRM Employees, Attendance, Leaves, Performance, and Jobs seeded');
+  console.log('  ✓ HRM Employees, Attendance, Leaves, and Performance seeded');
 
   // ========== 4. CRM MODULE DATA ==========
   const customers = [

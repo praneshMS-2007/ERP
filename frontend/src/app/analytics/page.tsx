@@ -316,7 +316,7 @@ export default function AnalyticsPage() {
       {activeTab === 'hr' && (
         <div className="card" style={{ marginBottom: '24px', textAlign: 'center', padding: '48px' }}>
           <h2 style={{ fontSize: '20px', fontWeight: 700, marginBottom: '8px' }}>Human Resources Metrics</h2>
-          <p style={{ color: 'var(--color-text-muted)' }}>Analysis of recruitment funnels, timesheet compliance, and payroll trends will appear here.</p>
+          <p style={{ color: 'var(--color-text-muted)' }}>Analysis of timesheet compliance and payroll trends will appear here.</p>
         </div>
       )}
       

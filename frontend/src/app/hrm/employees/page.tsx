@@ -3,15 +3,22 @@
 import { useEffect, useState } from 'react';
 import {
   Users, UserPlus, MoreVertical, ChevronLeft, ChevronRight,
-  Trash2, Edit, Search,
+  Trash2, Edit, Search, Eye, EyeOff,
 } from 'lucide-react';
 import { hrmApi, exportApi, API_ORIGIN } from '../../../services/api';
 import ExportButton from '../../../components/ExportButton';
 import Modal, { FormField } from '../../../components/Modal';
 import EmployeeDetailModal from '../../../components/modals/EmployeeDetailModal';
-import CredentialsPanel from '../../../components/modals/CredentialsPanel';
+import { useAuth } from '../../../context/AuthContext';
 
 export default function EmployeeDirectory() {
+  const { hasPermission, user } = useAuth();
+  const isSuperAdmin = user?.role === 'SUPER_ADMIN';
+  // Create/edit/remove all hit HR:WRITE server-side (only SUPER_ADMIN/
+  // HR_MANAGER hold it) — the page used to render these buttons for every
+  // logged-in user regardless of role, so a plain EMPLOYEE saw "Add
+  // Employee" and a Remove option that would only fail once clicked.
+  const canManageEmployees = hasPermission('HR', 'WRITE');
   const [employees, setEmployees] = useState<any[]>([]);
   const [attendance, setAttendance] = useState<any[]>([]);
   const [activeTab, setActiveTab] = useState<'ACTIVE' | 'FORMER'>('ACTIVE');
@@ -33,15 +40,27 @@ export default function EmployeeDirectory() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
+  // Management Account vs Employee Account — every Employee Account gets the
+  // same uniform EMPLOYEE-tier access; a Management Account is the only way
+  // to grant one of the elevated system roles (Super Admin only, enforced
+  // server-side too). Project Manager is deliberately not selectable here —
+  // that stays project-scoped, assigned only via project staffing.
+  const [accountKind, setAccountKind] = useState<'EMPLOYEE' | 'MANAGEMENT'>('EMPLOYEE');
   const [form, setForm] = useState({
     firstName: '', lastName: '', personalEmail: '', contact: '',
-    departmentId: '', designationId: '', empType: 'FULL_TIME', joinDate: '',
+    department: '', designation: '', empType: 'FULL_TIME', joinDate: '', roleName: '',
+    username: '', password: '',
   });
+  const [showPassword, setShowPassword] = useState(false);
+  const MANAGEMENT_ROLES = [
+    { label: 'Super Admin', value: 'SUPER_ADMIN' },
+    { label: 'HR Manager', value: 'HR_MANAGER' },
+    { label: 'Finance Manager', value: 'FINANCE_MANAGER' },
+    { label: 'Sales Manager', value: 'SALES_MANAGER' },
+    { label: 'Inventory Manager', value: 'INVENTORY_MANAGER' },
+  ];
   const [departments, setDepartments] = useState<any[]>([]);
   const [designations, setDesignations] = useState<any[]>([]);
-
-  // Credentials, shown exactly once right after an account is created
-  const [newCredentials, setNewCredentials] = useState<{ name: string; username: string; password: string } | null>(null);
 
   // Remove Employee — asks for a real last working day rather than assuming
   // "today," since offboarding is often processed after the fact.
@@ -132,20 +151,34 @@ export default function EmployeeDirectory() {
   // so surface whatever it says instead of just giving up.
   async function handleAddEmployee() {
     if (!form.firstName || !form.lastName) return;
+    if (!form.department.trim() || !form.designation.trim()) {
+      setAddError('Department and designation are both required.');
+      return;
+    }
+    if (accountKind === 'MANAGEMENT' && !form.roleName) {
+      setAddError('Choose which management role this account should have.');
+      return;
+    }
+    if (!form.username.trim()) {
+      setAddError('Choose a username for this account.');
+      return;
+    }
+    if (form.password.length < 8) {
+      setAddError('Password must be at least 8 characters long.');
+      return;
+    }
     setAddError(null);
     setAdding(true);
     try {
-      const created = await hrmApi.createEmployee({ ...form });
+      await hrmApi.createEmployee({
+        ...form,
+        username: form.username.trim(),
+        roleName: accountKind === 'MANAGEMENT' ? form.roleName : undefined,
+      });
       setShowAddModal(false);
-      setForm({ firstName: '', lastName: '', personalEmail: '', contact: '', departmentId: '', designationId: '', empType: 'FULL_TIME', joinDate: '' });
+      setAccountKind('EMPLOYEE');
+      setForm({ firstName: '', lastName: '', personalEmail: '', contact: '', department: '', designation: '', empType: 'FULL_TIME', joinDate: '', roleName: '', username: '', password: '' });
       fetchAll();
-      if (created?.credentials) {
-        setNewCredentials({
-          name: `${created.firstName} ${created.lastName}`,
-          username: created.credentials.username,
-          password: created.credentials.temporaryPassword,
-        });
-      }
     } catch (e: any) {
       setAddError(e.message || 'Could not add this employee.');
     } finally {
@@ -190,9 +223,11 @@ export default function EmployeeDirectory() {
         </div>
         <div className="page-header-actions">
           <ExportButton onExport={(format) => exportApi.exportEmployees(format)} label="Export" />
-          <button className="btn btn-primary" onClick={() => setShowAddModal(true)}>
-            <UserPlus size={16} /> Add Employee
-          </button>
+          {canManageEmployees && (
+            <button className="btn btn-primary" onClick={() => setShowAddModal(true)}>
+              <UserPlus size={16} /> Add Employee
+            </button>
+          )}
         </div>
       </div>
 
@@ -317,24 +352,30 @@ export default function EmployeeDirectory() {
                     </td>
                   )}
                   <td style={{ position: 'relative' }} onClick={(e) => e.stopPropagation()}>
-                    <button onClick={() => setActionMenuId(actionMenuId === emp.id ? null : emp.id)} style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--color-text-muted)' }}>
-                      <MoreVertical size={16} />
-                    </button>
-                    {actionMenuId === emp.id && (
-                      <div style={{
-                        position: 'absolute', right: 0, top: '100%', zIndex: 50,
-                        background: 'var(--color-card)', border: '1px solid var(--color-border)', borderRadius: '8px',
-                        boxShadow: '0 4px 12px rgba(0,0,0,0.15)', padding: '4px', minWidth: '120px',
-                      }}>
-                        <button onClick={() => { setActionMenuId(null); setDetailId(emp.id); }} style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%', padding: '8px 12px', border: 'none', background: 'transparent', cursor: 'pointer', borderRadius: '6px', fontSize: '13px', color: 'var(--color-text)' }}>
-                          <Edit size={14} /> Edit
+                    {canManageEmployees ? (
+                      <>
+                        <button onClick={() => setActionMenuId(actionMenuId === emp.id ? null : emp.id)} style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--color-text-muted)' }}>
+                          <MoreVertical size={16} />
                         </button>
-                        {activeTab === 'ACTIVE' && (
-                          <button onClick={() => handleRemove(emp.id, `${emp.firstName} ${emp.lastName}`)} style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%', padding: '8px 12px', border: 'none', background: 'transparent', cursor: 'pointer', borderRadius: '6px', fontSize: '13px', color: '#dc2626' }}>
-                            <Trash2 size={14} /> Remove
-                          </button>
+                        {actionMenuId === emp.id && (
+                          <div style={{
+                            position: 'absolute', right: 0, top: '100%', zIndex: 50,
+                            background: 'var(--color-card)', border: '1px solid var(--color-border)', borderRadius: '8px',
+                            boxShadow: '0 4px 12px rgba(0,0,0,0.15)', padding: '4px', minWidth: '120px',
+                          }}>
+                            <button onClick={() => { setActionMenuId(null); setDetailId(emp.id); }} style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%', padding: '8px 12px', border: 'none', background: 'transparent', cursor: 'pointer', borderRadius: '6px', fontSize: '13px', color: 'var(--color-text)' }}>
+                              <Edit size={14} /> Edit
+                            </button>
+                            {activeTab === 'ACTIVE' && (
+                              <button onClick={() => handleRemove(emp.id, `${emp.firstName} ${emp.lastName}`)} style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%', padding: '8px 12px', border: 'none', background: 'transparent', cursor: 'pointer', borderRadius: '6px', fontSize: '13px', color: '#dc2626' }}>
+                                <Trash2 size={14} /> Remove
+                              </button>
+                            )}
+                          </div>
                         )}
-                      </div>
+                      </>
+                    ) : (
+                      <span style={{ fontSize: '12px', color: 'var(--color-text-muted)' }}>View only</span>
                     )}
                   </td>
                 </tr>
@@ -358,26 +399,86 @@ export default function EmployeeDirectory() {
       {/* ADD EMPLOYEE MODAL — this also provisions the ERP login, referencing
           the standard onboarding fields until the team lead's exact form
           arrives (see the "type" column below, already wired to empType). */}
-      <Modal isOpen={showAddModal} onClose={() => { setShowAddModal(false); setAddError(null); }} title="Add New Employee">
+      <Modal isOpen={showAddModal} onClose={() => { setShowAddModal(false); setAddError(null); setAccountKind('EMPLOYEE'); }} title="Add New Employee">
         {addError && (
           <div style={{ padding: '10px 14px', marginBottom: 14, background: '#fef2f2', border: '1px solid #fecaca', color: '#dc2626', borderRadius: 8, fontSize: 13, fontWeight: 600 }}>
             {addError}
           </div>
         )}
+
+        {/* Account kind — stacked vertically, Management Account only offered
+            to a Super Admin (also enforced server-side). Everything below
+            this is the same shared form either way; only the role differs. */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '18px' }}>
+          {isSuperAdmin && (
+            <button
+              type="button"
+              onClick={() => setAccountKind('MANAGEMENT')}
+              style={{
+                textAlign: 'left', padding: '12px 14px', borderRadius: '10px', cursor: 'pointer',
+                border: accountKind === 'MANAGEMENT' ? '2px solid #2563eb' : '1px solid var(--color-border)',
+                background: accountKind === 'MANAGEMENT' ? '#eff6ff' : 'var(--color-background)',
+              }}
+            >
+              <div style={{ fontSize: '13.5px', fontWeight: 700, color: accountKind === 'MANAGEMENT' ? '#2563eb' : 'var(--color-text)' }}>Management Account</div>
+              <div style={{ fontSize: '12px', color: 'var(--color-text-muted)', marginTop: '2px' }}>
+                Grant one of the elevated system roles — Super Admin, HR, Finance, Sales, or Inventory Manager.
+              </div>
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => setAccountKind('EMPLOYEE')}
+            style={{
+              textAlign: 'left', padding: '12px 14px', borderRadius: '10px', cursor: 'pointer',
+              border: accountKind === 'EMPLOYEE' ? '2px solid #2563eb' : '1px solid var(--color-border)',
+              background: accountKind === 'EMPLOYEE' ? '#eff6ff' : 'var(--color-background)',
+            }}
+          >
+            <div style={{ fontSize: '13.5px', fontWeight: 700, color: accountKind === 'EMPLOYEE' ? '#2563eb' : 'var(--color-text)' }}>Employee Account</div>
+            <div style={{ fontSize: '12px', color: 'var(--color-text-muted)', marginTop: '2px' }}>
+              Standard access — every employee gets the same permissions here. (A person only ever gains
+              Project Manager controls by being staffed as one on a specific project.)
+            </div>
+          </button>
+        </div>
+
+        {accountKind === 'MANAGEMENT' && (
+          <FormField label="Management Role" type="select" value={form.roleName} onChange={(v) => setForm({ ...form, roleName: v })}
+            required options={MANAGEMENT_ROLES} />
+        )}
+
         <FormField label="First Name" value={form.firstName} onChange={(v) => setForm({ ...form, firstName: v })} required placeholder="e.g. John" />
         <FormField label="Last Name" value={form.lastName} onChange={(v) => setForm({ ...form, lastName: v })} required placeholder="e.g. Smith" />
         <FormField label="Email" type="email" value={form.personalEmail} onChange={(v) => setForm({ ...form, personalEmail: v })} required placeholder="the address they applied from" />
         <FormField label="Contact" value={form.contact} onChange={(v) => setForm({ ...form, contact: v })} placeholder="+1 555-0123" />
         <FormField label="Date of Joining" type="date" value={form.joinDate} onChange={(v) => setForm({ ...form, joinDate: v })} />
-        <FormField label="Department" type="select" value={form.departmentId} onChange={(v) => setForm({ ...form, departmentId: v })}
-          options={departments.map((d: any) => ({ label: d.name, value: d.id }))} />
-        <FormField label="Designation" type="select" value={form.designationId} onChange={(v) => setForm({ ...form, designationId: v })}
-          options={designations.map((d: any) => ({ label: d.title, value: d.id }))} />
+        <FormField label="Department" value={form.department} onChange={(v) => setForm({ ...form, department: v })} required placeholder="e.g. Engineering" />
+        <FormField label="Designation" value={form.designation} onChange={(v) => setForm({ ...form, designation: v })} required placeholder="e.g. Full Stack Developer" />
         <FormField label="Employment Type" type="select" value={form.empType} onChange={(v) => setForm({ ...form, empType: v })}
           options={[{ label: 'Full Time', value: 'FULL_TIME' }, { label: 'Part Time', value: 'PART_TIME' }, { label: 'Contract', value: 'CONTRACT' }, { label: 'Intern', value: 'INTERN' }]} />
-        <p style={{ fontSize: 12.5, color: 'var(--color-text-muted)', margin: '2px 0 14px' }}>
-          An ERP username and password are generated automatically once this is saved.
-        </p>
+
+        <div style={{ borderTop: '1px solid var(--color-border)', margin: '16px 0', paddingTop: '16px' }}>
+          <p style={{ fontSize: 12.5, color: 'var(--color-text-muted)', margin: '0 0 12px' }}>
+            ERP login — set this person's username and password now; nothing is generated automatically.
+          </p>
+          <FormField label="Username" value={form.username} onChange={(v) => setForm({ ...form, username: v })} required placeholder="e.g. jane.doe" />
+          <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px', color: 'var(--color-text-secondary)' }}>
+            Password <span style={{ color: '#dc2626' }}>*</span>
+          </label>
+          <div style={{ position: 'relative', marginBottom: '16px' }}>
+            <input
+              type={showPassword ? 'text' : 'password'} value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })}
+              placeholder="At least 8 characters" autoComplete="new-password"
+              style={{ width: '100%', padding: '10px 40px 10px 14px', borderRadius: '10px', border: '1px solid var(--color-border)', background: 'var(--color-background)', fontSize: '14px', color: 'var(--color-text)', outline: 'none' }}
+            />
+            <button type="button" onClick={() => setShowPassword((s) => !s)}
+              style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', border: 'none', background: 'none', cursor: 'pointer', color: 'var(--color-text-muted)', display: 'flex' }}>
+              {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+            </button>
+          </div>
+        </div>
+
         <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', marginTop: '8px' }}>
           <button className="btn btn-secondary" onClick={() => { setShowAddModal(false); setAddError(null); }}>Cancel</button>
           <button className="btn btn-primary" onClick={handleAddEmployee} disabled={adding}>
@@ -385,17 +486,6 @@ export default function EmployeeDirectory() {
           </button>
         </div>
       </Modal>
-
-      {/* CREDENTIALS — shown exactly once, right after creation */}
-      {newCredentials && (
-        <CredentialsPanel
-          isOpen={true}
-          onClose={() => setNewCredentials(null)}
-          personName={newCredentials.name}
-          username={newCredentials.username}
-          password={newCredentials.password}
-        />
-      )}
 
       {/* REMOVE EMPLOYEE — asks for a real last working day */}
       <Modal isOpen={!!removeTarget} onClose={() => setRemoveTarget(null)} title={`Remove ${removeTarget?.name ?? ''}`} width="440px">

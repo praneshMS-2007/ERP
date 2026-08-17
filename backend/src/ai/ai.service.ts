@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { AuthenticatedUser, hasModuleAccess } from '../auth/permission.util';
 
 @Injectable()
 export class AiService {
@@ -7,44 +8,75 @@ export class AiService {
 
   constructor(private prisma: PrismaService) {}
 
-  async chatCompletion(messages: any[]) {
-    const groqApiKey = process.env.GROQ_API_KEY;
+  /**
+   * The RAG context is assembled per-caller, not once for everyone. Before
+   * this, an EMPLOYEE account with no FINANCE/INVENTORY/CRM permission could
+   * still ask the assistant for revenue or stock levels and get a real
+   * answer, because the same prompt (built with every module's data) went
+   * out regardless of who was asking. Filtering the model's *answer* isn't
+   * a control — a differently-phrased question talks it out of a refusal.
+   * The only real fix is upstream: a restricted number is never in the
+   * prompt to begin with.
+   */
+  private async buildScopedContext(user?: AuthenticatedUser) {
+    const lines: string[] = [];
 
-    // RAG Context Retrieval: Fetch live state from PostgreSQL
-    const [
-      activeEmpCount,
-      activeProjectsCount,
-      delayedProjectsCount,
-      openLeadsCount,
-      lowStockProducts,
-      incomeAgg,
-    ] = await Promise.all([
-      this.prisma.employee.count({ where: { status: { not: 'INACTIVE' } } }),
-      this.prisma.project.count({ where: { status: 'IN_PROGRESS' } }),
-      this.prisma.project.count({ where: { status: 'ON_HOLD' } }),
-      this.prisma.lead.count({ where: { status: { not: 'CONVERTED' } } }),
-      this.prisma.product.findMany({
+    if (hasModuleAccess(user, 'HR', 'READ')) {
+      const activeEmpCount = await this.prisma.employee.count({ where: { status: { not: 'INACTIVE' } } });
+      lines.push(`- Active Employees: ${activeEmpCount}`);
+    }
+
+    if (hasModuleAccess(user, 'PROJECTS', 'READ')) {
+      const [activeProjectsCount, delayedProjectsCount] = await Promise.all([
+        this.prisma.project.count({ where: { status: 'IN_PROGRESS' } }),
+        this.prisma.project.count({ where: { status: 'ON_HOLD' } }),
+      ]);
+      lines.push(`- Active Projects: ${activeProjectsCount} (Delayed/On Hold: ${delayedProjectsCount})`);
+    }
+
+    if (hasModuleAccess(user, 'CRM', 'READ')) {
+      const openLeadsCount = await this.prisma.lead.count({ where: { status: { not: 'CONVERTED' } } });
+      lines.push(`- Open CRM Leads: ${openLeadsCount}`);
+    }
+
+    if (hasModuleAccess(user, 'FINANCE', 'READ')) {
+      const incomeAgg = await this.prisma.income.aggregate({ _sum: { amount: true } });
+      lines.push(`- YTD Revenue: $${(incomeAgg._sum.amount || 0).toLocaleString()}`);
+    }
+
+    if (hasModuleAccess(user, 'INVENTORY', 'READ')) {
+      const lowStockProducts = await this.prisma.product.findMany({
         where: { stockLevel: { lte: 20 } },
-        select: { name: true, sku: true, stockLevel: true, minStockLevel: true },
+        select: { name: true, stockLevel: true },
         take: 5,
-      }),
-      this.prisma.income.aggregate({ _sum: { amount: true } }),
-    ]);
+      });
+      const summary = lowStockProducts.length > 0
+        ? lowStockProducts.map((p) => `${p.name} (${p.stockLevel} units)`).join(', ')
+        : 'None';
+      lines.push(`- Low Stock Items: ${summary}`);
+    }
 
-    const totalRevenue = incomeAgg._sum.amount || 14500;
-    const lowStockSummary = lowStockProducts.length > 0
-      ? lowStockProducts.map(p => `${p.name} (${p.stockLevel} units)`).join(', ')
-      : 'None';
+    return lines;
+  }
 
-    const ragSystemPrompt = `You are the Enterprise ERP AI Operations Copilot.
-You have REAL-TIME direct access to live PostgreSQL enterprise metrics:
-- Active Employees: ${activeEmpCount}
-- Active Projects: ${activeProjectsCount} (Delayed/On Hold: ${delayedProjectsCount})
-- Open CRM Leads: ${openLeadsCount}
-- YTD Revenue: $${totalRevenue.toLocaleString()}
-- Low Stock Items: ${lowStockSummary}
+  async chatCompletion(messages: any[], user?: AuthenticatedUser) {
+    const groqApiKey = process.env.GROQ_API_KEY;
+    const contextLines = await this.buildScopedContext(user);
 
-Answer user questions accurately using these exact live numbers. Be professional, concise, and executive-ready.`;
+    const ragSystemPrompt = contextLines.length > 0
+      ? `You are the Enterprise ERP AI Operations Copilot.
+You have REAL-TIME direct access to live PostgreSQL enterprise metrics — but ONLY the ones listed below.
+This list is already filtered to what this specific user's role is permitted to see:
+${contextLines.join('\n')}
+
+Answer using only these exact live numbers. If asked about a metric not listed above (for example
+revenue, salary, or stock levels when those aren't in your list), say plainly that it isn't available
+to their role and suggest they ask someone with access — never guess, estimate, or infer a number for
+data you were not given.`
+      : `You are the Enterprise ERP AI Operations Copilot. This user's role does not currently grant
+access to any live enterprise metrics. Do not state or estimate any company figures — explain that
+data access depends on their role's permissions and suggest they contact an administrator if they
+believe this is wrong.`;
 
     if (groqApiKey) {
       try {
@@ -72,18 +104,24 @@ Answer user questions accurately using these exact live numbers. Be professional
       }
     }
 
-    // Dynamic RAG Fallback
+    // Fallback used when Groq is unavailable — still governed by the same
+    // per-caller scoping, not a second unfiltered path back to the data.
     const lastUserMessage = messages && messages.length > 0 ? messages[messages.length - 1]?.content : '';
-    let responseText = `I am your Enterprise ERP AI Copilot. Live DB state: ${activeEmpCount} employees, ${activeProjectsCount} active projects, $${totalRevenue.toLocaleString()} revenue.`;
+    const topicModule =
+      /employee|joined|staff/i.test(lastUserMessage) ? 'HR' :
+      /stock|inventory|product/i.test(lastUserMessage) ? 'INVENTORY' :
+      /project|delayed/i.test(lastUserMessage) ? 'PROJECTS' :
+      /sales|revenue|deal|lead/i.test(lastUserMessage) ? 'CRM' :
+      /revenue|finance|income/i.test(lastUserMessage) ? 'FINANCE' :
+      null;
 
-    if (/employee|joined|staff/i.test(lastUserMessage)) {
-      responseText = `Based on live HR data: We currently have ${activeEmpCount} active employees. 5 employees joined in recent cycles.`;
-    } else if (/stock|inventory|product/i.test(lastUserMessage)) {
-      responseText = `Inventory RAG Alert: ${lowStockProducts.length} products are currently below reorder levels: ${lowStockSummary}.`;
-    } else if (/project|delayed/i.test(lastUserMessage)) {
-      responseText = `Project Management RAG: We have ${activeProjectsCount} active projects. ${delayedProjectsCount} project(s) require attention.`;
-    } else if (/sales|revenue|deal/i.test(lastUserMessage)) {
-      responseText = `Sales & Finance RAG: YTD Revenue stands at $${totalRevenue.toLocaleString()} with ${openLeadsCount} active lead opportunities in the pipeline.`;
+    let responseText: string;
+    if (topicModule && !hasModuleAccess(user, topicModule, 'READ')) {
+      responseText = `That's not something your role has access to. Ask someone with ${topicModule.toLowerCase()} permissions, or check with an administrator if you think this is wrong.`;
+    } else if (contextLines.length > 0) {
+      responseText = `Here's what I can see for your role:\n${contextLines.join('\n')}`;
+    } else {
+      responseText = `Your role doesn't currently have access to any live enterprise metrics I can report on.`;
     }
 
     return {
@@ -119,25 +157,38 @@ Answer user questions accurately using these exact live numbers. Be professional
   }
 
   // AI Feature 3: Employee Performance Insights
-  async getHrInsights() {
-    const activeEmps = await this.prisma.employee.count({ where: { status: { not: 'INACTIVE' } } });
-    const reviews = await this.prisma.performanceReview.findMany({
-      include: { employee: true },
-      orderBy: { rating: 'desc' },
-      take: 3,
-    });
+  /**
+   * Named "top performers" are derived from PerformanceReview.rating — the
+   * same HR-only data as the /hrm/performance-reviews list. Controller gates
+   * this route at HR:READ, which EMPLOYEE holds, so any employee could see
+   * colleagues' review-ranked names through this widget even without access
+   * to the reviews list itself. Withheld here for the same viewers who are
+   * blocked from that list.
+   */
+  async getHrInsights(user?: AuthenticatedUser) {
+    const canViewReviews = user?.role === 'SUPER_ADMIN' || user?.role === 'HR_MANAGER';
 
-    const topPerformers = reviews.map(r => `${r.employee.firstName} ${r.employee.lastName}`).join(', ') || 'Sarah Jenkins, Marcus Thorne, Arthur Vance';
+    const outputs = [
+      'Employee attendance rate is currently 94.2%',
+      'Leave requests increased 12% heading into Q3',
+    ];
+
+    let topPerformers: string | undefined;
+    if (canViewReviews) {
+      const reviews = await this.prisma.performanceReview.findMany({
+        include: { employee: true },
+        orderBy: { rating: 'desc' },
+        take: 3,
+      });
+      topPerformers = reviews.map(r => `${r.employee.firstName} ${r.employee.lastName}`).join(', ') || undefined;
+      if (topPerformers) outputs.push(`Top performing employees: ${topPerformers}`);
+    }
 
     return {
       employeeAttendance: '94.2%',
       leaveRequestsTrend: '+12% month-over-month',
       topPerformers,
-      outputs: [
-        'Employee attendance rate is currently 94.2%',
-        'Leave requests increased 12% heading into Q3',
-        `Top performing employees: ${topPerformers}`,
-      ],
+      outputs,
     };
   }
 

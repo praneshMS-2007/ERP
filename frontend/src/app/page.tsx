@@ -22,8 +22,16 @@ import { BarChart } from '@/components/dashboard/Charts';
 import Link from 'next/link';
 import { analyticsApi, hrmApi, projectApi, inventoryApi, financeApi, exportApi } from '../services/api';
 import ExportButton from '../components/ExportButton';
+import { useAuth } from '../context/AuthContext';
+import EmployeeDashboard from '../components/dashboard/EmployeeDashboard';
 
 export default function DashboardPage() {
+  const { user } = useAuth();
+  if (user?.role === 'EMPLOYEE') return <EmployeeDashboard />;
+  return <ExecutiveDashboard />;
+}
+
+function ExecutiveDashboard() {
   const [kpis, setKpis] = useState({
     totalEmployees: 0,
     activeProjects: 0,

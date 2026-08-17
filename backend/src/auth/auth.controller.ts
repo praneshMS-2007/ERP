@@ -8,16 +8,22 @@ export class AuthController {
 
   @Public()
   @Post('login')
-  login(@Body() body: any) {
-    return this.authService.login(body.email, body.password);
+  login(@Body() body: any, @Request() req: any, @Headers('user-agent') userAgent: string) {
+    return this.authService.login(body.email, body.password, req.ip, userAgent);
+  }
+
+  @Public()
+  @Post('request-password-reset')
+  requestPasswordReset(@Body('identifier') identifier: string) {
+    return this.authService.requestPasswordReset(identifier);
   }
 
   @Public()
   @Post('logout')
-  logout(@Headers('authorization') authHeader: string) {
+  logout(@Headers('authorization') authHeader: string, @Request() req: any) {
     const token = authHeader?.split(' ')[1];
     if (token) {
-      return this.authService.logout(token);
+      return this.authService.logout(token, req.ip);
     }
     return { message: 'Logged out' };
   }
@@ -25,20 +31,6 @@ export class AuthController {
   @Get('me')
   getProfile(@Request() req: any) {
     return this.authService.getProfile(req.user?.sub || req.user?.id);
-  }
-
-  @Put('profile')
-  updateProfile(@Request() req: any, @Body() body: any) {
-    return this.authService.updateProfile(req.user?.sub || req.user?.id, body);
-  }
-
-  @Put('change-password')
-  changePassword(@Request() req: any, @Body() body: any) {
-    return this.authService.changePassword(
-      req.user?.sub || req.user?.id,
-      body.currentPassword,
-      body.newPassword
-    );
   }
 
   @Get('sessions')

@@ -28,8 +28,8 @@ export class HrmController {
 
   @Post('employees')
   @RequirePermission('HR', 'WRITE')
-  createEmployee(@Body() data: Record<string, any>) {
-    return this.hrmService.createEmployee(data);
+  createEmployee(@Body() data: Record<string, any>, @CurrentUser() user: RequestUser) {
+    return this.hrmService.createEmployee(data, user);
   }
 
   @Put('employees/:id')
@@ -78,6 +78,14 @@ export class HrmController {
     return this.hrmService.setAvatar(id, file);
   }
 
+  // HR/Admin's per-employee history drill-down — same calendar engine as
+  // the employee's own /self/attendance/calendar, just for someone else.
+  @Get('employees/:id/attendance/calendar')
+  @RequirePermission('HR', 'WRITE')
+  getEmployeeAttendanceCalendar(@Param('id') id: string, @Query('year') year: string, @Query('month') month: string) {
+    return this.hrmService.getEmployeeAttendanceCalendar(id, parseInt(year, 10), parseInt(month, 10));
+  }
+
   // ========== USER MANAGEMENT ==========
   // Gated on HR:WRITE, same as payroll and salary — only SUPER_ADMIN and
   // HR_MANAGER hold that permission, matching "admin or HR only" exactly.
@@ -90,8 +98,20 @@ export class HrmController {
 
   @Put('users/:id/reset-password')
   @RequirePermission('HR', 'WRITE')
-  resetUserPassword(@Param('id') id: string) {
-    return this.hrmService.resetUserPassword(id);
+  resetUserPassword(@Param('id') id: string, @Body() body: { newPassword: string }) {
+    return this.hrmService.resetUserPassword(id, body.newPassword);
+  }
+
+  @Get('password-reset-requests')
+  @RequirePermission('HR', 'WRITE')
+  getPasswordResetRequests() {
+    return this.hrmService.getPasswordResetRequests();
+  }
+
+  @Put('password-reset-requests/:id/resolve')
+  @RequirePermission('HR', 'WRITE')
+  resolvePasswordResetRequest(@Param('id') id: string, @CurrentUser() user: RequestUser) {
+    return this.hrmService.resolvePasswordResetRequest(id, user);
   }
 
   // ========== ATTENDANCE STATS & TREND (Subpaths placed first for NestJS router precedence) ==========
@@ -119,8 +139,34 @@ export class HrmController {
     return this.hrmService.markAttendance(data);
   }
 
-  @Get('leaves')
+  // ========== COMPANY HOLIDAYS ==========
+  @Get('holidays')
   @RequirePermission('HR', 'READ')
+  getHolidays() {
+    return this.hrmService.getHolidays();
+  }
+
+  @Post('holidays')
+  @RequirePermission('HR', 'WRITE')
+  createHoliday(@Body() body: { date: string; name: string; description?: string }, @CurrentUser() user: RequestUser) {
+    return this.hrmService.createHoliday(body, user);
+  }
+
+  @Delete('holidays/:id')
+  @RequirePermission('HR', 'WRITE')
+  deleteHoliday(@Param('id') id: string) {
+    return this.hrmService.deleteHoliday(id);
+  }
+
+  // HR:WRITE, not READ — deliberately narrower than /hrm/attendance above.
+  // Presence/absence today is normal directory-level visibility (used by
+  // the Employee Directory's "Today" badge for every viewer). A leave
+  // record's *reason* and history is a different kind of information —
+  // this endpoint returned every employee's leave requests, reasons
+  // included, to any plain EMPLOYEE account before this change. An
+  // employee's own leave history is available via /self/leaves instead.
+  @Get('leaves')
+  @RequirePermission('HR', 'WRITE')
   getLeaves(@Query('status') status?: string) {
     return this.hrmService.getLeaves(status);
   }
@@ -138,60 +184,65 @@ export class HrmController {
   }
 
   // ========== PAYROLL ==========
+  // Controller gate is deliberately broad (HR:READ) — the narrower
+  // "HR, Finance or admin only" check lives in the service, since Finance
+  // needs read access here (approves payroll) without holding HR:WRITE.
   @Get('payrolls')
   @RequirePermission('HR', 'READ')
-  getPayrolls() {
-    return this.hrmService.getPayrolls();
+  getPayrolls(@CurrentUser() user: RequestUser) {
+    return this.hrmService.getPayrolls(user);
   }
 
+  // HR:WRITE-gated — only SUPER_ADMIN/HR_MANAGER hold it, which is exactly
+  // "HR prepares" from the locked segregation-of-duties decision. Finance
+  // never holds HR:WRITE, so this alone already keeps Finance from creating
+  // records — see updatePayrollStatus for the other half.
   @Post('payrolls')
   @RequirePermission('HR', 'WRITE')
   createPayroll(@Body() data: Prisma.PayrollUncheckedCreateInput) {
     return this.hrmService.createPayroll(data);
   }
 
+  // Gate deliberately broad (HR:READ) — the real "Finance/Admin only, never
+  // HR" check lives in the service (canApprovePayroll), same pattern as
+  // getPayrolls just above.
   @Put('payrolls/:id/status')
-  @RequirePermission('HR', 'WRITE')
-  updatePayrollStatus(@Param('id') id: string, @Body('status') status: any) {
-    return this.hrmService.updatePayrollStatus(id, status);
-  }
-
-  // ========== RECRUITMENT ==========
-  @Get('jobs')
   @RequirePermission('HR', 'READ')
-  getJobPostings() {
-    return this.hrmService.getJobPostings();
+  updatePayrollStatus(
+    @Param('id') id: string,
+    @Body('status') status: any,
+    @Body('reason') reason: string | undefined,
+    @CurrentUser() user: RequestUser,
+  ) {
+    return this.hrmService.updatePayrollStatus(id, status, reason, user);
   }
 
-  @Post('jobs')
+  // HR-only — the "resubmit" half of the Return to HR loop, and general
+  // record upkeep before Finance has acted on it.
+  @Put('payrolls/:id')
   @RequirePermission('HR', 'WRITE')
-  createJobPosting(@Body() data: Prisma.JobPostingUncheckedCreateInput) {
-    return this.hrmService.createJobPosting(data);
+  updatePayroll(
+    @Param('id') id: string,
+    @Body() data: { payPeriod?: string; baseSalary?: number; bonus?: number; deductions?: number },
+  ) {
+    return this.hrmService.updatePayroll(id, data);
   }
 
-  @Get('applicants')
-  @RequirePermission('HR', 'READ')
-  getApplicants() {
-    return this.hrmService.getApplicants();
-  }
-
-  @Post('applicants')
+  // HR-only — matches createPayroll's gate; deleting is just undoing a
+  // create HR hasn't finished with, never available once Finance paid it.
+  @Delete('payrolls/:id')
   @RequirePermission('HR', 'WRITE')
-  createApplicant(@Body() data: Prisma.ApplicantUncheckedCreateInput) {
-    return this.hrmService.createApplicant(data);
-  }
-
-  @Put('applicants/:id/status')
-  @RequirePermission('HR', 'WRITE')
-  updateApplicantStatus(@Param('id') id: string, @Body('status') status: any) {
-    return this.hrmService.updateApplicantStatus(id, status);
+  deletePayroll(@Param('id') id: string) {
+    return this.hrmService.deletePayroll(id);
   }
 
   // ========== PERFORMANCE REVIEWS ==========
+  // Controller gate is broad (HR:READ); the HR-only narrowing (ratings,
+  // written reviews, goals) lives in the service.
   @Get('performance-reviews')
   @RequirePermission('HR', 'READ')
-  getPerformanceReviews() {
-    return this.hrmService.getPerformanceReviews();
+  getPerformanceReviews(@CurrentUser() user: RequestUser) {
+    return this.hrmService.getPerformanceReviews(user);
   }
 
   // ========== IT ACCESS ==========

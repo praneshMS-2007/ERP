@@ -11,6 +11,7 @@ interface Permission {
 interface User {
   id: string;
   email: string | null; // null for ERP-generated accounts with no mailbox yet
+  username: string | null;
   role: string;
   name: string;
   permissions: Permission[];

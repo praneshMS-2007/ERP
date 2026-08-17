@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { Mail, Lock, Eye, EyeOff, ArrowRight, ShieldCheck, BarChart3, Building2, Zap, X } from 'lucide-react';
+import { authApi } from '../../services/api';
 
 const SAVED_CREDS_KEY = 'erp_saved_credentials';
 
@@ -15,6 +16,31 @@ export default function LoginPage() {
   const [rememberMe, setRememberMe] = useState(false);
   const [hasSavedCreds, setHasSavedCreds] = useState(false);
   const { login } = useAuth();
+
+  const [showReset, setShowReset] = useState(false);
+  const [resetIdentifier, setResetIdentifier] = useState('');
+  const [resetMessage, setResetMessage] = useState('');
+  const [resetLoading, setResetLoading] = useState(false);
+
+  async function handleRequestReset() {
+    if (!resetIdentifier.trim()) return;
+    setResetLoading(true);
+    try {
+      const res = await authApi.requestPasswordReset(resetIdentifier.trim());
+      setResetMessage(res.message || 'If that account exists, HR/Admin has been notified to reset the password.');
+    } catch {
+      // Same generic message either way — never confirm/deny which identifiers exist.
+      setResetMessage('If that account exists, HR/Admin has been notified to reset the password.');
+    } finally {
+      setResetLoading(false);
+    }
+  }
+
+  function closeReset() {
+    setShowReset(false);
+    setResetIdentifier('');
+    setResetMessage('');
+  }
 
   // Load saved credentials on mount
   useEffect(() => {
@@ -227,7 +253,7 @@ export default function LoginPage() {
               </label>
               <button
                 type="button"
-                onClick={() => alert('Password reset link sent to corporate email.')}
+                onClick={() => setShowReset(true)}
                 style={{ background: 'none', border: 'none', color: '#2563eb', fontSize: '13px', fontWeight: 600, cursor: 'pointer', padding: 0 }}
               >
                 Forgot password?
@@ -296,6 +322,56 @@ export default function LoginPage() {
         </div>
 
       </div>
+
+      {/* Forgot Password Modal — submits to HR/Admin's inbox; no automatic reset happens */}
+      {showReset && (
+        <div
+          onClick={(e) => { if (e.target === e.currentTarget) closeReset(); }}
+          style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+        >
+          <div style={{ background: '#ffffff', borderRadius: '16px', width: '420px', maxWidth: '92vw', boxShadow: '0 25px 50px rgba(0,0,0,0.25)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 24px', borderBottom: '1px solid #e5e7eb' }}>
+              <h2 style={{ fontSize: '17px', fontWeight: 700, margin: 0, color: '#111827' }}>Reset your password</h2>
+              <button onClick={closeReset} style={{ border: 'none', background: '#f3f4f6', cursor: 'pointer', borderRadius: '8px', padding: '6px', color: '#6b7280', display: 'flex' }}>
+                <X size={16} />
+              </button>
+            </div>
+            <div style={{ padding: '24px' }}>
+              {resetMessage ? (
+                <p style={{ fontSize: '13.5px', color: '#374151', lineHeight: 1.5 }}>{resetMessage}</p>
+              ) : (
+                <>
+                  <p style={{ fontSize: '13px', color: '#6b7280', marginBottom: '16px', lineHeight: 1.5 }}>
+                    Enter your email or username. HR/Admin will see your request and reset the password manually — there's no automatic reset.
+                  </p>
+                  <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: '#4b5563', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '6px' }}>
+                    EMAIL OR USERNAME
+                  </label>
+                  <input
+                    type="text"
+                    value={resetIdentifier}
+                    onChange={(e) => setResetIdentifier(e.target.value)}
+                    placeholder="name@company.com or your.username"
+                    style={{ width: '100%', height: '44px', padding: '0 14px', borderRadius: '8px', border: '1px solid #d1d5db', fontSize: '14px', outline: 'none', color: '#111827' }}
+                  />
+                </>
+              )}
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '20px' }}>
+                {resetMessage ? (
+                  <button onClick={closeReset} style={{ padding: '10px 18px', background: '#2563eb', color: '#fff', border: 'none', borderRadius: '8px', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}>Done</button>
+                ) : (
+                  <>
+                    <button onClick={closeReset} style={{ padding: '10px 18px', background: '#f3f4f6', color: '#374151', border: 'none', borderRadius: '8px', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}>Cancel</button>
+                    <button onClick={handleRequestReset} disabled={resetLoading || !resetIdentifier.trim()} style={{ padding: '10px 18px', background: '#2563eb', color: '#fff', border: 'none', borderRadius: '8px', fontSize: '13px', fontWeight: 600, cursor: 'pointer', opacity: resetLoading || !resetIdentifier.trim() ? 0.6 : 1 }}>
+                      {resetLoading ? 'Submitting…' : 'Submit Request'}
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );

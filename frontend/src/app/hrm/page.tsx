@@ -2,8 +2,8 @@
 
 import { useEffect, useState, useMemo } from 'react';
 import {
-  Users, UserMinus, UserPlus2, Star, TrendingUp, TrendingDown,
-  Briefcase, Calendar, FileText, ChevronLeft, ChevronRight, Download,
+  Users, UserMinus, Star, TrendingUp, TrendingDown,
+  Calendar, ChevronLeft, ChevronRight, Download,
 } from 'lucide-react';
 import { hrmApi, exportApi } from '../../services/api';
 import ExportButton from '../../components/ExportButton';
@@ -12,8 +12,6 @@ export default function HRManagement() {
   // Core data
   const [employees, setEmployees] = useState<any[]>([]);
   const [allLeaves, setAllLeaves] = useState<any[]>([]);
-  const [jobPostings, setJobPostings] = useState<any[]>([]);
-  const [applicants, setApplicants] = useState<any[]>([]);
   const [perfReviews, setPerfReviews] = useState<any[]>([]);
 
   // Date-driven state
@@ -29,17 +27,13 @@ export default function HRManagement() {
 
   async function fetchCoreData() {
     try {
-      const [empData, leaveData, jobData, appData, perfData] = await Promise.all([
+      const [empData, leaveData, perfData] = await Promise.all([
         hrmApi.getEmployees(),
         hrmApi.getLeaves(),
-        hrmApi.getJobPostings(),
-        hrmApi.getApplicants(),
         hrmApi.getPerformanceReviews(),
       ]);
       setEmployees(Array.isArray(empData) ? empData : []);
       setAllLeaves(Array.isArray(leaveData) ? leaveData : []);
-      setJobPostings(Array.isArray(jobData) ? jobData : []);
-      setApplicants(Array.isArray(appData) ? appData : []);
       setPerfReviews(Array.isArray(perfData) ? perfData : []);
     } catch (e) {
       console.error('Failed to fetch HRM data:', e);
@@ -90,10 +84,6 @@ export default function HRManagement() {
   const hiredBeforeThisMonth = employees.length - hiredThisMonth;
   const growthPct = hiredBeforeThisMonth > 0 ? Math.round((hiredThisMonth / hiredBeforeThisMonth) * 100) : (hiredThisMonth > 0 ? 100 : 0);
 
-  // Open positions
-  const openJobs = jobPostings.filter(j => j.status === 'OPEN');
-  const highPriorityJobs = openJobs.filter(j => j.priority === 'HIGH').length;
-
   // Avg performance
   const avgPerf = perfReviews.length > 0 ? perfReviews.reduce((sum: number, r: any) => sum + r.rating, 0) / perfReviews.length : 0;
   const perfLabel = (avg: number) => {
@@ -110,9 +100,6 @@ export default function HRManagement() {
     const d = new Date(l.updatedAt);
     return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
   }).length;
-  const pendingApplicants = applicants.filter((a: any) => a.status === 'APPLIED' || a.status === 'INTERVIEW').length;
-  const totalApplicants = applicants.length;
-
   // ========== CALENDAR LOGIC ==========
   const daysInMonth = new Date(calYear, calMonth + 1, 0).getDate();
   const firstDayOffset = new Date(calYear, calMonth, 1).getDay();
@@ -188,7 +175,7 @@ export default function HRManagement() {
       </div>
 
       {/* KPI Row 1 — Top Metrics */}
-      <div className="kpi-grid">
+      <div className="kpi-grid" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
         {/* Total Workforce */}
         <div className="kpi-card">
           <div className="kpi-card-top">
@@ -210,18 +197,6 @@ export default function HRManagement() {
           <div className="kpi-card-value">{resignedCount}</div>
           <div style={{ fontSize: '12px', color: resignedThisMonth > 0 ? '#dc2626' : 'var(--color-text-muted)', display: 'flex', alignItems: 'center', gap: '4px' }}>
             {resignedThisMonth > 0 && <TrendingDown size={13} />} {resignedThisMonth} this month
-          </div>
-        </div>
-
-        {/* Open Positions */}
-        <div className="kpi-card">
-          <div className="kpi-card-top">
-            <div className="kpi-card-label">OPEN POSITIONS</div>
-            <div className="kpi-card-icon" style={{ background: '#f0fdf4', color: '#16a34a' }}><UserPlus2 size={22} /></div>
-          </div>
-          <div className="kpi-card-value">{openJobs.length}</div>
-          <div style={{ fontSize: '12px', color: '#ea580c', display: 'flex', alignItems: 'center', gap: '4px' }}>
-            <Briefcase size={13} /> {highPriorityJobs} high priority
           </div>
         </div>
 
@@ -312,21 +287,8 @@ export default function HRManagement() {
             </div>
           </div>
 
-          {/* Sub-grid: Job Applications & Leave Requests */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-            {/* Job Applications KPI */}
-            <div className="kpi-card" style={{ padding: '14px' }}>
-              <div className="kpi-card-top" style={{ marginBottom: '8px' }}>
-                <div className="kpi-card-label" style={{ fontSize: '11px' }}>JOB APPLICATIONS</div>
-                <div className="kpi-card-icon" style={{ background: '#f0fdf4', color: '#16a34a', width: '32px', height: '32px' }}><Briefcase size={16} /></div>
-              </div>
-              <div className="kpi-card-value" style={{ fontSize: '22px' }}>{totalApplicants}</div>
-              <div style={{ fontSize: '11px', color: 'var(--color-text-muted)', display: 'flex', alignItems: 'center', gap: '4px', marginTop: '4px' }}>
-                <FileText size={12} /> {pendingApplicants} pending
-              </div>
-            </div>
-
-            {/* Leave Requests KPI */}
+          {/* Leave Requests */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '16px' }}>
             <div className="kpi-card" style={{ padding: '14px' }}>
               <div className="kpi-card-top" style={{ marginBottom: '8px' }}>
                 <div className="kpi-card-label" style={{ fontSize: '11px' }}>LEAVE REQUESTS</div>

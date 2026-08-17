@@ -3,14 +3,28 @@
 import { useEffect, useState } from 'react';
 import {
   ChevronLeft, ChevronRight, CheckCircle, XCircle, Clock, AlertCircle, Calendar,
+  CalendarPlus, History, Trash2,
 } from 'lucide-react';
 import { hrmApi, exportApi } from '../../../services/api';
 import ExportButton from '../../../components/ExportButton';
+import Modal, { FormField } from '../../../components/Modal';
+import AttendanceCalendar from '../../../components/AttendanceCalendar';
+import AttendanceExportButton from '../../../components/AttendanceExportButton';
 
 export default function AttendancePage() {
   const [employees, setEmployees] = useState<any[]>([]);
   const [attendance, setAttendance] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Per-employee history drill-down — same shared calendar component the
+  // employee sees for themselves, just pointed at someone else's data.
+  const [historyEmployee, setHistoryEmployee] = useState<any | null>(null);
+
+  // Company holidays
+  const [holidays, setHolidays] = useState<any[]>([]);
+  const [showHolidayModal, setShowHolidayModal] = useState(false);
+  const [holidayForm, setHolidayForm] = useState({ date: '', name: '', description: '' });
+  const [holidayError, setHolidayError] = useState('');
 
   // Date selection
   const [selectedDate, setSelectedDate] = useState(new Date());
@@ -18,12 +32,14 @@ export default function AttendancePage() {
   async function fetchData() {
     try {
       setLoading(true);
-      const [empData, attData] = await Promise.all([
+      const [empData, attData, holidayData] = await Promise.all([
         hrmApi.getEmployees(),
         hrmApi.getAttendance(),
+        hrmApi.getHolidays().catch(() => []),
       ]);
       setEmployees(Array.isArray(empData) ? empData.filter((e: any) => e.status !== 'INACTIVE') : []);
       setAttendance(Array.isArray(attData) ? attData : []);
+      setHolidays(Array.isArray(holidayData) ? holidayData : []);
     } catch (e) {
       console.error('Failed to fetch attendance data:', e);
     } finally {
@@ -32,6 +48,32 @@ export default function AttendancePage() {
   }
 
   useEffect(() => { fetchData(); }, []);
+
+  async function handleCreateHoliday() {
+    if (!holidayForm.date || !holidayForm.name.trim()) {
+      setHolidayError('A date and a title are both required.');
+      return;
+    }
+    try {
+      await hrmApi.createHoliday({ date: holidayForm.date, name: holidayForm.name.trim(), description: holidayForm.description.trim() || undefined });
+      setShowHolidayModal(false);
+      setHolidayForm({ date: '', name: '', description: '' });
+      setHolidayError('');
+      fetchData();
+    } catch (e: any) {
+      setHolidayError(e.message || 'Could not declare this holiday.');
+    }
+  }
+
+  async function handleDeleteHoliday(id: string) {
+    if (!confirm('Remove this company holiday?')) return;
+    try {
+      await hrmApi.deleteHoliday(id);
+      fetchData();
+    } catch (e: any) {
+      alert(e.message || 'Could not remove this holiday.');
+    }
+  }
 
   // Get attendance for the selected date
   function getAttendanceForEmployee(empId: string) {
@@ -91,6 +133,33 @@ export default function AttendancePage() {
 
   const colors = ['#2563eb', '#7c3aed', '#059669', '#d97706', '#ec4899', '#14b8a6'];
 
+  // ================= PER-EMPLOYEE HISTORY DRILL-DOWN =================
+  // Same shared calendar the employee sees for their own Attendance
+  // section — just bound to /hrm/employees/:id/attendance/calendar
+  // instead of /self/attendance/calendar.
+  if (historyEmployee) {
+    return (
+      <div className="fade-in">
+        <button onClick={() => setHistoryEmployee(null)} className="btn btn-secondary" style={{ marginBottom: '16px' }}>
+          <ChevronLeft size={14} /> Back to roster
+        </button>
+        <div className="page-header">
+          <div>
+            <h1>{historyEmployee.firstName} {historyEmployee.lastName}</h1>
+            <p>Attendance history from {new Date(historyEmployee.joinDate).toLocaleDateString()} (their join date) to today.</p>
+          </div>
+          <div className="page-header-actions">
+            <AttendanceExportButton
+              onExport={(from, to) => exportApi.exportEmployeeAttendanceRange(historyEmployee.id, from, to)}
+              description={`Choose a date range within ${historyEmployee.firstName}'s tracked history — from their join date through today.`}
+            />
+          </div>
+        </div>
+        <AttendanceCalendar fetchMonth={(year, month) => hrmApi.getEmployeeAttendanceCalendar(historyEmployee.id, year, month)} />
+      </div>
+    );
+  }
+
   return (
     <div className="fade-in">
       {/* Page Header */}
@@ -100,9 +169,27 @@ export default function AttendancePage() {
           <p>Track and manage employee attendance records.</p>
         </div>
         <div className="page-header-actions">
+          <button className="btn btn-secondary" onClick={() => { setHolidayForm({ date: '', name: '', description: '' }); setHolidayError(''); setShowHolidayModal(true); }}>
+            <CalendarPlus size={16} /> Declare Holiday
+          </button>
           <ExportButton onExport={(format) => exportApi.exportAttendance(format, selectedDate.getMonth() + 1, selectedDate.getFullYear())} label="Export" />
         </div>
       </div>
+
+      {holidays.length > 0 && (
+        <div className="card" style={{ marginBottom: '20px' }}>
+          <h3 style={{ fontSize: '14px', fontWeight: 700, marginBottom: '10px' }}>Company Holidays</h3>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+            {holidays.map((h) => (
+              <div key={h.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 10px', borderRadius: '8px', border: '1px solid var(--color-border)', fontSize: '12.5px' }}>
+                <span style={{ fontWeight: 600 }}>{new Date(h.date).toLocaleDateString()}</span>
+                <span style={{ color: 'var(--color-text-muted)' }}>{h.name}</span>
+                <button onClick={() => handleDeleteHoliday(h.id)} style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#dc2626', display: 'flex' }}><Trash2 size={13} /></button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Date Navigator + Summary */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '20px', marginBottom: '20px' }}>
@@ -192,16 +279,25 @@ export default function AttendancePage() {
                     </span>
                   </td>
                   <td>
-                    {!att ? (
-                      <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                        <button onClick={() => handleMarkAttendance(emp.id, 'PRESENT')} style={{ border: 'none', background: '#dcfce7', color: '#16a34a', padding: '4px 10px', borderRadius: '6px', fontSize: '11px', fontWeight: 600, cursor: 'pointer' }}>Present</button>
-                        <button onClick={() => handleMarkAttendance(emp.id, 'ABSENT')} style={{ border: 'none', background: '#fee2e2', color: '#dc2626', padding: '4px 10px', borderRadius: '6px', fontSize: '11px', fontWeight: 600, cursor: 'pointer' }}>Absent</button>
-                        <button onClick={() => handleMarkAttendance(emp.id, 'HALF_DAY')} style={{ border: 'none', background: '#fef3c7', color: '#d97706', padding: '4px 10px', borderRadius: '6px', fontSize: '11px', fontWeight: 600, cursor: 'pointer' }}>Half Day</button>
-                        <button onClick={() => handleMarkAttendance(emp.id, 'LATE')} style={{ border: 'none', background: '#fff7ed', color: '#ea580c', padding: '4px 10px', borderRadius: '6px', fontSize: '11px', fontWeight: 600, cursor: 'pointer' }}>Late</button>
-                      </div>
-                    ) : (
-                      <span style={{ fontSize: '12px', color: 'var(--color-text-muted)' }}>Marked</span>
-                    )}
+                    <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' }}>
+                      {!att ? (
+                        <>
+                          <button onClick={() => handleMarkAttendance(emp.id, 'PRESENT')} style={{ border: 'none', background: '#dcfce7', color: '#16a34a', padding: '4px 10px', borderRadius: '6px', fontSize: '11px', fontWeight: 600, cursor: 'pointer' }}>Present</button>
+                          <button onClick={() => handleMarkAttendance(emp.id, 'ABSENT')} style={{ border: 'none', background: '#fee2e2', color: '#dc2626', padding: '4px 10px', borderRadius: '6px', fontSize: '11px', fontWeight: 600, cursor: 'pointer' }}>Absent</button>
+                          <button onClick={() => handleMarkAttendance(emp.id, 'HALF_DAY')} style={{ border: 'none', background: '#fef3c7', color: '#d97706', padding: '4px 10px', borderRadius: '6px', fontSize: '11px', fontWeight: 600, cursor: 'pointer' }}>Half Day</button>
+                          <button onClick={() => handleMarkAttendance(emp.id, 'LATE')} style={{ border: 'none', background: '#fff7ed', color: '#ea580c', padding: '4px 10px', borderRadius: '6px', fontSize: '11px', fontWeight: 600, cursor: 'pointer' }}>Late</button>
+                        </>
+                      ) : (
+                        <span style={{ fontSize: '12px', color: 'var(--color-text-muted)' }}>Marked</span>
+                      )}
+                      <button
+                        onClick={() => setHistoryEmployee(emp)}
+                        title="View attendance history"
+                        style={{ border: '1px solid var(--color-border)', background: 'var(--color-card)', color: 'var(--color-text-secondary)', padding: '4px 8px', borderRadius: '6px', fontSize: '11px', fontWeight: 600, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                      >
+                        <History size={12} /> History
+                      </button>
+                    </div>
                   </td>
                 </tr>
               );
@@ -209,6 +305,19 @@ export default function AttendancePage() {
           </tbody>
         </table>
       </div>
+
+      <Modal isOpen={showHolidayModal} onClose={() => setShowHolidayModal(false)} title="Declare Company Holiday">
+        {holidayError && (
+          <div style={{ padding: '10px 14px', marginBottom: 14, background: '#fef2f2', border: '1px solid #fecaca', color: '#dc2626', borderRadius: 8, fontSize: 13, fontWeight: 600 }}>{holidayError}</div>
+        )}
+        <FormField label="Date" type="date" value={holidayForm.date} onChange={(v) => setHolidayForm({ ...holidayForm, date: v })} required />
+        <FormField label="Title" value={holidayForm.name} onChange={(v) => setHolidayForm({ ...holidayForm, name: v })} placeholder="e.g. Diwali" required />
+        <FormField label="Description" type="textarea" value={holidayForm.description} onChange={(v) => setHolidayForm({ ...holidayForm, description: v })} placeholder="Reason for the holiday (optional)" />
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '8px' }}>
+          <button className="btn btn-secondary" onClick={() => setShowHolidayModal(false)}>Cancel</button>
+          <button className="btn btn-primary" onClick={handleCreateHoliday}>Declare Holiday</button>
+        </div>
+      </Modal>
     </div>
   );
 }

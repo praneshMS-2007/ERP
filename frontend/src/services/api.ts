@@ -114,8 +114,8 @@ export const hrmApi = {
   removeEmployee: (id: string, lastWorkingDay?: string) =>
     mutateApi(`/hrm/employees/${id}/remove`, { method: 'PUT', body: JSON.stringify({ lastWorkingDay }) }),
   getUsers: () => mutateApi('/hrm/users'),
-  resetUserPassword: (id: string) =>
-    mutateApi(`/hrm/users/${id}/reset-password`, { method: 'PUT' }),
+  resetUserPassword: (id: string, newPassword: string) =>
+    mutateApi(`/hrm/users/${id}/reset-password`, { method: 'PUT', body: JSON.stringify({ newPassword }) }),
   getItAccess: (employeeId: string) => mutateApi(`/hrm/employees/${employeeId}/it-access`),
   setItAccess: (employeeId: string, data: any) =>
     mutateApi(`/hrm/employees/${employeeId}/it-access`, { method: 'PUT', body: JSON.stringify(data) }),
@@ -170,16 +170,14 @@ export const hrmApi = {
   },
   getAttendance: () => fetchApi('/hrm/attendance'),
   getPayrolls: () => fetchApi('/hrm/payrolls'),
-  getJobPostings: () => fetchApi('/hrm/jobs'),
-  getApplicants: () => fetchApi('/hrm/applicants'),
   getLeaves: () => fetchApi('/hrm/leaves'),
   createEmployee: (data: any) =>
     mutateApi('/hrm/employees', { method: 'POST', body: JSON.stringify(data) }),
-  createPayroll: (data: any) => fetchApi('/hrm/payrolls', { method: 'POST', body: JSON.stringify(data) }),
-  updatePayrollStatus: (id: string, status: string) => fetchApi(`/hrm/payrolls/${id}/status`, { method: 'PUT', body: JSON.stringify({ status }) }),
-  createJobPosting: (data: any) => fetchApi('/hrm/jobs', { method: 'POST', body: JSON.stringify(data) }),
-  createApplicant: (data: any) => fetchApi('/hrm/applicants', { method: 'POST', body: JSON.stringify(data) }),
-  updateApplicantStatus: (id: string, status: string) => fetchApi(`/hrm/applicants/${id}/status`, { method: 'PUT', body: JSON.stringify({ status }) }),
+  createPayroll: (data: any) => mutateApi('/hrm/payrolls', { method: 'POST', body: JSON.stringify(data) }),
+  updatePayroll: (id: string, data: any) => mutateApi(`/hrm/payrolls/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deletePayroll: (id: string) => mutateApi(`/hrm/payrolls/${id}`, { method: 'DELETE' }),
+  updatePayrollStatus: (id: string, status: string, reason?: string) =>
+    mutateApi(`/hrm/payrolls/${id}/status`, { method: 'PUT', body: JSON.stringify({ status, reason }) }),
   markAttendance: (data: any) => fetchApi('/hrm/attendance', { method: 'POST', body: JSON.stringify(data) }),
   requestLeave: (data: any) => fetchApi('/hrm/leaves', { method: 'POST', body: JSON.stringify(data) }),
   updateLeaveStatus: (id: string, status: string) => fetchApi(`/hrm/leaves/${id}/status`, { method: 'PUT', body: JSON.stringify({ status }) }),
@@ -187,6 +185,39 @@ export const hrmApi = {
   createPerformanceReview: (data: any) => fetchApi('/hrm/performance-reviews', { method: 'POST', body: JSON.stringify(data) }),
   getAttendanceStats: (date: string) => fetchApi(`/hrm/attendance/stats?date=${date}`),
   getAttendanceTrend: (year: number) => fetchApi(`/hrm/attendance/trend?year=${year}`),
+  getEmployeeAttendanceCalendar: (employeeId: string, year: number, month: number) =>
+    mutateApi(`/hrm/employees/${employeeId}/attendance/calendar?year=${year}&month=${month}`),
+  getHolidays: () => mutateApi('/hrm/holidays'),
+  createHoliday: (data: { date: string; name: string; description?: string }) =>
+    mutateApi('/hrm/holidays', { method: 'POST', body: JSON.stringify(data) }),
+  deleteHoliday: (id: string) => mutateApi(`/hrm/holidays/${id}`, { method: 'DELETE' }),
+  getPasswordResetRequests: () => mutateApi('/hrm/password-reset-requests'),
+  resolvePasswordResetRequest: (id: string) => mutateApi(`/hrm/password-reset-requests/${id}/resolve`, { method: 'PUT' }),
+};
+
+export const announcementApi = {
+  getAnnouncements: () => mutateApi('/announcements'),
+  getRecipientOptions: () => mutateApi('/announcements/recipients'),
+  createAnnouncement: (data: { title: string; body: string; fileUrl?: string; fileName?: string; isBroadcast: boolean; recipientUserIds?: string[] }) =>
+    mutateApi('/announcements', { method: 'POST', body: JSON.stringify(data) }),
+  deleteAnnouncement: (id: string) => mutateApi(`/announcements/${id}`, { method: 'DELETE' }),
+};
+
+// Self-service endpoints — the backend derives the employee from the JWT,
+// never from a request parameter, so there is no employeeId to pass here.
+export const selfApi = {
+  getProfile: () => fetchApi('/self/profile'),
+  getLeaves: () => fetchApi('/self/leaves'),
+  requestLeave: (data: { leaveType: string; startDate: string; endDate: string; reason: string }) =>
+    mutateApi('/self/leaves', { method: 'POST', body: JSON.stringify(data) }),
+  getLeaveBalance: () => mutateApi('/self/leaves/balance'),
+  getAttendance: () => fetchApi('/self/attendance'),
+  getAttendanceCalendar: (year: number, month: number) => mutateApi(`/self/attendance/calendar?year=${year}&month=${month}`),
+  clockIn: () => fetchApi('/self/attendance/clock-in', { method: 'POST' }),
+  getProjects: () => fetchApi('/self/projects'),
+  getTasks: () => fetchApi('/self/tasks'),
+  getAnnouncements: () => fetchApi('/self/announcements'),
+  getPayroll: () => mutateApi('/self/payroll'),
 };
 
 export const inventoryApi = {
@@ -209,12 +240,84 @@ export const inventoryApi = {
 
 export const projectApi = {
   getProjects: () => fetchApi('/projects'),
+  getProjectById: (id: string) => mutateApi(`/projects/${id}`),
   getTasks: () => fetchApi('/projects/tasks'),
-  getTimesheets: () => fetchApi('/projects/timesheets'),
-  createProject: (data: any) => fetchApi('/projects', { method: 'POST', body: JSON.stringify(data) }),
-  createTask: (data: any) => fetchApi('/projects/tasks', { method: 'POST', body: JSON.stringify(data) }),
-  createTimeLog: (data: any) => fetchApi('/projects/timesheets', { method: 'POST', body: JSON.stringify(data) }),
-  updateTaskStatus: (id: string, status: string) => fetchApi(`/projects/tasks/${id}/status`, { method: 'PUT', body: JSON.stringify({ status }) }),
+  // Mutating calls use mutateApi (throws a real error on failure) rather
+  // than fetchApi (silently returns [] on failure) — createTask/
+  // updateTaskStatus were on fetchApi before, fixed while touching this file.
+  createProject: (data: any) => mutateApi('/projects', { method: 'POST', body: JSON.stringify(data) }),
+  deleteProject: (id: string) => mutateApi(`/projects/${id}`, { method: 'DELETE' }),
+  updateProjectStaffing: (id: string, data: { projectManagerId?: string; teamEmployeeIds?: string[] }) =>
+    mutateApi(`/projects/${id}/staffing`, { method: 'PUT', body: JSON.stringify(data) }),
+  getProjectStaff: (id: string) => mutateApi(`/projects/${id}/staff`),
+  updateMemberRole: (id: string, employeeId: string, role: string) =>
+    mutateApi(`/projects/${id}/staff/${employeeId}/role`, { method: 'PUT', body: JSON.stringify({ role }) }),
+  updateProjectOverview: (id: string, data: { description?: string; startDate?: string | null; endDate?: string | null }) =>
+    mutateApi(`/projects/${id}/overview`, { method: 'PUT', body: JSON.stringify(data) }),
+  updateProjectStatus: (id: string, status: string) =>
+    mutateApi(`/projects/${id}/status`, { method: 'PUT', body: JSON.stringify({ status }) }),
+  createTask: (data: any) => mutateApi('/projects/tasks', { method: 'POST', body: JSON.stringify(data) }),
+  updateTask: (id: string, data: any) => mutateApi(`/projects/tasks/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteTask: (id: string) => mutateApi(`/projects/tasks/${id}`, { method: 'DELETE' }),
+  updateTaskStatus: (id: string, status: string) => mutateApi(`/projects/tasks/${id}/status`, { method: 'PUT', body: JSON.stringify({ status }) }),
+  // Timesheet — lives inside a project now. "me" always means the caller;
+  // there is no way to pass another employeeId into the fill/update calls.
+  getMyTimesheet: (projectId: string) => mutateApi(`/projects/${projectId}/timesheet/me`),
+  upsertMyTimesheet: (projectId: string, data: { hours: number; description?: string }) =>
+    mutateApi(`/projects/${projectId}/timesheet/me`, { method: 'PUT', body: JSON.stringify(data) }),
+  getMemberTimesheet: (projectId: string, employeeId: string, date?: string) =>
+    mutateApi(`/projects/${projectId}/timesheet/${employeeId}${date ? `?date=${date}` : ''}`),
+  getHolidays: (projectId: string) => mutateApi(`/projects/${projectId}/holidays`),
+  createHoliday: (projectId: string, data: { date: string; title: string }) =>
+    mutateApi(`/projects/${projectId}/holidays`, { method: 'POST', body: JSON.stringify(data) }),
+  deleteHoliday: (projectId: string, holidayId: string) =>
+    mutateApi(`/projects/${projectId}/holidays/${holidayId}`, { method: 'DELETE' }),
+  getDocuments: (projectId: string) => mutateApi(`/projects/${projectId}/documents`),
+  uploadDocument: (projectId: string, data: { kind: string; fileUrl: string; fileName: string }) =>
+    mutateApi(`/projects/${projectId}/documents`, { method: 'POST', body: JSON.stringify(data) }),
+  deleteDocument: (projectId: string, documentId: string) =>
+    mutateApi(`/projects/${projectId}/documents/${documentId}`, { method: 'DELETE' }),
+  createAnnouncement: (projectId: string, data: { title: string; body: string; fileUrl?: string; fileName?: string; audienceEmployeeId?: string }) =>
+    mutateApi(`/projects/${projectId}/announcements`, { method: 'POST', body: JSON.stringify(data) }),
+  getAnnouncements: (projectId: string) => mutateApi(`/projects/${projectId}/announcements`),
+  deleteAnnouncement: (projectId: string, announcementId: string) =>
+    mutateApi(`/projects/${projectId}/announcements/${announcementId}`, { method: 'DELETE' }),
+};
+
+// Generic authenticated file upload, reused for announcement attachments —
+// no dedicated upload plumbing needed for this feature.
+export const uploadApi = {
+  uploadFile: async (file: File) => {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+    const body = new FormData();
+    body.append('file', file);
+    const res = await fetch(`${API_BASE}/upload/file`, {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      body,
+    });
+    const json = await res.json().catch(() => null);
+    if (!res.ok) throw new Error(json?.message || `Upload failed (${res.status})`);
+    return json;
+  },
+  // Project/announcement attachments are stored as a relative path (e.g.
+  // "/uploads/file-xyz.pdf") served by the BACKEND, not the frontend — a
+  // plain <a href={fileUrl}> resolves against the frontend's own origin and
+  // 404s. Fetching as a blob and triggering the save manually (same pattern
+  // as exportApi.downloadFile) also sidesteps browsers silently ignoring
+  // the `download` attribute on cross-origin links, so the file always
+  // actually saves to disk instead of trying to open in-browser.
+  downloadFile: async (fileUrl: string, fileName: string) => {
+    const res = await fetch(`${API_ORIGIN}${fileUrl}`);
+    if (!res.ok) throw new Error('Download failed');
+    const blob = await res.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = fileName || 'download';
+    a.click();
+    window.URL.revokeObjectURL(url);
+  },
 };
 
 export const analyticsApi = {
@@ -227,6 +330,13 @@ export const authApi = {
   login: (data: any) => fetchApi('/auth/login', {
     method: 'POST',
     body: JSON.stringify(data),
+  }),
+  // Public — no token exists yet, that's the whole point. Always resolves
+  // successfully with the same generic message regardless of whether the
+  // identifier matched a real account.
+  requestPasswordReset: (identifier: string) => mutateApi('/auth/request-password-reset', {
+    method: 'POST',
+    body: JSON.stringify({ identifier }),
   }),
 };
 
@@ -277,7 +387,14 @@ export const exportApi = {
         ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
       },
     });
-    if (!res.ok) throw new Error('Export failed');
+    if (!res.ok) {
+      // A rejected export (e.g. a date range outside what's allowed) comes
+      // back as a real JSON error body, not a file — surface that message
+      // instead of a generic "Export failed" so the reason is visible.
+      const body = await res.json().catch(() => null);
+      const detail = Array.isArray(body?.message) ? body.message.join(', ') : body?.message;
+      throw new Error(detail || 'Export failed');
+    }
     const blob = await res.blob();
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -294,12 +411,18 @@ export const exportApi = {
   exportLedger: (format: string) => exportApi.downloadFile(`/export/finance/ledger?format=${format}`, `ledger.${format}`),
   exportExpenses: (format: string) => exportApi.downloadFile(`/export/finance/expenses?format=${format}`, `expenses.${format}`),
   exportAttendance: (format: string, month: number, year: number) => exportApi.downloadFile(`/export/hrm/attendance?format=${format}&month=${month}&year=${year}`, `attendance_${month}_${year}.${format}`),
+  exportSelfAttendanceRange: (from: string, to: string) =>
+    exportApi.downloadFile(`/export/self/attendance?from=${from}&to=${to}&format=xlsx`, `my_attendance_${from}_to_${to}.xlsx`),
+  exportEmployeeAttendanceRange: (employeeId: string, from: string, to: string) =>
+    exportApi.downloadFile(`/export/hrm/employees/${employeeId}/attendance?from=${from}&to=${to}&format=xlsx`, `attendance_${from}_to_${to}.xlsx`),
 };
 
 export const settingsApi = {
   getProfile: () => fetchApi('/auth/me'),
-  updateProfile: (data: any) => fetchApi('/auth/profile', { method: 'PUT', body: JSON.stringify(data) }),
-  changePassword: (currentPassword: string, newPassword: string) => fetchApi('/auth/change-password', { method: 'PUT', body: JSON.stringify({ currentPassword, newPassword }) }),
+  // No self-service profile or password edits — every field on Settings >
+  // My Profile is read-only, sourced from the Employee record. Changes only
+  // happen through HR/Admin's Employee Directory (hrmApi.updateEmployee) or
+  // password reset flow (hrmApi.resetUserPassword + the /portal inbox).
   getSessions: () => fetchApi('/auth/sessions'),
   revokeSession: (id: string) => fetchApi(`/auth/sessions/${id}`, { method: 'DELETE' }),
 };
