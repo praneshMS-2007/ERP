@@ -1,16 +1,26 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { LifeBuoy, Plus, Filter, MessageSquare, AlertCircle, Clock, CheckCircle2 } from 'lucide-react';
+import { LifeBuoy, Plus, AlertCircle, Clock, CheckCircle2, Pencil, Trash2 } from 'lucide-react';
 import { crmApi } from '../../../services/api';
 import Modal, { FormField } from '../../../components/Modal';
+
+const emptyForm = { customerId: '', subject: '', priority: 'MEDIUM', description: '', startDate: '', endDate: '' };
+
+// "2026-08-20T10:00:00.000Z" -> "2026-08-20", so a date input can show it
+const toDateInputValue = (iso?: string) => (iso ? iso.slice(0, 10) : '');
 
 export default function SupportTicketsPage() {
   const [tickets, setTickets] = useState<any[]>([]);
   const [customers, setCustomers] = useState<any[]>([]);
   const [showModal, setShowModal] = useState(false);
-  const [form, setForm] = useState({ customerId: '', subject: '', priority: 'MEDIUM', description: '' });
+  const [form, setForm] = useState(emptyForm);
   const [filterStatus, setFilterStatus] = useState('');
+  const [formError, setFormError] = useState('');
+
+  const [editTarget, setEditTarget] = useState<any | null>(null);
+  const [editForm, setEditForm] = useState(emptyForm);
+  const [editError, setEditError] = useState('');
 
   async function fetchAll() {
     try {
@@ -28,21 +38,77 @@ export default function SupportTicketsPage() {
   useEffect(() => { fetchAll(); }, []);
 
   async function handleCreateTicket() {
-    if (!form.subject) return;
-    await crmApi.createSupportTicket({
-      subject: form.subject,
-      priority: form.priority,
-      description: form.description,
-      customerId: form.customerId || undefined,
+    if (!form.subject) { setFormError('Subject is required.'); return; }
+    if (!form.startDate || !form.endDate) { setFormError('Start date and end date are both required.'); return; }
+    if (form.endDate < form.startDate) { setFormError('End date cannot be before the start date.'); return; }
+    setFormError('');
+    try {
+      await crmApi.createSupportTicket({
+        subject: form.subject,
+        priority: form.priority,
+        description: form.description,
+        customerId: form.customerId || undefined,
+        startDate: new Date(form.startDate).toISOString(),
+        endDate: new Date(form.endDate).toISOString(),
+      });
+      setShowModal(false);
+      setForm(emptyForm);
+      fetchAll();
+    } catch (e: any) {
+      setFormError(e.message || 'Could not create this ticket.');
+    }
+  }
+
+  function openEdit(t: any) {
+    setEditTarget(t);
+    setEditForm({
+      customerId: t.customerId || '', subject: t.subject || '', priority: t.priority || 'MEDIUM',
+      description: t.description || '', startDate: toDateInputValue(t.startDate), endDate: toDateInputValue(t.endDate),
     });
-    setShowModal(false);
-    setForm({ customerId: '', subject: '', priority: 'MEDIUM', description: '' });
-    fetchAll();
+    setEditError('');
+  }
+
+  async function handleSaveEdit() {
+    if (!editTarget) return;
+    if (!editForm.subject) { setEditError('Subject is required.'); return; }
+    if (editForm.startDate && editForm.endDate && editForm.endDate < editForm.startDate) {
+      setEditError('End date cannot be before the start date.');
+      return;
+    }
+    setEditError('');
+    try {
+      await crmApi.updateSupportTicket(editTarget.id, {
+        subject: editForm.subject,
+        priority: editForm.priority,
+        description: editForm.description,
+        customerId: editForm.customerId || null,
+        startDate: editForm.startDate ? new Date(editForm.startDate).toISOString() : null,
+        endDate: editForm.endDate ? new Date(editForm.endDate).toISOString() : null,
+      });
+      setEditTarget(null);
+      fetchAll();
+    } catch (e: any) {
+      setEditError(e.message || 'Could not update this ticket.');
+    }
+  }
+
+  async function handleDelete(id: string, subject: string) {
+    if (!confirm(`Delete ticket "${subject}"? This can't be undone.`)) return;
+    try {
+      await crmApi.deleteSupportTicket(id);
+      fetchAll();
+    } catch (e: any) {
+      alert(e.message || 'Could not delete this ticket.');
+    }
   }
 
   async function handleUpdateStatus(id: string, status: string) {
-    await crmApi.updateSupportTicketStatus(id, status);
-    fetchAll();
+    try {
+      await crmApi.updateSupportTicketStatus(id, status);
+      fetchAll();
+    } catch (e: any) {
+      alert(e.message || 'Could not update this ticket\'s status.');
+    }
   }
 
   const priorityColor = (p: string) => {
@@ -82,7 +148,7 @@ export default function SupportTicketsPage() {
             <option value="IN_PROGRESS">In Progress</option>
             <option value="RESOLVED">Resolved</option>
           </select>
-          <button className="btn btn-primary" onClick={() => setShowModal(true)}>
+          <button className="btn btn-primary" onClick={() => { setFormError(''); setForm(emptyForm); setShowModal(true); }}>
             <Plus size={16} /> New Ticket
           </button>
         </div>
@@ -130,7 +196,7 @@ export default function SupportTicketsPage() {
               <th>Customer</th>
               <th>Priority</th>
               <th>Status</th>
-              <th>Date</th>
+              <th>Start – End</th>
               <th>Actions</th>
             </tr>
           </thead>
@@ -147,13 +213,21 @@ export default function SupportTicketsPage() {
                   </span>
                 </td>
                 <td><span className={statusBadge(t.status)}>{t.status}</span></td>
-                <td style={{ color: 'var(--color-text-secondary)' }}>{new Date(t.createdAt).toLocaleDateString()}</td>
+                <td style={{ color: 'var(--color-text-secondary)', fontSize: '13px' }}>
+                  {t.startDate || t.endDate
+                    ? `${t.startDate ? new Date(t.startDate).toLocaleDateString() : '—'} – ${t.endDate ? new Date(t.endDate).toLocaleDateString() : '—'}`
+                    : new Date(t.createdAt).toLocaleDateString()}
+                </td>
                 <td>
-                  {t.status !== 'RESOLVED' && (
-                    <button className="btn btn-secondary btn-sm" onClick={() => handleUpdateStatus(t.id, 'RESOLVED')}>
-                      Mark Resolved
-                    </button>
-                  )}
+                  <div style={{ display: 'flex', gap: '6px' }}>
+                    {t.status !== 'RESOLVED' && (
+                      <button className="btn btn-secondary btn-sm" onClick={() => handleUpdateStatus(t.id, 'RESOLVED')}>
+                        Mark Resolved
+                      </button>
+                    )}
+                    <button className="btn btn-secondary btn-sm" onClick={() => openEdit(t)}><Pencil size={13} /></button>
+                    <button className="btn btn-secondary btn-sm" style={{ color: '#dc2626' }} onClick={() => handleDelete(t.id, t.subject)}><Trash2 size={13} /></button>
+                  </div>
                 </td>
               </tr>
             ))}
@@ -163,15 +237,39 @@ export default function SupportTicketsPage() {
 
       {/* CREATE TICKET MODAL */}
       <Modal isOpen={showModal} onClose={() => setShowModal(false)} title="Create Support Ticket">
+        {formError && (
+          <div style={{ padding: '10px 14px', marginBottom: 14, background: '#fef2f2', border: '1px solid #fecaca', color: '#dc2626', borderRadius: 8, fontSize: 13, fontWeight: 600 }}>{formError}</div>
+        )}
         <FormField label="Subject" value={form.subject} onChange={(v) => setForm({ ...form, subject: v })} required placeholder="e.g. System Access Issue" />
         <FormField label="Customer" type="select" value={form.customerId} onChange={(v) => setForm({ ...form, customerId: v })}
           options={customers.map(c => ({ label: `${c.name} (${c.company || 'Individual'})`, value: c.id }))} />
         <FormField label="Priority" type="select" value={form.priority} onChange={(v) => setForm({ ...form, priority: v })}
           options={[{ label: 'Low', value: 'LOW' }, { label: 'Medium', value: 'MEDIUM' }, { label: 'High', value: 'HIGH' }, { label: 'Critical', value: 'CRITICAL' }]} />
+        <FormField label="Start Date" type="date" value={form.startDate} onChange={(v) => setForm({ ...form, startDate: v })} required />
+        <FormField label="End Date" type="date" value={form.endDate} onChange={(v) => setForm({ ...form, endDate: v })} required />
         <FormField label="Description" type="textarea" value={form.description} onChange={(v) => setForm({ ...form, description: v })} placeholder="Describe the issue..." />
         <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', marginTop: '8px' }}>
           <button className="btn btn-secondary" onClick={() => setShowModal(false)}>Cancel</button>
           <button className="btn btn-primary" onClick={handleCreateTicket}>Create Ticket</button>
+        </div>
+      </Modal>
+
+      {/* EDIT TICKET MODAL */}
+      <Modal isOpen={!!editTarget} onClose={() => setEditTarget(null)} title={`Edit Ticket — ${editTarget?.subject || ''}`}>
+        {editError && (
+          <div style={{ padding: '10px 14px', marginBottom: 14, background: '#fef2f2', border: '1px solid #fecaca', color: '#dc2626', borderRadius: 8, fontSize: 13, fontWeight: 600 }}>{editError}</div>
+        )}
+        <FormField label="Subject" value={editForm.subject} onChange={(v) => setEditForm({ ...editForm, subject: v })} required />
+        <FormField label="Customer" type="select" value={editForm.customerId} onChange={(v) => setEditForm({ ...editForm, customerId: v })}
+          options={customers.map(c => ({ label: `${c.name} (${c.company || 'Individual'})`, value: c.id }))} />
+        <FormField label="Priority" type="select" value={editForm.priority} onChange={(v) => setEditForm({ ...editForm, priority: v })}
+          options={[{ label: 'Low', value: 'LOW' }, { label: 'Medium', value: 'MEDIUM' }, { label: 'High', value: 'HIGH' }, { label: 'Critical', value: 'CRITICAL' }]} />
+        <FormField label="Start Date" type="date" value={editForm.startDate} onChange={(v) => setEditForm({ ...editForm, startDate: v })} />
+        <FormField label="End Date" type="date" value={editForm.endDate} onChange={(v) => setEditForm({ ...editForm, endDate: v })} />
+        <FormField label="Description" type="textarea" value={editForm.description} onChange={(v) => setEditForm({ ...editForm, description: v })} />
+        <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', marginTop: '8px' }}>
+          <button className="btn btn-secondary" onClick={() => setEditTarget(null)}>Cancel</button>
+          <button className="btn btn-primary" onClick={handleSaveEdit}>Save</button>
         </div>
       </Modal>
     </div>

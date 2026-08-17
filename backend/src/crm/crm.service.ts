@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, Logger } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { Prisma } from '@prisma/client';
 
@@ -37,6 +37,8 @@ export class CrmService {
   async convertLeadToCustomer(id: string) {
     const lead = await this.prisma.lead.findUnique({ where: { id } });
     if (!lead) throw new NotFoundException('Lead not found.');
+    if (lead.status === 'CONVERTED') throw new BadRequestException('This lead has already been converted.');
+    if (lead.status === 'LOST') throw new BadRequestException('A lost lead cannot be converted. Update its status first.');
 
     const result = await this.prisma.$transaction(async (tx) => {
       // 1. Create customer from lead
@@ -81,10 +83,6 @@ export class CrmService {
     });
   }
 
-  async createCustomer(data: Prisma.CustomerCreateInput) {
-    return this.prisma.customer.create({ data });
-  }
-
   async updateCustomer(id: string, data: Prisma.CustomerUpdateInput) {
     return this.prisma.customer.update({ where: { id }, data });
   }
@@ -102,6 +100,14 @@ export class CrmService {
       include: { customer: { select: { name: true, company: true } } },
       orderBy: { createdAt: 'desc' },
     });
+  }
+
+  async createOpportunity(data: Prisma.OpportunityUncheckedCreateInput) {
+    return this.prisma.opportunity.create({ data });
+  }
+
+  async updateOpportunity(id: string, data: Prisma.OpportunityUpdateInput) {
+    return this.prisma.opportunity.update({ where: { id }, data });
   }
 
   // ========== SUPPORT TICKETS ==========
@@ -152,6 +158,15 @@ export class CrmService {
     });
   }
 
+  async updateSupportTicket(id: string, data: Prisma.SupportTicketUpdateInput) {
+    return this.prisma.supportTicket.update({ where: { id }, data });
+  }
+
+  async deleteSupportTicket(id: string) {
+    await this.prisma.supportTicket.delete({ where: { id } });
+    return { message: 'Support ticket deleted.' };
+  }
+
   // ========== FOLLOW UPS ==========
   async getFollowUps() {
     return this.prisma.followUp.findMany({
@@ -162,5 +177,11 @@ export class CrmService {
 
   async createFollowUp(data: Prisma.FollowUpUncheckedCreateInput) {
     return this.prisma.followUp.create({ data });
+  }
+
+  async completeFollowUp(id: string) {
+    const followUp = await this.prisma.followUp.findUnique({ where: { id } });
+    if (!followUp) throw new NotFoundException('Follow-up not found.');
+    return this.prisma.followUp.update({ where: { id }, data: { completedAt: new Date() } });
   }
 }

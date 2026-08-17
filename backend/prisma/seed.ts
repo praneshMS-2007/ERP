@@ -1,4 +1,4 @@
-import { PrismaClient, EmpType, EmpStatus, AttendanceStatus, LeaveType, LeaveStatus, LeadStatus, TicketStatus, TicketPriority, ProductStatus, ProjectStatus, Priority, InvoiceStatus, ExpenseCategory, LedgerType, POStatus } from '@prisma/client';
+import { PrismaClient, EmpType, EmpStatus, AttendanceStatus, LeaveType, LeaveStatus, ProductStatus, ProjectStatus, Priority, InvoiceStatus, ExpenseCategory, LedgerType, POStatus } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
@@ -190,41 +190,10 @@ async function main() {
   console.log('  ✓ HRM Employees, Attendance, Leaves, and Performance seeded');
 
   // ========== 4. CRM MODULE DATA ==========
-  const customers = [
-    { name: 'Apex Global Logistics', email: 'contact@apexglobal.com', phone: '+1 555-0199', company: 'Apex Global Inc' },
-    { name: 'Skyline Enterprises', email: 'info@skyline.io', phone: '+1 555-0244', company: 'Skyline Corp' },
-    { name: 'Oasis Retail Outlets', email: 'purchasing@oasis.com', phone: '+971 4 399 1000', company: 'Oasis Holding' },
-  ];
-
-  const custIds: string[] = [];
-  for (const c of customers) {
-    const existing = await prisma.customer.findFirst({ where: { email: c.email } });
-    if (!existing) {
-      const newC = await prisma.customer.create({ data: c });
-      custIds.push(newC.id);
-    } else {
-      custIds.push(existing.id);
-    }
-  }
-
-  await prisma.lead.createMany({
-    data: [
-      { name: 'Jonathan Reed', company: 'Reed Telecom', email: 'jreed@reedtelecom.com', status: LeadStatus.NEW },
-      { name: 'Samantha Miller', company: 'Miller Tech', email: 'smiller@millertech.com', status: LeadStatus.QUALIFIED },
-    ],
-    skipDuplicates: true,
-  });
-
-  if (custIds.length > 0) {
-    await prisma.supportTicket.createMany({
-      data: [
-        { customerId: custIds[0], subject: 'VPN Access Disruption', priority: TicketPriority.HIGH, status: TicketStatus.OPEN, description: 'Employees in Dubai branch unable to connect' },
-        { customerId: custIds[1], subject: 'Billing Statement Discrepancy', priority: TicketPriority.MEDIUM, status: TicketStatus.IN_PROGRESS, description: 'Invoice INV-2026-004 query' },
-      ],
-      skipDuplicates: true,
-    });
-  }
-  console.log('  ✓ CRM Customers, Leads, and Support Tickets seeded');
+  // Deliberately empty. CRM data (leads, customers, opportunities, support
+  // tickets) is production data, not fixtures — it must only ever be created
+  // through the real app funnel (Add Lead -> Convert), never seeded fake.
+  console.log('  ✓ CRM module left empty (no fixtures — real data only)');
 
   // ========== 5. INVENTORY MODULE DATA ==========
   const cat1 = await prisma.category.upsert({ where: { name: 'Networking' }, update: {}, create: { name: 'Networking', description: 'Cables, routers, switches' } });

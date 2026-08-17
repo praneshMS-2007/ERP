@@ -43,12 +43,10 @@ export class CrmController {
     return this.crmService.getCustomers();
   }
 
-  @Post('customers')
-  @RequirePermission('CRM', 'WRITE')
-  createCustomer(@Body() data: Prisma.CustomerCreateInput) {
-    return this.crmService.createCustomer(data);
-  }
-
+  // No POST here, deliberately — a Customer only ever comes into existence
+  // by converting a Lead (see leads/:id/convert below). That's the one
+  // funnel: Lead -> Customer -> Opportunity. Editing an existing customer
+  // is still allowed, just never creating one out of nowhere.
   @Put('customers/:id')
   @RequirePermission('CRM', 'WRITE')
   updateCustomer(@Param('id') id: string, @Body() data: Prisma.CustomerUpdateInput) {
@@ -65,6 +63,18 @@ export class CrmController {
   @RequirePermission('CRM', 'READ')
   getOpportunities(@Query('stage') stage?: string) {
     return this.crmService.getOpportunities(stage);
+  }
+
+  @Post('opportunities')
+  @RequirePermission('CRM', 'WRITE')
+  createOpportunity(@Body() data: Prisma.OpportunityUncheckedCreateInput) {
+    return this.crmService.createOpportunity(data);
+  }
+
+  @Put('opportunities/:id')
+  @RequirePermission('CRM', 'WRITE')
+  updateOpportunity(@Param('id') id: string, @Body() data: Prisma.OpportunityUpdateInput) {
+    return this.crmService.updateOpportunity(id, data);
   }
 
   // ========== SUPPORT TICKETS ==========
@@ -86,6 +96,18 @@ export class CrmController {
     return this.crmService.updateSupportTicketStatus(id, status);
   }
 
+  @Put('tickets/:id')
+  @RequirePermission('CRM', 'WRITE')
+  updateSupportTicket(@Param('id') id: string, @Body() data: Prisma.SupportTicketUpdateInput) {
+    return this.crmService.updateSupportTicket(id, data);
+  }
+
+  @Delete('tickets/:id')
+  @RequirePermission('CRM', 'DELETE')
+  deleteSupportTicket(@Param('id') id: string) {
+    return this.crmService.deleteSupportTicket(id);
+  }
+
   // ========== FOLLOW UPS ==========
   @Get('follow-ups')
   @RequirePermission('CRM', 'READ')
@@ -97,5 +119,11 @@ export class CrmController {
   @RequirePermission('CRM', 'WRITE')
   createFollowUp(@Body() data: Prisma.FollowUpUncheckedCreateInput) {
     return this.crmService.createFollowUp(data);
+  }
+
+  @Put('follow-ups/:id/complete')
+  @RequirePermission('CRM', 'WRITE')
+  completeFollowUp(@Param('id') id: string) {
+    return this.crmService.completeFollowUp(id);
   }
 }

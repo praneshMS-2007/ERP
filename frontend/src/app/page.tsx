@@ -309,7 +309,7 @@ function ExecutiveDashboard() {
               </Link>
               <Link href="/crm" className="quick-action-btn" style={{ background: '#f8fafc', border: '1px solid var(--color-border)' }}>
                 <UserCheck className="qa-icon" style={{ color: '#2563eb' }} />
-                <span className="qa-label" style={{ fontWeight: 600, color: 'var(--color-text-primary)' }}>Add Customer</span>
+                <span className="qa-label" style={{ fontWeight: 600, color: 'var(--color-text-primary)' }}>New Lead</span>
               </Link>
               <Link href="/inventory" className="quick-action-btn" style={{ background: '#f8fafc', border: '1px solid var(--color-border)' }}>
                 <PackagePlus className="qa-icon" style={{ color: '#2563eb' }} />

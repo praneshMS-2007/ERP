@@ -92,6 +92,9 @@ const allNavItems: NavItem[] = [
   { name: 'Attendance', path: '/attendance', icon: CalendarCheck, requiredRoles: ['EMPLOYEE'] },
   { name: 'CRM', path: '/crm', icon: Globe, requiredModule: 'CRM', subItems: [
     { name: 'Sales Pipeline', path: '/crm' },
+    { name: 'Leads', path: '/crm/leads' },
+    { name: 'Customers', path: '/crm/customers' },
+    { name: 'Opportunities', path: '/crm/opportunities' },
     { name: 'Support Tickets', path: '/crm/support' },
     { name: 'Contacts', path: '/crm/contacts' },
   ]},

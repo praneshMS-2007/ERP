@@ -1,124 +1,201 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
-import Link from 'next/link';
-import { crmApi } from '@/services/api';
+import { useEffect, useState } from 'react';
+import { Pencil, Plus } from 'lucide-react';
+import { crmApi } from '../../../services/api';
+import Modal, { FormField } from '../../../components/Modal';
 
-export default function CRMOpportunities() {
+const STAGE_LABEL: Record<string, string> = {
+  DISCOVERY: 'Discovery', PROPOSAL: 'Proposal', NEGOTIATION: 'Negotiation',
+  CLOSED_WON: 'Closed Won', CLOSED_LOST: 'Closed Lost',
+};
+const STAGE_COLOR: Record<string, string> = {
+  DISCOVERY: '#2563eb', PROPOSAL: '#3b82f6', NEGOTIATION: '#d97706',
+  CLOSED_WON: '#16a34a', CLOSED_LOST: '#dc2626',
+};
+const STAGE_OPTIONS = [
+  { label: 'Discovery', value: 'DISCOVERY' },
+  { label: 'Proposal', value: 'PROPOSAL' },
+  { label: 'Negotiation', value: 'NEGOTIATION' },
+  { label: 'Closed Won', value: 'CLOSED_WON' },
+  { label: 'Closed Lost', value: 'CLOSED_LOST' },
+];
+
+// "2026-09-16T18:59:37.047Z" -> "2026-09-16", so a date input can show it
+const toDateInputValue = (iso?: string) => (iso ? iso.slice(0, 10) : '');
+
+export default function OpportunitiesPage() {
   const [opportunities, setOpportunities] = useState<any[]>([]);
+  const [customers, setCustomers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
 
-  useEffect(() => {
-    async function loadData() {
-      try {
-        const data = await crmApi.getOpportunities();
-        setOpportunities(data || []);
-      } catch (e) {
-        console.error(e);
-      } finally {
-        setLoading(false);
-      }
+  const [editTarget, setEditTarget] = useState<any | null>(null);
+  const [editForm, setEditForm] = useState({ value: '', stage: '', expectedCloseDate: '' });
+  const [error, setError] = useState('');
+
+  const emptyAddForm = { customerId: '', value: '0', stage: 'DISCOVERY', expectedCloseDate: '' };
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [addForm, setAddForm] = useState(emptyAddForm);
+  const [addError, setAddError] = useState('');
+
+  async function fetchAll() {
+    try {
+      const [oppData, custData] = await Promise.all([crmApi.getOpportunities(), crmApi.getCustomers()]);
+      setOpportunities(Array.isArray(oppData) ? oppData : []);
+      setCustomers(Array.isArray(custData) ? custData : []);
+    } catch (e) {
+      console.error('Opportunities fetch error', e);
+    } finally {
+      setLoading(false);
     }
-    loadData();
-  }, []);
+  }
 
-  // Preloaded demo data in case backend returns empty
-  const demoOpportunities = opportunities.length > 0 ? opportunities : [
-    { id: 1, name: 'ERP Implementation - TechCorp', stage: 'PROPOSAL', value: 85000, probability: 70, customer: { name: 'TechCorp Solutions' } },
-    { id: 2, name: 'CRM Upgrade - GlobalTrade', stage: 'NEGOTIATION', value: 45000, probability: 85, customer: { name: 'GlobalTrade Inc' } },
-    { id: 3, name: 'Cloud Migration - StartupXYZ', stage: 'QUALIFICATION', value: 120000, probability: 40, customer: { name: 'StartupXYZ' } },
-    { id: 4, name: 'Support Contract - MegaRetail', stage: 'CLOSED_WON', value: 30000, probability: 100, customer: { name: 'MegaRetail Corp' } },
-    { id: 5, name: 'Analytics Platform - DataDriven', stage: 'PROPOSAL', value: 95000, probability: 60, customer: { name: 'DataDriven Analytics' } },
-  ];
+  useEffect(() => { fetchAll(); }, []);
 
-  const filtered = demoOpportunities.filter((o: any) =>
-    `${o.name} ${o.stage} ${o.customer?.name || ''}`.toLowerCase().includes(search.toLowerCase())
-  );
+  function openEdit(o: any) {
+    setEditTarget(o);
+    setEditForm({ value: String(o.value ?? 0), stage: o.stage, expectedCloseDate: toDateInputValue(o.expectedCloseDate) });
+    setError('');
+  }
 
-  const stageColor = (s: string) => {
-    if (s === 'CLOSED_WON') return 'var(--green)';
-    if (s === 'CLOSED_LOST') return 'var(--red)';
-    if (s === 'NEGOTIATION') return 'var(--amber)';
-    if (s === 'PROPOSAL') return 'var(--purple)';
-    return 'var(--teal)';
-  };
+  async function handleSave() {
+    if (!editTarget) return;
+    try {
+      await crmApi.updateOpportunity(editTarget.id, {
+        value: parseFloat(editForm.value) || 0,
+        stage: editForm.stage,
+        expectedCloseDate: editForm.expectedCloseDate ? new Date(editForm.expectedCloseDate).toISOString() : undefined,
+      });
+      setEditTarget(null);
+      fetchAll();
+    } catch (e: any) {
+      setError(e.message || 'Could not update this opportunity.');
+    }
+  }
+
+  function openAdd() {
+    setAddForm(emptyAddForm);
+    setAddError('');
+    setShowAddModal(true);
+  }
+
+  async function handleAdd() {
+    if (!addForm.customerId) { setAddError('Choose which customer this deal is for.'); return; }
+    try {
+      await crmApi.createOpportunity({
+        customerId: addForm.customerId,
+        value: parseFloat(addForm.value) || 0,
+        stage: addForm.stage,
+        expectedCloseDate: addForm.expectedCloseDate ? new Date(addForm.expectedCloseDate).toISOString() : undefined,
+      });
+      setShowAddModal(false);
+      fetchAll();
+    } catch (e: any) {
+      setAddError(e.message || 'Could not create this opportunity.');
+    }
+  }
+
+  const formatCurrency = (n: number) => '$' + (n || 0).toLocaleString();
+  const openCount = opportunities.filter(o => o.stage !== 'CLOSED_WON' && o.stage !== 'CLOSED_LOST').length;
+  const openValue = opportunities.filter(o => o.stage !== 'CLOSED_WON' && o.stage !== 'CLOSED_LOST').reduce((s, o) => s + (o.value || 0), 0);
+  const wonValue = opportunities.filter(o => o.stage === 'CLOSED_WON').reduce((s, o) => s + (o.value || 0), 0);
 
   return (
-    <div className="page-content">
+    <div className="fade-in">
       <div className="page-header">
-        <div className="page-header-left">
+        <div>
           <h1>Opportunities</h1>
-          <p>Track sales pipeline and deal stages</p>
+          <p>Every deal in the pipeline, and where it stands.</p>
         </div>
-        <div className="page-actions">
-          <Link href="/crm" className="btn btn-secondary btn-sm">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="14" height="14" style={{marginRight: '4px'}}><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
-            Back to CRM
-          </Link>
-          <button className="btn btn-primary">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-            New Opportunity
+        <div className="page-header-actions">
+          <button className="btn btn-primary" onClick={openAdd}>
+            <Plus size={16} /> New Opportunity
           </button>
         </div>
       </div>
 
-      <div className="table-card fade-in">
-        <div className="table-toolbar">
-          <div className="table-title">All Opportunities ({filtered.length})</div>
-          <div className="table-controls">
-            <div className="tbl-search">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-              <input type="text" placeholder="Search opportunities..." value={search} onChange={e => setSearch(e.target.value)} />
-            </div>
-          </div>
+      <div className="kpi-grid" style={{ gridTemplateColumns: 'repeat(3, 1fr)', marginBottom: '24px' }}>
+        <div className="kpi-card">
+          <div className="kpi-card-label">OPEN DEALS</div>
+          <div className="kpi-card-value" style={{ marginTop: '8px' }}>{openCount}</div>
         </div>
+        <div className="kpi-card">
+          <div className="kpi-card-label">OPEN PIPELINE VALUE</div>
+          <div className="kpi-card-value" style={{ marginTop: '8px' }}>{formatCurrency(openValue)}</div>
+        </div>
+        <div className="kpi-card">
+          <div className="kpi-card-label">WON (ALL TIME)</div>
+          <div className="kpi-card-value" style={{ marginTop: '8px', color: '#16a34a' }}>{formatCurrency(wonValue)}</div>
+        </div>
+      </div>
+
+      <div className="card">
+        <h3 style={{ fontSize: '16px', fontWeight: 700, marginBottom: '16px' }}>All Opportunities ({opportunities.length})</h3>
         <table className="data-table">
           <thead>
             <tr>
-              <th>Opportunity</th>
               <th>Customer</th>
               <th>Stage</th>
               <th>Value</th>
-              <th>Probability</th>
+              <th>Expected Close</th>
               <th>Actions</th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={6} style={{textAlign: 'center', padding: '30px', color: 'var(--text-muted)'}}>Loading...</td></tr>
-            ) : filtered.length === 0 ? (
-              <tr><td colSpan={6} style={{textAlign: 'center', padding: '30px', color: 'var(--text-muted)'}}>No opportunities found</td></tr>
-            ) : (
-              filtered.map((o: any) => (
-                <tr key={o.id}>
-                  <td style={{fontWeight: 600}}>{o.name}</td>
-                  <td>{o.customer?.name || '-'}</td>
-                  <td>
-                    <span className="badge" style={{ color: stageColor(o.stage), backgroundColor: `${stageColor(o.stage)}15` }}>{o.stage.replace(/_/g, ' ')}</span>
-                  </td>
-                  <td style={{fontWeight: 600, color: 'var(--green)'}}>${(o.value || 0).toLocaleString()}</td>
-                  <td>
-                    <div style={{display: 'flex', alignItems: 'center', gap: '8px'}}>
-                      <div style={{flex: 1, height: '6px', backgroundColor: 'var(--border)', borderRadius: '3px', overflow: 'hidden'}}>
-                        <div style={{width: `${o.probability}%`, height: '100%', backgroundColor: stageColor(o.stage), borderRadius: '3px'}} />
-                      </div>
-                      <span style={{fontSize: '12px', fontWeight: 600}}>{o.probability}%</span>
-                    </div>
-                  </td>
-                  <td>
-                    <div className="action-btns">
-                      <button className="act-btn act-edit" title="Edit">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))
-            )}
+              <tr><td colSpan={5} style={{ textAlign: 'center', padding: '30px', color: 'var(--color-text-muted)' }}>Loading…</td></tr>
+            ) : opportunities.length === 0 ? (
+              <tr><td colSpan={5} style={{ textAlign: 'center', padding: '30px', color: 'var(--color-text-muted)' }}>No opportunities yet.</td></tr>
+            ) : opportunities.map((o) => (
+              <tr key={o.id}>
+                <td style={{ fontWeight: 600 }}>{o.customer?.name || '—'}{o.customer?.company ? ` · ${o.customer.company}` : ''}</td>
+                <td>
+                  <span style={{ color: STAGE_COLOR[o.stage], background: `${STAGE_COLOR[o.stage]}18`, padding: '3px 10px', borderRadius: '999px', fontSize: '12px', fontWeight: 700 }}>
+                    {STAGE_LABEL[o.stage] || o.stage}
+                  </span>
+                </td>
+                <td style={{ fontWeight: 700 }}>{formatCurrency(o.value)}</td>
+                <td style={{ color: 'var(--color-text-secondary)' }}>{o.expectedCloseDate ? new Date(o.expectedCloseDate).toLocaleDateString() : '—'}</td>
+                <td>
+                  <button className="btn btn-secondary btn-sm" onClick={() => openEdit(o)}>
+                    <Pencil size={13} /> Edit
+                  </button>
+                </td>
+              </tr>
+            ))}
           </tbody>
         </table>
       </div>
+
+      {/* EDIT OPPORTUNITY */}
+      <Modal isOpen={!!editTarget} onClose={() => setEditTarget(null)} title={`Edit Opportunity — ${editTarget?.customer?.name || ''}`} width="420px">
+        {error && (
+          <div style={{ padding: '10px 14px', marginBottom: 14, background: '#fef2f2', border: '1px solid #fecaca', color: '#dc2626', borderRadius: 8, fontSize: 13, fontWeight: 600 }}>{error}</div>
+        )}
+        <FormField label="Deal Value ($)" type="number" value={editForm.value} onChange={(v) => setEditForm({ ...editForm, value: v })} required placeholder="0" />
+        <FormField label="Stage" type="select" value={editForm.stage} onChange={(v) => setEditForm({ ...editForm, stage: v })} options={STAGE_OPTIONS} />
+        <FormField label="Expected Close Date" type="date" value={editForm.expectedCloseDate} onChange={(v) => setEditForm({ ...editForm, expectedCloseDate: v })} />
+        <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', marginTop: '8px' }}>
+          <button className="btn btn-secondary" onClick={() => setEditTarget(null)}>Cancel</button>
+          <button className="btn btn-primary" onClick={handleSave}>Save</button>
+        </div>
+      </Modal>
+
+      {/* NEW OPPORTUNITY */}
+      <Modal isOpen={showAddModal} onClose={() => setShowAddModal(false)} title="New Opportunity" width="420px">
+        {addError && (
+          <div style={{ padding: '10px 14px', marginBottom: 14, background: '#fef2f2', border: '1px solid #fecaca', color: '#dc2626', borderRadius: 8, fontSize: 13, fontWeight: 600 }}>{addError}</div>
+        )}
+        <FormField label="Customer" type="select" value={addForm.customerId} onChange={(v) => setAddForm({ ...addForm, customerId: v })}
+          options={customers.map((c) => ({ label: `${c.name}${c.company ? ` (${c.company})` : ''}`, value: c.id }))} />
+        <FormField label="Deal Value ($)" type="number" value={addForm.value} onChange={(v) => setAddForm({ ...addForm, value: v })} placeholder="0" />
+        <FormField label="Stage" type="select" value={addForm.stage} onChange={(v) => setAddForm({ ...addForm, stage: v })} options={STAGE_OPTIONS} />
+        <FormField label="Expected Close Date" type="date" value={addForm.expectedCloseDate} onChange={(v) => setAddForm({ ...addForm, expectedCloseDate: v })} />
+        <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', marginTop: '8px' }}>
+          <button className="btn btn-secondary" onClick={() => setShowAddModal(false)}>Cancel</button>
+          <button className="btn btn-primary" onClick={handleAdd}>Create Opportunity</button>
+        </div>
+      </Modal>
     </div>
   );
 }

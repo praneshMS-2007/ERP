@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import {
   Users, Target, Briefcase, DollarSign, TrendingUp,
-  Plus, Pencil, Mail, Phone, ChevronLeft, ChevronRight, Zap,
+  Plus, Pencil, ChevronLeft, ChevronRight, Zap,
 } from 'lucide-react';
 import Link from 'next/link';
 import { crmApi, exportApi } from '../../services/api';
@@ -19,6 +19,7 @@ export default function CRMPage() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [followUps, setFollowUps] = useState<any[]>([]);
   const [form, setForm] = useState({ name: '', email: '', phone: '', company: '', source: '' });
+  const [formError, setFormError] = useState('');
 
   async function fetchAll() {
     try {
@@ -35,8 +36,14 @@ export default function CRMPage() {
       setOpportunities(oppList);
       setFollowUps(fuList);
 
-      const pipelineValue = oppList.reduce((sum: number, o: any) => sum + (o.value || 0), 0);
-      setStats({ customers: custList.length, leads: leadList.length, opportunities: oppList.length, pipelineValue });
+      // "Active" means still in progress — a converted or lost lead isn't a
+      // prospect any more, and a closed opportunity isn't open any more.
+      // Counting them anyway was the bug: both cards used to just report
+      // the total row count regardless of status.
+      const activeLeadCount = leadList.filter((l: any) => l.status !== 'CONVERTED' && l.status !== 'LOST').length;
+      const openOpportunities = oppList.filter((o: any) => o.stage !== 'CLOSED_WON' && o.stage !== 'CLOSED_LOST');
+      const pipelineValue = openOpportunities.reduce((sum: number, o: any) => sum + (o.value || 0), 0);
+      setStats({ customers: custList.length, leads: activeLeadCount, opportunities: openOpportunities.length, pipelineValue });
 
       if (leadList.length > 0 && !selectedLead) setSelectedLead(leadList[0]);
     } catch (e) { console.error('CRM fetch error', e); }
@@ -55,15 +62,24 @@ export default function CRMPage() {
 
   async function handleAddLead() {
     if (!form.name) return;
-    await crmApi.createLead(form as any);
-    setShowAddModal(false);
-    setForm({ name: '', email: '', phone: '', company: '', source: '' });
-    fetchAll();
+    setFormError('');
+    try {
+      await crmApi.createLead({ ...form, status: 'NEW' });
+      setShowAddModal(false);
+      setForm({ name: '', email: '', phone: '', company: '', source: '' });
+      fetchAll();
+    } catch (e: any) {
+      setFormError(e.message || 'Could not create this lead.');
+    }
   }
 
   async function handleConvertLead(id: string) {
-    await crmApi.convertLead(id);
-    fetchAll();
+    try {
+      await crmApi.convertLead(id);
+      fetchAll();
+    } catch (e: any) {
+      alert(e.message || 'Could not convert this lead.');
+    }
   }
 
   const formatCurrency = (n: number) => n >= 1000 ? `$${(n / 1000).toFixed(1)}K` : `$${n}`;
@@ -85,7 +101,7 @@ export default function CRMPage() {
         </div>
         <div className="page-header-actions">
           <ExportButton onExport={(format) => exportApi.exportCustomers(format)} label="Export Customers" />
-          <button className="btn btn-primary" onClick={() => setShowAddModal(true)}>
+          <button className="btn btn-primary" onClick={() => { setFormError(''); setShowAddModal(true); }}>
             <Plus size={16} /> New Lead
           </button>
         </div>
@@ -167,7 +183,7 @@ export default function CRMPage() {
                     <td><span className={badgeClass(l.status)}>{l.status}</span></td>
                     <td style={{ color: 'var(--color-text-secondary)' }}>{new Date(l.createdAt).toLocaleDateString()}</td>
                     <td>
-                      {l.status !== 'CONVERTED' && (
+                      {l.status !== 'CONVERTED' && l.status !== 'LOST' && (
                         <button className="btn btn-primary btn-sm" onClick={(e) => { e.stopPropagation(); handleConvertLead(l.id); }}>Convert</button>
                       )}
                     </td>
@@ -225,14 +241,6 @@ export default function CRMPage() {
                 ))}
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                <a href={selectedLead.email ? `mailto:${selectedLead.email}` : '#'} className="btn btn-primary" style={{ justifyContent: 'center', textDecoration: 'none' }}>
-                  <Mail size={16} /> Send Email
-                </a>
-                <a href={selectedLead.phone ? `tel:${selectedLead.phone}` : '#'} className="btn btn-secondary" style={{ justifyContent: 'center', textDecoration: 'none' }}>
-                  <Phone size={16} /> Call Lead
-                </a>
-              </div>
             </>
           ) : (
             <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--color-text-muted)' }}>Click a lead to view details</div>
@@ -242,6 +250,9 @@ export default function CRMPage() {
 
       {/* ADD LEAD MODAL */}
       <Modal isOpen={showAddModal} onClose={() => setShowAddModal(false)} title="Create New Lead">
+        {formError && (
+          <div style={{ padding: '10px 14px', marginBottom: 14, background: '#fef2f2', border: '1px solid #fecaca', color: '#dc2626', borderRadius: 8, fontSize: 13, fontWeight: 600 }}>{formError}</div>
+        )}
         <FormField label="Full Name" value={form.name} onChange={(v) => setForm({ ...form, name: v })} required placeholder="e.g. Sarah Jenkins" />
         <FormField label="Email" type="email" value={form.email} onChange={(v) => setForm({ ...form, email: v })} placeholder="sarah@company.com" />
         <FormField label="Phone" value={form.phone} onChange={(v) => setForm({ ...form, phone: v })} placeholder="+1 555-0123" />

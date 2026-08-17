@@ -8,9 +8,13 @@
   "scripts": {
     "build": "nest build",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
+    "prestart": "node scripts/free-port.js",
     "start": "nest start",
+    "prestart:dev": "node scripts/free-port.js",
     "start:dev": "nest start --watch",
+    "prestart:debug": "node scripts/free-port.js",
     "start:debug": "nest start --debug --watch",
+    "prestart:prod": "node scripts/free-port.js",
     "start:prod": "node dist/src/main.js",
     "postinstall": "prisma generate && npm run build",
     "lint": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix",

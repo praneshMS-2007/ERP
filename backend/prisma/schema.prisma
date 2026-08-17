@@ -349,6 +349,9 @@ model Lead {
   phone     String?
   company   String?
   status    LeadStatus
+  // Where this lead came from — the "New Lead" form already asked for this,
+  // but the field didn't exist here, so every submission failed outright.
+  source    String?
   customer  Customer?
   followUps FollowUp[]
   createdAt DateTime    @default(now()) @map("created_at")
@@ -363,6 +366,11 @@ model Customer {
   email               String?
   phone               String?
   company             String?
+  // Whether this account is still a live customer or has churned — separate
+  // from a Lead's own status, and from Employee.status (that one also
+  // revokes login access on removal; a customer has no login here, so this
+  // is a plain flag with no cascading side effects).
+  status              CustomerStatus  @default(ACTIVE)
   convertedFromLeadId String?         @unique @map("converted_from_lead_id")
   lead                Lead?           @relation(fields: [convertedFromLeadId], references: [id])
   opportunities       Opportunity[]
@@ -389,16 +397,22 @@ model Opportunity {
 }
 
 model FollowUp {
-  id             String    @id @default(uuid())
-  leadId         String?   @map("lead_id")
-  lead           Lead?     @relation(fields: [leadId], references: [id])
-  customerId     String?   @map("customer_id")
-  customer       Customer? @relation(fields: [customerId], references: [id])
+  id             String       @id @default(uuid())
+  leadId         String?      @map("lead_id")
+  lead           Lead?        @relation(fields: [leadId], references: [id])
+  customerId     String?      @map("customer_id")
+  customer       Customer?    @relation(fields: [customerId], references: [id])
+  // The "Schedule Follow-up" form already asked Call/Email/Meeting/Demo,
+  // but nothing on this model stored it, so every submission failed.
+  type           FollowUpType @default(CALL)
   date           DateTime
   notes          String
-  nextActionDate DateTime? @map("next_action_date")
-  createdAt      DateTime  @default(now()) @map("created_at")
-  updatedAt      DateTime  @updatedAt @map("updated_at")
+  nextActionDate DateTime?    @map("next_action_date")
+  // Null = still upcoming. Set once someone marks it done — kept as history
+  // rather than deleted, same as every other status flip in this app.
+  completedAt    DateTime?    @map("completed_at")
+  createdAt      DateTime     @default(now()) @map("created_at")
+  updatedAt      DateTime     @updatedAt @map("updated_at")
 
   @@map("follow_ups")
 }
@@ -938,12 +952,20 @@ model TaxRecord {
 
 model SupportTicket {
   id          String         @id @default(uuid())
-  customerId  String         @map("customer_id")
-  customer    Customer       @relation(fields: [customerId], references: [id])
+  // Nullable — the ticket form already let you leave "Customer" blank and
+  // rendered it as "Guest / Unassigned", but the column itself was
+  // required, so submitting without a customer crashed every time.
+  customerId  String?        @map("customer_id")
+  customer    Customer?      @relation(fields: [customerId], references: [id])
   subject     String
   description String
   status      TicketStatus   @default(OPEN)
   priority    TicketPriority @default(MEDIUM)
+  // The window the issue is expected to be worked in — set by whoever files
+  // the ticket, editable afterward. Independent of createdAt/updatedAt,
+  // which just track the row's own history.
+  startDate   DateTime?      @map("start_date")
+  endDate     DateTime?      @map("end_date")
   createdAt   DateTime       @default(now()) @map("created_at")
   updatedAt   DateTime       @updatedAt @map("updated_at")
 
@@ -1120,6 +1142,18 @@ enum LeadStatus {
   QUALIFIED
   CONVERTED
   LOST
+}
+
+enum CustomerStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum FollowUpType {
+  CALL
+  EMAIL
+  MEETING
+  DEMO
 }
 
 enum OpportunityStage {

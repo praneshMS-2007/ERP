@@ -1,6 +1,6 @@
-import { Controller, Post, Get, Body } from '@nestjs/common';
+import { Controller, Post, Body } from '@nestjs/common';
 import { AiService } from './ai.service';
-import { RequirePermission, CurrentUser } from '../auth/decorators';
+import { CurrentUser } from '../auth/decorators';
 import type { AuthenticatedUser } from '../auth/permission.util';
 
 @Controller('ai')
@@ -14,31 +14,5 @@ export class AiController {
   @Post('chat')
   async chat(@Body() body: { messages: any[] }, @CurrentUser() user: AuthenticatedUser) {
     return this.aiService.chatCompletion(body.messages, user);
-  }
-
-  @Get('sales-insights')
-  @RequirePermission('CRM', 'READ')
-  async getSalesInsights() {
-    return this.aiService.getSalesInsights();
-  }
-
-  @Get('hr-insights')
-  @RequirePermission('HR', 'READ')
-  async getHrInsights(@CurrentUser() user: AuthenticatedUser) {
-    return this.aiService.getHrInsights(user);
-  }
-
-  @Get('inventory-insights')
-  @RequirePermission('INVENTORY', 'READ')
-  async getInventoryInsights() {
-    return this.aiService.getInventoryInsights();
-  }
-
-  // Cross-module executive rollup — gated like the Analytics dashboard
-  // itself, not any single module's permission.
-  @Get('executive-summary')
-  @RequirePermission('ANALYTICS', 'READ')
-  async getExecutiveSummary() {
-    return this.aiService.getExecutiveSummary();
   }
 }

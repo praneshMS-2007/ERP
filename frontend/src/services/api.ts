@@ -96,12 +96,24 @@ export const crmApi = {
   getOpportunities: () => fetchApi('/crm/opportunities'),
   getSupportTickets: () => fetchApi('/crm/tickets'),
   getFollowUps: () => fetchApi('/crm/follow-ups'),
-  createSupportTicket: (data: any) => fetchApi('/crm/tickets', { method: 'POST', body: JSON.stringify(data) }),
-  createFollowUp: (data: any) => fetchApi('/crm/follow-ups', { method: 'POST', body: JSON.stringify(data) }),
-  createLead: (data: any) => fetchApi('/crm/leads', { method: 'POST', body: JSON.stringify(data) }),
-  createCustomer: (data: any) => fetchApi('/crm/customers', { method: 'POST', body: JSON.stringify(data) }),
-  convertLead: (id: string) => fetchApi(`/crm/leads/${id}/convert`, { method: 'POST' }),
-  updateSupportTicketStatus: (id: string, status: string) => fetchApi(`/crm/tickets/${id}/status`, { method: 'PUT', body: JSON.stringify({ status }) }),
+  createSupportTicket: (data: any) => mutateApi('/crm/tickets', { method: 'POST', body: JSON.stringify(data) }),
+  createFollowUp: (data: any) => mutateApi('/crm/follow-ups', { method: 'POST', body: JSON.stringify(data) }),
+  completeFollowUp: (id: string) => mutateApi(`/crm/follow-ups/${id}/complete`, { method: 'PUT' }),
+  createLead: (data: any) => mutateApi('/crm/leads', { method: 'POST', body: JSON.stringify(data) }),
+  // No createCustomer — a Customer only ever comes from converting a Lead
+  // (see convertLead below). Editing an existing one is still allowed.
+  updateLead: (id: string, data: any) => mutateApi(`/crm/leads/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteLead: (id: string) => mutateApi(`/crm/leads/${id}`, { method: 'DELETE' }),
+  updateCustomer: (id: string, data: any) => mutateApi(`/crm/customers/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteCustomer: (id: string) => mutateApi(`/crm/customers/${id}`, { method: 'DELETE' }),
+  convertLead: (id: string) => mutateApi(`/crm/leads/${id}/convert`, { method: 'POST' }),
+  updateSupportTicketStatus: (id: string, status: string) => mutateApi(`/crm/tickets/${id}/status`, { method: 'PUT', body: JSON.stringify({ status }) }),
+  updateSupportTicket: (id: string, data: any) => mutateApi(`/crm/tickets/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteSupportTicket: (id: string) => mutateApi(`/crm/tickets/${id}`, { method: 'DELETE' }),
+  updateOpportunity: (id: string, data: { value?: number; stage?: string; expectedCloseDate?: string }) =>
+    mutateApi(`/crm/opportunities/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  createOpportunity: (data: { customerId: string; value: number; stage: string; expectedCloseDate?: string }) =>
+    mutateApi('/crm/opportunities', { method: 'POST', body: JSON.stringify(data) }),
 };
 
 export const hrmApi = {
@@ -362,10 +374,6 @@ export const aiApi = {
     method: 'POST',
     body: JSON.stringify({ messages }),
   }),
-  getSalesInsights: () => fetchApi('/ai/sales-insights'),
-  getHrInsights: () => fetchApi('/ai/hr-insights'),
-  getInventoryInsights: () => fetchApi('/ai/inventory-insights'),
-  getExecutiveSummary: () => fetchApi('/ai/executive-summary'),
 };
 
 export const notificationApi = {
