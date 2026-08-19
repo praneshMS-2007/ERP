@@ -234,20 +234,44 @@ export const selfApi = {
 
 export const inventoryApi = {
   getProducts: () => fetchApi('/inventory/products'),
+  getProduct: (id: string) => fetchApi(`/inventory/products/${id}`),
   getStockAlerts: () => fetchApi('/inventory/stock-alerts'),
   getCategories: () => fetchApi('/inventory/categories'),
   createCategory: (data: any) => fetchApi('/inventory/categories', { method: 'POST', body: JSON.stringify(data) }),
   getSuppliers: () => fetchApi('/inventory/suppliers'),
   getWarehouses: () => fetchApi('/inventory/warehouses'),
+  getWarehouseDetail: (id: string) => fetchApi(`/inventory/warehouses/${id}`),
   getSalesOrders: () => fetchApi('/inventory/sales-orders'),
   getPurchaseOrders: () => fetchApi('/inventory/purchase-orders'),
-  createProduct: (data: any) => fetchApi('/inventory/products', { method: 'POST', body: JSON.stringify(data) }),
+  createProduct: (data: any) => mutateApi('/inventory/products', { method: 'POST', body: JSON.stringify(data) }),
+  updateProduct: (id: string, data: any) => mutateApi(`/inventory/products/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteProduct: (id: string) => mutateApi(`/inventory/products/${id}`, { method: 'DELETE' }),
+  sellProduct: (id: string, data: { warehouseId: string; quantity: number }) =>
+    mutateApi(`/inventory/products/${id}/sell`, { method: 'POST', body: JSON.stringify(data) }),
+  addProductStock: (id: string, data: { warehouseId: string; quantity: number }) =>
+    mutateApi(`/inventory/products/${id}/add-stock`, { method: 'POST', body: JSON.stringify(data) }),
   createSupplier: (data: any) => fetchApi('/inventory/suppliers', { method: 'POST', body: JSON.stringify(data) }),
-  createPurchaseOrder: (data: any) => fetchApi('/inventory/purchase-orders', { method: 'POST', body: JSON.stringify(data) }),
-  createWarehouse: (data: any) => fetchApi('/inventory/warehouses', { method: 'POST', body: JSON.stringify(data) }),
-  createSalesOrder: (data: any) => fetchApi('/inventory/sales-orders', { method: 'POST', body: JSON.stringify(data) }),
-  updateSalesOrderStatus: (id: string, status: string) => fetchApi(`/inventory/sales-orders/${id}/status`, { method: 'PUT', body: JSON.stringify({ status }) }),
+  createPurchaseOrder: (data: any) => mutateApi('/inventory/purchase-orders', { method: 'POST', body: JSON.stringify(data) }),
+  createWarehouse: (data: any) => mutateApi('/inventory/warehouses', { method: 'POST', body: JSON.stringify(data) }),
+  updateWarehouse: (id: string, data: any) => mutateApi(`/inventory/warehouses/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  geocode: (query: string) => mutateApi(`/inventory/geocode?q=${encodeURIComponent(query)}`, { method: 'GET' }),
+  reverseGeocode: (lat: number, lng: number) => mutateApi(`/inventory/reverse-geocode?lat=${lat}&lng=${lng}`, { method: 'GET' }),
+  getSalesHistory: () => fetchApi('/inventory/sales-history'),
+  getRecentStockActivity: (limit?: number) => fetchApi(`/inventory/stock-activity${limit ? `?limit=${limit}` : ''}`),
+  getProductAdditionsHistory: () => fetchApi('/inventory/product-additions'),
+  createSalesOrder: (data: any) => mutateApi('/inventory/sales-orders', { method: 'POST', body: JSON.stringify(data) }),
+  updateSalesOrderStatus: (id: string, status: string) => mutateApi(`/inventory/sales-orders/${id}/status`, { method: 'PUT', body: JSON.stringify({ status }) }),
   updatePurchaseOrderStatus: (id: string, status: string) => fetchApi(`/inventory/purchase-orders/${id}/status`, { method: 'PUT', body: JSON.stringify({ status }) }),
+};
+
+export const rawMaterialApi = {
+  getRawMaterials: () => fetchApi('/inventory/raw-materials'),
+  createRawMaterial: (data: any) => mutateApi('/inventory/raw-materials', { method: 'POST', body: JSON.stringify(data) }),
+  updateRawMaterial: (id: string, data: any) => mutateApi(`/inventory/raw-materials/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteRawMaterial: (id: string) => mutateApi(`/inventory/raw-materials/${id}`, { method: 'DELETE' }),
+  adjustRawMaterialStock: (id: string, data: { warehouseId: string; delta: number }) =>
+    mutateApi(`/inventory/raw-materials/${id}/adjust`, { method: 'PUT', body: JSON.stringify(data) }),
+  getRawMaterialAdditionsHistory: () => fetchApi('/inventory/raw-material-additions'),
 };
 
 export const projectApi = {
@@ -361,12 +385,21 @@ export const financeApi = {
   getPayments: () => fetchApi('/finance/payments'),
   getLedgerEntries: () => fetchApi('/finance/ledger'),
   getTaxRecords: () => fetchApi('/finance/taxes'),
-  createExpense: (data: any) => fetchApi('/finance/expenses', { method: 'POST', body: JSON.stringify(data) }),
-  createInvoice: (data: any) => fetchApi('/finance/invoices', { method: 'POST', body: JSON.stringify(data) }),
-  createIncome: (data: any) => fetchApi('/finance/incomes', { method: 'POST', body: JSON.stringify(data) }),
-  createPayment: (data: any) => fetchApi('/finance/payments', { method: 'POST', body: JSON.stringify(data) }),
-  createLedgerEntry: (data: any) => fetchApi('/finance/ledger', { method: 'POST', body: JSON.stringify(data) }),
-  createTaxRecord: (data: any) => fetchApi('/finance/taxes', { method: 'POST', body: JSON.stringify(data) }),
+  createExpense: (data: any) => mutateApi('/finance/expenses', { method: 'POST', body: JSON.stringify(data) }),
+  updateExpense: (id: string, data: any) => mutateApi(`/finance/expenses/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteExpense: (id: string) => mutateApi(`/finance/expenses/${id}`, { method: 'DELETE' }),
+  createInvoice: (data: any) => mutateApi('/finance/invoices', { method: 'POST', body: JSON.stringify(data) }),
+  updateInvoice: (id: string, data: any) => mutateApi(`/finance/invoices/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteInvoice: (id: string) => mutateApi(`/finance/invoices/${id}`, { method: 'DELETE' }),
+  createIncome: (data: any) => mutateApi('/finance/incomes', { method: 'POST', body: JSON.stringify(data) }),
+  updateIncome: (id: string, data: any) => mutateApi(`/finance/incomes/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteIncome: (id: string) => mutateApi(`/finance/incomes/${id}`, { method: 'DELETE' }),
+  createBudget: (data: any) => mutateApi('/finance/budgets', { method: 'POST', body: JSON.stringify(data) }),
+  updateBudget: (id: string, data: any) => mutateApi(`/finance/budgets/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteBudget: (id: string) => mutateApi(`/finance/budgets/${id}`, { method: 'DELETE' }),
+  createPayment: (data: any) => mutateApi('/finance/payments', { method: 'POST', body: JSON.stringify(data) }),
+  createLedgerEntry: (data: any) => mutateApi('/finance/ledger', { method: 'POST', body: JSON.stringify(data) }),
+  createTaxRecord: (data: any) => mutateApi('/finance/taxes', { method: 'POST', body: JSON.stringify(data) }),
 };
 
 export const aiApi = {

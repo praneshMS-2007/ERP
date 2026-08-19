@@ -5,6 +5,7 @@ import { Download, FileText, ArrowUpRight, ArrowDownRight, Briefcase, Plus, Filt
 import { financeApi, exportApi } from '../../../services/api';
 import ExportButton from '../../../components/ExportButton';
 import Modal, { FormField } from '../../../components/Modal';
+import { formatINR } from '../../../lib/currency';
 
 export default function LedgerPage() {
   const [activeTab, setActiveTab] = useState<'ledger' | 'taxes'>('ledger');
@@ -47,7 +48,6 @@ export default function LedgerPage() {
   const totalDebits = ledgerEntries.filter(e => e.type === 'DEBIT').reduce((s, e) => s + (e.amount || 0), 0);
   const pendingTax = taxRecords.filter(t => t.status === 'UNPAID' || t.status === 'PENDING').reduce((s, t) => s + (t.amount || 0), 0);
 
-  const formatCurrency = (n: number) => '$' + n.toLocaleString();
 
   return (
     <div className="fade-in">
@@ -70,7 +70,7 @@ export default function LedgerPage() {
             <div className="kpi-card-label">Total Credits</div>
             <div className="kpi-card-icon" style={{ background: '#eff6ff', color: '#2563eb' }}><Landmark size={20} /></div>
           </div>
-          <div className="kpi-card-value">{formatCurrency(totalCredits)}</div>
+          <div className="kpi-card-value">{formatINR(totalCredits)}</div>
           <div className="kpi-card-trend up">Total credit movements</div>
         </div>
         <div className="kpi-card">
@@ -78,7 +78,7 @@ export default function LedgerPage() {
             <div className="kpi-card-label">Total Debits</div>
             <div className="kpi-card-icon" style={{ background: '#fef2f2', color: '#dc2626' }}><Briefcase size={20} /></div>
           </div>
-          <div className="kpi-card-value">{formatCurrency(totalDebits)}</div>
+          <div className="kpi-card-value">{formatINR(totalDebits)}</div>
           <div className="kpi-card-trend down">Total debit movements</div>
         </div>
         <div className="kpi-card">
@@ -86,7 +86,7 @@ export default function LedgerPage() {
             <div className="kpi-card-label">Pending Tax Liability</div>
             <div className="kpi-card-icon" style={{ background: '#fef3c7', color: '#d97706' }}><FileText size={20} /></div>
           </div>
-          <div className="kpi-card-value">{formatCurrency(pendingTax)}</div>
+          <div className="kpi-card-value">{formatINR(pendingTax)}</div>
           <div className="kpi-card-trend neutral">Unpaid tax records</div>
         </div>
       </div>
@@ -132,10 +132,10 @@ export default function LedgerPage() {
                   <td>{entry.description}</td>
                   <td><span className="badge badge-default">{entry.accountCode}</span></td>
                   <td style={{ fontWeight: 600, color: 'var(--color-success)' }}>
-                    {entry.type === 'CREDIT' ? `$${entry.amount}` : '-'}
+                    {entry.type === 'CREDIT' ? formatINR(entry.amount) : '-'}
                   </td>
                   <td style={{ fontWeight: 600, color: 'var(--color-danger)' }}>
-                    {entry.type === 'DEBIT' ? `$${entry.amount}` : '-'}
+                    {entry.type === 'DEBIT' ? formatINR(entry.amount) : '-'}
                   </td>
                 </tr>
               ))}
@@ -161,7 +161,7 @@ export default function LedgerPage() {
                 <tr key={i}>
                   <td style={{ fontWeight: 600 }}>{t.period}</td>
                   <td>{t.type}</td>
-                  <td style={{ fontWeight: 700 }}>${t.amount}</td>
+                  <td style={{ fontWeight: 700 }}>{formatINR(t.amount)}</td>
                   <td>{t.dueDate ? new Date(t.dueDate).toLocaleDateString() : 'N/A'}</td>
                   <td>
                     <span className={t.status === 'PAID' ? 'badge badge-healthy' : 'badge badge-warning'}>{t.status}</span>

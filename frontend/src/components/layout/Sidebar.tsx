@@ -8,7 +8,7 @@ import {
   LayoutDashboard,
   Users,
   Globe,
-  DollarSign,
+  IndianRupee,
   Box,
   FolderKanban,
   BarChart3,
@@ -98,9 +98,10 @@ const allNavItems: NavItem[] = [
     { name: 'Support Tickets', path: '/crm/support' },
     { name: 'Contacts', path: '/crm/contacts' },
   ]},
-  { name: 'Finance', path: '/finance', icon: DollarSign, requiredModule: 'FINANCE', subItems: [
+  { name: 'Finance', path: '/finance', icon: IndianRupee, requiredModule: 'FINANCE', subItems: [
     { name: 'Overview', path: '/finance' },
     { name: 'General Ledger', path: '/finance/ledger' },
+    { name: 'Budgets', path: '/finance/budgets' },
     // Mirror of HR Management's Payroll link above — same page (it already
     // adapts its own actions per viewer: HR gets Add Payroll, Finance gets
     // Mark Paid), just reachable from Finance's own section instead, and
@@ -112,7 +113,9 @@ const allNavItems: NavItem[] = [
   ]},
   { name: 'Inventory', path: '/inventory', icon: Box, requiredModule: 'INVENTORY', subItems: [
     { name: 'Overview', path: '/inventory' },
+    { name: 'Products', path: '/inventory/products' },
     { name: 'Warehouse', path: '/inventory/warehouse' },
+    { name: 'Raw Materials', path: '/inventory/raw-materials' },
     { name: 'Sales Orders', path: '/inventory/sales-orders' },
   ]},
   // "Project Management" is the parent group; its own landing link is now

@@ -1,4 +1,4 @@
-import { PrismaClient, EmpType, EmpStatus, AttendanceStatus, LeaveType, LeaveStatus, ProductStatus, ProjectStatus, Priority, InvoiceStatus, ExpenseCategory, LedgerType, POStatus } from '@prisma/client';
+import { PrismaClient, EmpType, EmpStatus, AttendanceStatus, LeaveType, LeaveStatus, ProductStatus, ProjectStatus, Priority, POStatus } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
@@ -201,7 +201,7 @@ async function main() {
   const cat3 = await prisma.category.upsert({ where: { name: 'Accessories' }, update: {}, create: { name: 'Accessories', description: 'Peripherals and adapters' } });
 
   const supp1 = await prisma.supplier.create({
-    data: { name: 'TechSource Global', contactPerson: 'David Miller', email: 'sales@techsource.com', phone: '+1 800-555-0199', city: 'San Jose', country: 'USA' }
+    data: { name: 'TechSource India', contactPerson: 'Deepak Mehta', email: 'sales@techsourceindia.com', phone: '+91 80 4567 8900', city: 'Bengaluru', country: 'India' }
   });
 
   const products = [
@@ -236,8 +236,8 @@ async function main() {
 
   await prisma.warehouse.createMany({
     data: [
-      { name: 'Dubai Central Logistics Hub', location: 'Jebel Ali Freezone, Dubai', capacity: 10000 },
-      { name: 'Riyadh Distribution Center', location: 'Industrial City, Riyadh', capacity: 7500 },
+      { name: 'Mumbai Central Logistics Hub', location: 'Bhiwandi, Maharashtra', capacity: 10000 },
+      { name: 'Bengaluru Distribution Center', location: 'Whitefield, Bengaluru, Karnataka', capacity: 7500 },
     ],
     skipDuplicates: true,
   });
@@ -266,33 +266,11 @@ async function main() {
   console.log('  ✓ Projects and Tasks seeded');
 
   // ========== 7. FINANCE MODULE DATA ==========
-  await prisma.invoice.createMany({
-    data: [
-      { invoiceNo: 'INV-2026-101', clientName: 'Apex Global Inc', amount: 14500, status: InvoiceStatus.PAID, dueDate: new Date('2026-08-30') },
-      { invoiceNo: 'INV-2026-102', clientName: 'Skyline Corp', amount: 28000, status: InvoiceStatus.UNPAID, dueDate: new Date('2026-09-15') },
-    ],
-    skipDuplicates: true,
-  });
-
-  await prisma.expense.createMany({
-    data: [
-      { description: 'Cloud Infrastructure Servers (AWS)', amount: 4200, category: ExpenseCategory.OPERATIONAL, date: new Date() },
-      { description: 'Monthly Payroll Disbursement', amount: 52000, category: ExpenseCategory.PAYROLL, date: new Date() },
-    ],
-    skipDuplicates: true,
-  });
-
-  // Balanced Ledger Entries (Matching Debits & Credits = 0)
-  await prisma.ledgerEntry.createMany({
-    data: [
-      { account: '1010-CASH', type: LedgerType.DEBIT, amount: 14500, description: 'Customer Invoice Payment Received' },
-      { account: '4000-REVENUE', type: LedgerType.CREDIT, amount: 14500, description: 'Revenue Recognition INV-2026-101' },
-      { account: '5000-OPERATIONAL-EXPENSE', type: LedgerType.DEBIT, amount: 4200, description: 'Cloud Infrastructure Payment' },
-      { account: '1010-CASH', type: LedgerType.CREDIT, amount: 4200, description: 'Bank Payout for Infrastructure' },
-    ],
-    skipDuplicates: true,
-  });
-  console.log('  ✓ Finance Invoices, Expenses, and Balanced Double-Entry Ledger seeded');
+  // Deliberately empty. Invoices, Expenses, Income, Budgets, and Ledger
+  // entries are production data, not fixtures — they must only ever be
+  // created through the real app (Add Invoice, Log Expense, Record Payment,
+  // payroll auto-created expenses, etc.), never seeded fake.
+  console.log('  ✓ Finance module left empty (no fixtures — real data only)');
 
   // ========== 8. NOTIFICATIONS & AUDIT LOGS ==========
   const adminUserId = createdUserMap['pranesh@shuroq.com'] || createdUserMap['admin@shuroq.com'];
@@ -301,7 +279,6 @@ async function main() {
       data: [
         { userId: adminUserId, title: 'Stock Alert: Fiber Optics', message: 'Inventory fell below minimum threshold (12 units remaining).', type: 'WARNING' },
         { userId: adminUserId, title: 'Leave Request Approved', message: 'Arthur Vance vacation request has been approved.', type: 'SUCCESS' },
-        { userId: adminUserId, title: 'Invoice INV-2026-101 Paid', message: 'Apex Global Inc completed payment of $14,500.', type: 'INFO' },
       ]
     });
 

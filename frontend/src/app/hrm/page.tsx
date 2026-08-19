@@ -159,7 +159,7 @@ export default function HRManagement() {
   const absentLine = trendData.data.map((d, i) => `${i === 0 ? 'M' : 'L'} ${toChartX(i)} ${toChartY(d.absent)}`).join(' ');
 
   // Format selected date for display
-  const selectedDateStr = selectedDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+  const selectedDateStr = selectedDate.toLocaleDateString('en-IN', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
 
   return (
     <div className="fade-in">

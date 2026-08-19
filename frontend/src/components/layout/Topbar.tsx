@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '../../context/AuthContext';
 import { notificationApi, searchApi } from '../../services/api';
+import { formatINR } from '../../lib/currency';
 
 export default function Topbar() {
   const { user } = useAuth();
@@ -160,7 +161,7 @@ export default function Topbar() {
                     <div style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', color: '#8b5cf6', marginBottom: '4px' }}>Invoices</div>
                     {searchResults.invoices.map((inv: any) => (
                       <div key={inv.id} onClick={() => { router.push('/finance'); setSearchQuery(''); }} style={{ padding: '6px 8px', fontSize: '13px', cursor: 'pointer', borderRadius: '4px' }} className="hover-bg-gray">
-                        {inv.invoiceNo} — {inv.clientName} (${inv.amount})
+                        {inv.invoiceNo} — {inv.clientName} ({formatINR(inv.amount)})
                       </div>
                     ))}
                   </div>

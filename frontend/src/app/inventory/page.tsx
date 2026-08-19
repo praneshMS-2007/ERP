@@ -2,38 +2,50 @@
 
 import { useEffect, useState } from 'react';
 import {
-  Package, DollarSign, AlertTriangle, ShoppingCart, TrendingUp,
+  Package, IndianRupee, AlertTriangle, ShoppingCart, TrendingUp,
   Download, Plus, Filter, MoreVertical, ChevronLeft, ChevronRight, Bot,
 } from 'lucide-react';
 import { inventoryApi, exportApi } from '../../services/api';
 import ExportButton from '../../components/ExportButton';
 import Modal, { FormField } from '../../components/Modal';
+import { formatINR, formatINRCompact } from '../../lib/currency';
+
+const emptyPoForm = { productId: '', supplierId: '', warehouseId: '', quantity: '', totalAmount: '', orderDate: new Date().toISOString().slice(0, 10) };
+const emptyProdForm = { name: '', sku: '', category: '', unit: 'pcs', price: '', costPrice: '', status: 'ACTIVE', warehouseId: '', initialQuantity: '' };
 
 export default function InventoryPage() {
   const [products, setProducts] = useState<any[]>([]);
   const [purchaseOrders, setPurchaseOrders] = useState<any[]>([]);
+  const [stockActivity, setStockActivity] = useState<any[]>([]);
   const [suppliers, setSuppliers] = useState<any[]>([]);
+  const [warehouses, setWarehouses] = useState<any[]>([]);
   const [stats, setStats] = useState({ total: 0, lowStock: 0, totalValue: 0, pendingPOs: 0 });
   const [page, setPage] = useState(0);
   const [filterCat, setFilterCat] = useState('');
   const [showPOModal, setShowPOModal] = useState(false);
   const [showProductModal, setShowProductModal] = useState(false);
-  const [poForm, setPoForm] = useState({ productId: '', supplierId: '', quantity: '', totalCost: '' });
-  const [prodForm, setProdForm] = useState({ name: '', sku: '', category: '', price: '', costPrice: '', stockLevel: '', minStockLevel: '' });
+  const [poForm, setPoForm] = useState(emptyPoForm);
+  const [poError, setPoError] = useState('');
+  const [prodForm, setProdForm] = useState(emptyProdForm);
+  const [prodError, setProdError] = useState('');
   const pageSize = 8;
 
   async function fetchAll() {
     try {
-      const [prodData, poData, supData] = await Promise.all([
-        inventoryApi.getProducts(), inventoryApi.getPurchaseOrders(), inventoryApi.getSuppliers(),
+      const [prodData, poData, activityData, supData, whData] = await Promise.all([
+        inventoryApi.getProducts(), inventoryApi.getPurchaseOrders(), inventoryApi.getRecentStockActivity(6), inventoryApi.getSuppliers(), inventoryApi.getWarehouses(),
       ]);
       const prodList = Array.isArray(prodData) ? prodData : [];
       const poList = Array.isArray(poData) ? poData : [];
+      const activityList = Array.isArray(activityData) ? activityData : [];
       const supList = Array.isArray(supData) ? supData : [];
+      const whList = Array.isArray(whData) ? whData : [];
 
       setProducts(prodList);
       setPurchaseOrders(poList);
+      setStockActivity(activityList);
       setSuppliers(supList);
+      setWarehouses(whList);
 
       const lowStock = prodList.filter((p: any) => p.stockLevel <= p.minStockLevel).length;
       const totalValue = prodList.reduce((s: number, p: any) => s + (p.price * p.stockLevel), 0);
@@ -52,29 +64,43 @@ export default function InventoryPage() {
   const uniqueCats = [...new Set(products.map(p => p.category).filter(Boolean))];
 
   async function handleCreatePO() {
-    if (!poForm.productId || !poForm.quantity) return;
-    await inventoryApi.createPurchaseOrder({
-      productId: poForm.productId, supplierId: poForm.supplierId || undefined,
-      quantity: parseInt(poForm.quantity), totalCost: parseFloat(poForm.totalCost || '0'),
-    } as any);
-    setShowPOModal(false);
-    setPoForm({ productId: '', supplierId: '', quantity: '', totalCost: '' });
-    fetchAll();
+    if (!poForm.productId || !poForm.quantity) { setPoError('Product and quantity are required.'); return; }
+    setPoError('');
+    try {
+      await inventoryApi.createPurchaseOrder({
+        productId: poForm.productId, supplierId: poForm.supplierId || undefined, warehouseId: poForm.warehouseId || undefined,
+        quantity: parseInt(poForm.quantity), totalAmount: parseFloat(poForm.totalAmount || '0'),
+        orderDate: new Date(poForm.orderDate).toISOString(), status: 'ORDERED',
+      } as any);
+      setShowPOModal(false);
+      setPoForm(emptyPoForm);
+      fetchAll();
+    } catch (e: any) {
+      setPoError(e.message || 'Could not create this purchase order.');
+    }
   }
 
   async function handleCreateProduct() {
-    if (!prodForm.name || !prodForm.sku) return;
-    await inventoryApi.createProduct({
-      name: prodForm.name, sku: prodForm.sku, category: prodForm.category,
-      price: parseFloat(prodForm.price || '0'), costPrice: parseFloat(prodForm.costPrice || '0'),
-      stockLevel: parseInt(prodForm.stockLevel || '0'), minStockLevel: parseInt(prodForm.minStockLevel || '10'),
-    } as any);
-    setShowProductModal(false);
-    setProdForm({ name: '', sku: '', category: '', price: '', costPrice: '', stockLevel: '', minStockLevel: '' });
-    fetchAll();
+    if (!prodForm.name || !prodForm.sku || !prodForm.unit) { setProdError('Name, SKU, and Unit are required.'); return; }
+    if (!prodForm.warehouseId) { setProdError('Choose which warehouse this product is stored in.'); return; }
+    setProdError('');
+    try {
+      await inventoryApi.createProduct({
+        name: prodForm.name, sku: prodForm.sku, category: prodForm.category, unit: prodForm.unit,
+        price: parseFloat(prodForm.price || '0'), costPrice: parseFloat(prodForm.costPrice || '0'),
+        status: prodForm.status, warehouseId: prodForm.warehouseId || undefined,
+        initialQuantity: parseInt(prodForm.initialQuantity || '0'), minStockLevel: 10,
+      } as any);
+      setShowProductModal(false);
+      setProdForm(emptyProdForm);
+      fetchAll();
+    } catch (e: any) {
+      setProdError(e.message || 'Could not create this product.');
+    }
   }
 
-  const formatCurrency = (n: number) => n >= 1_000_000 ? `$${(n / 1_000_000).toFixed(1)}M` : n >= 1000 ? `$${(n / 1000).toFixed(1)}K` : `$${n}`;
+  const REASON_LABEL: Record<string, string> = { SALE: 'Sold', RESTOCK: 'Restocked', ADJUSTMENT: 'Stock Added', RETURN: 'Returned' };
+
   const stockBadge = (p: any) => p.stockLevel <= p.minStockLevel ? 'badge badge-on-leave' : 'badge badge-active';
   const stockLabel = (p: any) => p.stockLevel <= p.minStockLevel ? 'LOW STOCK' : 'IN STOCK';
 
@@ -87,8 +113,8 @@ export default function InventoryPage() {
         </div>
         <div className="page-header-actions">
           <ExportButton onExport={(format) => exportApi.exportProducts(format)} label="Export Products" />
-          <button className="btn btn-secondary" onClick={() => setShowProductModal(true)}><Plus size={16} /> Add Product</button>
-          <button className="btn btn-primary" onClick={() => setShowPOModal(true)}><Plus size={16} /> New Purchase Order</button>
+          <button className="btn btn-secondary" onClick={() => { setProdError(''); setShowProductModal(true); }}><Plus size={16} /> Add Product</button>
+          <button className="btn btn-primary" onClick={() => { setPoError(''); setShowPOModal(true); }}><Plus size={16} /> New Purchase Order</button>
         </div>
       </div>
 
@@ -111,9 +137,9 @@ export default function InventoryPage() {
         <div className="kpi-card">
           <div className="kpi-card-header">
             <div className="kpi-card-label">Total Inventory Value</div>
-            <div className="kpi-card-icon" style={{ background: '#f0fdf4', color: '#16a34a' }}><DollarSign size={20} /></div>
+            <div className="kpi-card-icon" style={{ background: '#f0fdf4', color: '#16a34a' }}><IndianRupee size={20} /></div>
           </div>
-          <div className="kpi-card-value">{formatCurrency(stats.totalValue)}</div>
+          <div className="kpi-card-value">{formatINRCompact(stats.totalValue)}</div>
         </div>
         <div className="kpi-card">
           <div className="kpi-card-header">
@@ -147,7 +173,7 @@ export default function InventoryPage() {
                   <td style={{ fontWeight: 600 }}>{p.name}</td>
                   <td style={{ color: 'var(--color-text-muted)', fontFamily: 'monospace' }}>{p.sku}</td>
                   <td>{p.category || '-'}</td>
-                  <td style={{ fontWeight: 700 }}>${p.price?.toFixed(2)}</td>
+                  <td style={{ fontWeight: 700 }}>{formatINR(p.price)}</td>
                   <td>{p.stockLevel} / {p.minStockLevel}</td>
                   <td><span className={stockBadge(p)}>{stockLabel(p)}</span></td>
                 </tr>
@@ -168,27 +194,34 @@ export default function InventoryPage() {
         {/* Right Column: Live Stock Movement & Alerts */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           
-          {/* Stock Movement Feed */}
+          {/* Stock Movement Feed — real additions/sales, not PO ordering status */}
           <div className="card">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
               <h3 style={{ fontSize: '16px', fontWeight: 700 }}>Stock Movement</h3>
               <span style={{ fontSize: '11px', color: '#16a34a', fontWeight: 700 }}>LIVE DB</span>
             </div>
 
-            {purchaseOrders.length === 0 && products.length === 0 ? (
+            {stockActivity.length === 0 && products.filter(p => p.stockLevel <= p.minStockLevel).length === 0 ? (
               <div style={{ fontSize: '12px', color: 'var(--color-text-muted)', textAlign: 'center', padding: '20px 0' }}>No stock activity logged</div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                {purchaseOrders.slice(0, 3).map((po: any) => (
-                  <div key={po.id} style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', fontSize: '12px' }}>
-                    <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#2563eb', marginTop: 5, flexShrink: 0 }}></div>
-                    <div>
-                      <div style={{ fontWeight: 700, color: 'var(--color-text-primary)' }}>PO Order #{po.poNumber || po.id.slice(0, 6)}</div>
-                      <div style={{ color: 'var(--color-text-secondary)' }}>{po.quantity} units · Status: {po.status}</div>
-                      <div style={{ fontSize: '10px', color: 'var(--color-text-muted)' }}>{po.createdAt ? new Date(po.createdAt).toLocaleDateString() : 'Today'}</div>
+                {stockActivity.slice(0, 4).map((m: any) => {
+                  const added = m.changeAmount > 0;
+                  return (
+                    <div key={m.id} style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', fontSize: '12px' }}>
+                      <div style={{ width: 8, height: 8, borderRadius: '50%', background: added ? '#16a34a' : '#2563eb', marginTop: 5, flexShrink: 0 }}></div>
+                      <div>
+                        <div style={{ fontWeight: 700, color: 'var(--color-text-primary)' }}>
+                          {added ? 'Stock Added: ' : 'Stock Moved: '}{m.product?.name || 'Unknown product'}
+                        </div>
+                        <div style={{ color: 'var(--color-text-secondary)' }}>
+                          {added ? '+' : ''}{m.changeAmount} units · {REASON_LABEL[m.reason] || m.reason}{m.warehouse?.name ? ` · ${m.warehouse.name}` : ''}
+                        </div>
+                        <div style={{ fontSize: '10px', color: 'var(--color-text-muted)' }}>{new Date(m.date).toLocaleDateString()}</div>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
 
                 {products.filter(p => p.stockLevel <= p.minStockLevel).slice(0, 2).map((p: any) => (
                   <div key={p.id} style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', fontSize: '12px' }}>
@@ -209,12 +242,16 @@ export default function InventoryPage() {
 
       {/* NEW PURCHASE ORDER MODAL */}
       <Modal isOpen={showPOModal} onClose={() => setShowPOModal(false)} title="Create Purchase Order">
+        {poError && <div style={{ padding: '10px 14px', marginBottom: 14, background: '#fef2f2', border: '1px solid #fecaca', color: '#dc2626', borderRadius: 8, fontSize: 13, fontWeight: 600 }}>{poError}</div>}
         <FormField label="Product" type="select" value={poForm.productId} onChange={(v) => setPoForm({ ...poForm, productId: v })} required
           options={products.map(p => ({ label: `${p.name} (${p.sku})`, value: p.id }))} />
         <FormField label="Supplier" type="select" value={poForm.supplierId} onChange={(v) => setPoForm({ ...poForm, supplierId: v })}
           options={suppliers.map(s => ({ label: s.name, value: s.id }))} />
+        <FormField label="Warehouse (delivers to)" type="select" value={poForm.warehouseId} onChange={(v) => setPoForm({ ...poForm, warehouseId: v })}
+          options={warehouses.map(w => ({ label: w.name, value: w.id }))} />
         <FormField label="Quantity" type="number" value={poForm.quantity} onChange={(v) => setPoForm({ ...poForm, quantity: v })} required placeholder="100" />
-        <FormField label="Total Cost" type="number" value={poForm.totalCost} onChange={(v) => setPoForm({ ...poForm, totalCost: v })} placeholder="5000" />
+        <FormField label="Total Amount" type="number" value={poForm.totalAmount} onChange={(v) => setPoForm({ ...poForm, totalAmount: v })} placeholder="5000" />
+        <FormField label="Order Date" type="date" value={poForm.orderDate} onChange={(v) => setPoForm({ ...poForm, orderDate: v })} required />
         <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', marginTop: '8px' }}>
           <button className="btn btn-secondary" onClick={() => setShowPOModal(false)}>Cancel</button>
           <button className="btn btn-primary" onClick={handleCreatePO}>Create PO</button>
@@ -223,16 +260,23 @@ export default function InventoryPage() {
 
       {/* ADD PRODUCT MODAL */}
       <Modal isOpen={showProductModal} onClose={() => setShowProductModal(false)} title="Add New Product">
+        {prodError && <div style={{ padding: '10px 14px', marginBottom: 14, background: '#fef2f2', border: '1px solid #fecaca', color: '#dc2626', borderRadius: 8, fontSize: 13, fontWeight: 600 }}>{prodError}</div>}
         <FormField label="Product Name" value={prodForm.name} onChange={(v) => setProdForm({ ...prodForm, name: v })} required placeholder="Industrial Sensor" />
         <FormField label="SKU" value={prodForm.sku} onChange={(v) => setProdForm({ ...prodForm, sku: v })} required placeholder="SKU-001" />
         <FormField label="Category" value={prodForm.category} onChange={(v) => setProdForm({ ...prodForm, category: v })} placeholder="Electronics" />
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+          <FormField label="Unit" value={prodForm.unit} onChange={(v) => setProdForm({ ...prodForm, unit: v })} required placeholder="pcs" />
+          <FormField label="Status" type="select" value={prodForm.status} onChange={(v) => setProdForm({ ...prodForm, status: v })}
+            options={[{ label: 'Active', value: 'ACTIVE' }, { label: 'Inactive', value: 'INACTIVE' }]} />
+        </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
           <FormField label="Price" type="number" value={prodForm.price} onChange={(v) => setProdForm({ ...prodForm, price: v })} placeholder="99.99" />
           <FormField label="Cost Price" type="number" value={prodForm.costPrice} onChange={(v) => setProdForm({ ...prodForm, costPrice: v })} placeholder="50.00" />
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-          <FormField label="Initial Stock" type="number" value={prodForm.stockLevel} onChange={(v) => setProdForm({ ...prodForm, stockLevel: v })} placeholder="100" />
-          <FormField label="Min Stock Level" type="number" value={prodForm.minStockLevel} onChange={(v) => setProdForm({ ...prodForm, minStockLevel: v })} placeholder="10" />
+          <FormField label="Warehouse" type="select" value={prodForm.warehouseId} onChange={(v) => setProdForm({ ...prodForm, warehouseId: v })}
+            required options={warehouses.filter(w => w.type !== 'VIRTUAL').map(w => ({ label: w.name, value: w.id }))} />
+          <FormField label="Initial Stock" type="number" value={prodForm.initialQuantity} onChange={(v) => setProdForm({ ...prodForm, initialQuantity: v })} placeholder="100" />
         </div>
         <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', marginTop: '8px' }}>
           <button className="btn btn-secondary" onClick={() => setShowProductModal(false)}>Cancel</button>

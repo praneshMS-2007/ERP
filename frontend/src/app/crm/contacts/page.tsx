@@ -207,7 +207,7 @@ export default function ContactsPage() {
         )}
         <FormField label="Full Name" value={editForm.name} onChange={(v) => setEditForm({ ...editForm, name: v })} required placeholder="e.g. John Doe" />
         <FormField label="Email" type="email" value={editForm.email} onChange={(v) => setEditForm({ ...editForm, email: v })} placeholder="john@acme.com" />
-        <FormField label="Phone" value={editForm.phone} onChange={(v) => setEditForm({ ...editForm, phone: v })} placeholder="+1 555-0199" />
+        <FormField label="Phone" value={editForm.phone} onChange={(v) => setEditForm({ ...editForm, phone: v })} placeholder="+91 98765 43210" />
         <FormField label="Company Name" value={editForm.company} onChange={(v) => setEditForm({ ...editForm, company: v })} placeholder="Acme Global Inc" />
         {editTarget?.type === 'LEAD' && (
           <>

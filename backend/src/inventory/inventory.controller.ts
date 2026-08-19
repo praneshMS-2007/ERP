@@ -55,6 +55,24 @@ export class InventoryController {
     return this.inventoryService.deleteProduct(id);
   }
 
+  @Post('products/:id/sell')
+  @RequirePermission('INVENTORY', 'WRITE')
+  sellProduct(@Param('id') id: string, @Body() body: { warehouseId: string; quantity: number }) {
+    return this.inventoryService.sellProduct(id, body.warehouseId, Number(body.quantity));
+  }
+
+  @Post('products/:id/add-stock')
+  @RequirePermission('INVENTORY', 'WRITE')
+  addProductStock(@Param('id') id: string, @Body() body: { warehouseId: string; quantity: number }) {
+    return this.inventoryService.addProductStock(id, body.warehouseId, Number(body.quantity));
+  }
+
+  @Get('products/:id/sale-history')
+  @RequirePermission('INVENTORY', 'READ')
+  getProductSaleHistory(@Param('id') id: string) {
+    return this.inventoryService.getProductSaleHistory(id);
+  }
+
   @Get('suppliers')
   @RequirePermission('INVENTORY', 'READ')
   getSuppliers() {
@@ -85,16 +103,94 @@ export class InventoryController {
     return this.inventoryService.updatePurchaseOrderStatus(id, status);
   }
 
+  @Get('geocode')
+  @RequirePermission('INVENTORY', 'READ')
+  geocode(@Query('q') q: string) {
+    return this.inventoryService.geocode(q);
+  }
+
+  @Get('reverse-geocode')
+  @RequirePermission('INVENTORY', 'READ')
+  reverseGeocode(@Query('lat') lat: string, @Query('lng') lng: string) {
+    return this.inventoryService.reverseGeocode(parseFloat(lat), parseFloat(lng));
+  }
+
   @Get('warehouses')
   @RequirePermission('INVENTORY', 'READ')
   getWarehouses() {
     return this.inventoryService.getWarehouses();
   }
 
+  @Get('warehouses/:id')
+  @RequirePermission('INVENTORY', 'READ')
+  getWarehouseDetail(@Param('id') id: string) {
+    return this.inventoryService.getWarehouseDetail(id);
+  }
+
   @Post('warehouses')
   @RequirePermission('INVENTORY', 'WRITE')
   createWarehouse(@Body() data: Prisma.WarehouseUncheckedCreateInput) {
     return this.inventoryService.createWarehouse(data);
+  }
+
+  @Put('warehouses/:id')
+  @RequirePermission('INVENTORY', 'WRITE')
+  updateWarehouse(@Param('id') id: string, @Body() data: Prisma.WarehouseUncheckedUpdateInput) {
+    return this.inventoryService.updateWarehouse(id, data);
+  }
+
+  @Get('raw-materials')
+  @RequirePermission('INVENTORY', 'READ')
+  getRawMaterials() {
+    return this.inventoryService.getRawMaterials();
+  }
+
+  @Post('raw-materials')
+  @RequirePermission('INVENTORY', 'WRITE')
+  createRawMaterial(@Body() data: Prisma.RawMaterialUncheckedCreateInput & { warehouseId?: string; initialQuantity?: number }) {
+    return this.inventoryService.createRawMaterial(data);
+  }
+
+  @Put('raw-materials/:id')
+  @RequirePermission('INVENTORY', 'WRITE')
+  updateRawMaterial(@Param('id') id: string, @Body() data: Prisma.RawMaterialUncheckedUpdateInput) {
+    return this.inventoryService.updateRawMaterial(id, data);
+  }
+
+  @Delete('raw-materials/:id')
+  @RequirePermission('INVENTORY', 'DELETE')
+  deleteRawMaterial(@Param('id') id: string) {
+    return this.inventoryService.deleteRawMaterial(id);
+  }
+
+  @Put('raw-materials/:id/adjust')
+  @RequirePermission('INVENTORY', 'WRITE')
+  adjustRawMaterialStock(@Param('id') id: string, @Body() body: { warehouseId: string; delta: number }) {
+    return this.inventoryService.adjustRawMaterialStock(id, body.warehouseId, Number(body.delta));
+  }
+
+  @Get('sales-history')
+  @RequirePermission('INVENTORY', 'READ')
+  getSalesHistory() {
+    return this.inventoryService.getSalesHistory();
+  }
+
+  @Get('product-additions')
+  @RequirePermission('INVENTORY', 'READ')
+  getProductAdditionsHistory() {
+    return this.inventoryService.getProductAdditionsHistory();
+  }
+
+  @Get('raw-material-additions')
+  @RequirePermission('INVENTORY', 'READ')
+  getRawMaterialAdditionsHistory() {
+    return this.inventoryService.getRawMaterialAdditionsHistory();
+  }
+
+  @Get('stock-activity')
+  @RequirePermission('INVENTORY', 'READ')
+  getRecentStockActivity(@Query('limit') limit?: string) {
+    return this.inventoryService.getRecentStockActivity(limit ? parseInt(limit) : undefined);
   }
 
   @Get('sales-orders')

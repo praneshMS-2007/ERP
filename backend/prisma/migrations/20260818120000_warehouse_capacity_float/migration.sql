@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE "warehouses" ALTER COLUMN "capacity" SET DATA TYPE DOUBLE PRECISION;

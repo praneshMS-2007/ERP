@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { Pencil, Plus } from 'lucide-react';
 import { crmApi } from '../../../services/api';
 import Modal, { FormField } from '../../../components/Modal';
+import { formatINR } from '../../../lib/currency';
 
 const STAGE_LABEL: Record<string, string> = {
   DISCOVERY: 'Discovery', PROPOSAL: 'Proposal', NEGOTIATION: 'Negotiation',
@@ -95,7 +96,6 @@ export default function OpportunitiesPage() {
     }
   }
 
-  const formatCurrency = (n: number) => '$' + (n || 0).toLocaleString();
   const openCount = opportunities.filter(o => o.stage !== 'CLOSED_WON' && o.stage !== 'CLOSED_LOST').length;
   const openValue = opportunities.filter(o => o.stage !== 'CLOSED_WON' && o.stage !== 'CLOSED_LOST').reduce((s, o) => s + (o.value || 0), 0);
   const wonValue = opportunities.filter(o => o.stage === 'CLOSED_WON').reduce((s, o) => s + (o.value || 0), 0);
@@ -121,11 +121,11 @@ export default function OpportunitiesPage() {
         </div>
         <div className="kpi-card">
           <div className="kpi-card-label">OPEN PIPELINE VALUE</div>
-          <div className="kpi-card-value" style={{ marginTop: '8px' }}>{formatCurrency(openValue)}</div>
+          <div className="kpi-card-value" style={{ marginTop: '8px' }}>{formatINR(openValue)}</div>
         </div>
         <div className="kpi-card">
           <div className="kpi-card-label">WON (ALL TIME)</div>
-          <div className="kpi-card-value" style={{ marginTop: '8px', color: '#16a34a' }}>{formatCurrency(wonValue)}</div>
+          <div className="kpi-card-value" style={{ marginTop: '8px', color: '#16a34a' }}>{formatINR(wonValue)}</div>
         </div>
       </div>
 
@@ -154,7 +154,7 @@ export default function OpportunitiesPage() {
                     {STAGE_LABEL[o.stage] || o.stage}
                   </span>
                 </td>
-                <td style={{ fontWeight: 700 }}>{formatCurrency(o.value)}</td>
+                <td style={{ fontWeight: 700 }}>{formatINR(o.value)}</td>
                 <td style={{ color: 'var(--color-text-secondary)' }}>{o.expectedCloseDate ? new Date(o.expectedCloseDate).toLocaleDateString() : '—'}</td>
                 <td>
                   <button className="btn btn-secondary btn-sm" onClick={() => openEdit(o)}>
@@ -172,7 +172,7 @@ export default function OpportunitiesPage() {
         {error && (
           <div style={{ padding: '10px 14px', marginBottom: 14, background: '#fef2f2', border: '1px solid #fecaca', color: '#dc2626', borderRadius: 8, fontSize: 13, fontWeight: 600 }}>{error}</div>
         )}
-        <FormField label="Deal Value ($)" type="number" value={editForm.value} onChange={(v) => setEditForm({ ...editForm, value: v })} required placeholder="0" />
+        <FormField label="Deal Value (₹)" type="number" value={editForm.value} onChange={(v) => setEditForm({ ...editForm, value: v })} required placeholder="0" />
         <FormField label="Stage" type="select" value={editForm.stage} onChange={(v) => setEditForm({ ...editForm, stage: v })} options={STAGE_OPTIONS} />
         <FormField label="Expected Close Date" type="date" value={editForm.expectedCloseDate} onChange={(v) => setEditForm({ ...editForm, expectedCloseDate: v })} />
         <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', marginTop: '8px' }}>
@@ -188,7 +188,7 @@ export default function OpportunitiesPage() {
         )}
         <FormField label="Customer" type="select" value={addForm.customerId} onChange={(v) => setAddForm({ ...addForm, customerId: v })}
           options={customers.map((c) => ({ label: `${c.name}${c.company ? ` (${c.company})` : ''}`, value: c.id }))} />
-        <FormField label="Deal Value ($)" type="number" value={addForm.value} onChange={(v) => setAddForm({ ...addForm, value: v })} placeholder="0" />
+        <FormField label="Deal Value (₹)" type="number" value={addForm.value} onChange={(v) => setAddForm({ ...addForm, value: v })} placeholder="0" />
         <FormField label="Stage" type="select" value={addForm.stage} onChange={(v) => setAddForm({ ...addForm, stage: v })} options={STAGE_OPTIONS} />
         <FormField label="Expected Close Date" type="date" value={addForm.expectedCloseDate} onChange={(v) => setAddForm({ ...addForm, expectedCloseDate: v })} />
         <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', marginTop: '8px' }}>

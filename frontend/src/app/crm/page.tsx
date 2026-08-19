@@ -2,13 +2,14 @@
 
 import { useEffect, useState } from 'react';
 import {
-  Users, Target, Briefcase, DollarSign, TrendingUp,
+  Users, Target, Briefcase, IndianRupee, TrendingUp,
   Plus, Pencil, ChevronLeft, ChevronRight, Zap,
 } from 'lucide-react';
 import Link from 'next/link';
 import { crmApi, exportApi } from '../../services/api';
 import ExportButton from '../../components/ExportButton';
 import Modal, { FormField } from '../../components/Modal';
+import { formatINRCompact } from '../../lib/currency';
 
 export default function CRMPage() {
   const [leads, setLeads] = useState<any[]>([]);
@@ -82,8 +83,6 @@ export default function CRMPage() {
     }
   }
 
-  const formatCurrency = (n: number) => n >= 1000 ? `$${(n / 1000).toFixed(1)}K` : `$${n}`;
-
   const badgeClass = (s: string) => {
     const map: Record<string, string> = {
       'NEGOTIATION': 'badge badge-negotiation', 'CONVERTED': 'badge badge-closed',
@@ -122,12 +121,12 @@ export default function CRMPage() {
         <div className="kpi-card">
           <div className="kpi-card-label">Open Opportunities</div>
           <div className="kpi-card-value" style={{ marginTop: '8px' }}>{stats.opportunities}</div>
-          <div className="kpi-card-trend up"><Target size={14} /> {formatCurrency(stats.pipelineValue)} Pipeline</div>
+          <div className="kpi-card-trend up"><Target size={14} /> {formatINRCompact(stats.pipelineValue)} Pipeline</div>
         </div>
         <div className="kpi-card">
           <div className="kpi-card-label">Pipeline Value</div>
-          <div className="kpi-card-value" style={{ marginTop: '8px' }}>{formatCurrency(stats.pipelineValue)}</div>
-          <div className="kpi-card-trend up"><DollarSign size={14} /> Total open deals</div>
+          <div className="kpi-card-value" style={{ marginTop: '8px' }}>{formatINRCompact(stats.pipelineValue)}</div>
+          <div className="kpi-card-trend up"><IndianRupee size={14} /> Total open deals</div>
         </div>
       </div>
 
@@ -150,7 +149,7 @@ export default function CRMPage() {
                 return (
                   <div key={p.label} className="pipeline-card">
                     <div className="pipeline-label" style={{ color: p.color }}>{p.label.replace('_', ' ')}</div>
-                    <div className="pipeline-value">{formatCurrency(sv.value)}</div>
+                    <div className="pipeline-value">{formatINRCompact(sv.value)}</div>
                     <div className="pipeline-sub">{sv.count} Deals</div>
                     <div style={{ height: '3px', background: p.color, borderRadius: '2px', marginTop: '12px', width: sv.count > 0 ? '60%' : '10%' }} />
                   </div>
@@ -255,7 +254,7 @@ export default function CRMPage() {
         )}
         <FormField label="Full Name" value={form.name} onChange={(v) => setForm({ ...form, name: v })} required placeholder="e.g. Sarah Jenkins" />
         <FormField label="Email" type="email" value={form.email} onChange={(v) => setForm({ ...form, email: v })} placeholder="sarah@company.com" />
-        <FormField label="Phone" value={form.phone} onChange={(v) => setForm({ ...form, phone: v })} placeholder="+1 555-0123" />
+        <FormField label="Phone" value={form.phone} onChange={(v) => setForm({ ...form, phone: v })} placeholder="+91 98765 43210" />
         <FormField label="Company" value={form.company} onChange={(v) => setForm({ ...form, company: v })} placeholder="Nova Kinetic Ltd" />
         <FormField label="Source" type="select" value={form.source} onChange={(v) => setForm({ ...form, source: v })}
           options={[{ label: 'Website', value: 'WEBSITE' }, { label: 'Referral', value: 'REFERRAL' }, { label: 'LinkedIn', value: 'LINKEDIN' }, { label: 'Cold Call', value: 'COLD_CALL' }, { label: 'Trade Show', value: 'TRADE_SHOW' }]} />

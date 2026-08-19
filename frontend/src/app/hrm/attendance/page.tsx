@@ -109,7 +109,7 @@ export default function AttendancePage() {
     setSelectedDate(d);
   }
 
-  const dateStr = selectedDate.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+  const dateStr = selectedDate.toLocaleDateString('en-IN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
   const isToday = selectedDate.toDateString() === new Date().toDateString();
 
   // Stats
@@ -265,10 +265,10 @@ export default function AttendancePage() {
                   </td>
                   <td>{emp.department?.name || '-'}</td>
                   <td style={{ fontSize: '13px', color: 'var(--color-text-secondary)' }}>
-                    {att?.checkIn ? new Date(att.checkIn).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : '-'}
+                    {att?.checkIn ? new Date(att.checkIn).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : '-'}
                   </td>
                   <td style={{ fontSize: '13px', color: 'var(--color-text-secondary)' }}>
-                    {att?.checkOut ? new Date(att.checkOut).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : '-'}
+                    {att?.checkOut ? new Date(att.checkOut).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : '-'}
                   </td>
                   <td>
                     <span style={{

@@ -7,7 +7,7 @@ import {
   PieChart,
   Download,
   Filter,
-  DollarSign,
+  IndianRupee,
   Users,
   Box,
   FolderKanban,
@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { BarChart, LineChart, DoughnutChart } from '@/components/dashboard/Charts';
 import { analyticsApi } from '../../services/api';
+import { formatINRCompact } from '../../lib/currency';
 
 export default function AnalyticsPage() {
   const [metrics, setMetrics] = useState({
@@ -127,9 +128,9 @@ export default function AnalyticsPage() {
         <div className="kpi-card">
           <div className="kpi-card-header">
             <div className="kpi-card-label">Total Revenue YTD</div>
-            <div className="kpi-card-icon" style={{ background: '#f0fdf4', color: '#16a34a' }}><DollarSign size={20} /></div>
+            <div className="kpi-card-icon" style={{ background: '#f0fdf4', color: '#16a34a' }}><IndianRupee size={20} /></div>
           </div>
-          <div className="kpi-card-value">${(metrics.totalRevenue / 1000000).toFixed(1)}M</div>
+          <div className="kpi-card-value">{formatINRCompact(metrics.totalRevenue)}</div>
           <div className="kpi-card-trend up"><TrendingUp size={14} /> +18.5% YoY</div>
         </div>
         <div className="kpi-card">
@@ -185,7 +186,7 @@ export default function AnalyticsPage() {
             <LineChart
               labels={revenueTrend.labels}
               datasets={[
-                { label: 'Actual Revenue ($M)', data: revenueTrend.data }
+                { label: 'Actual Revenue (₹)', data: revenueTrend.data }
               ]}
             />
           </div>

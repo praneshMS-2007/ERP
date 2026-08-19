@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { Wallet } from 'lucide-react';
 import { selfApi } from '../../services/api';
+import { formatINR } from '../../lib/currency';
 
 const STATUS_LABEL: Record<string, string> = { DRAFT: 'Draft', PAID: 'Paid', REJECTED: 'Returned to HR' };
 
@@ -12,8 +13,6 @@ function statusBadge(s: string) {
   if (s === 'REJECTED') return 'badge badge-critical';
   return 'badge';
 }
-
-const formatCurrency = (n: number) => '$' + (n || 0).toLocaleString();
 
 export default function EmployeePayrollPage() {
   const [payrolls, setPayrolls] = useState<any[]>([]);
@@ -48,7 +47,7 @@ export default function EmployeePayrollPage() {
             <div className="kpi-card-label">MOST RECENT NET PAY</div>
             <div className="kpi-card-icon" style={{ background: '#f0fdf4', color: '#16a34a' }}><Wallet size={20} /></div>
           </div>
-          <div className="kpi-card-value">{lastPaid ? formatCurrency(lastPaid.netPay) : '—'}</div>
+          <div className="kpi-card-value">{lastPaid ? formatINR(lastPaid.netPay) : '—'}</div>
           <div style={{ fontSize: '12px', color: 'var(--color-text-muted)' }}>{lastPaid ? lastPaid.payPeriod : 'No paid records yet'}</div>
         </div>
         <div className="kpi-card">
@@ -88,10 +87,10 @@ export default function EmployeePayrollPage() {
             ) : payrolls.map((p) => (
               <tr key={p.id}>
                 <td style={{ fontWeight: 600 }}>{p.payPeriod}</td>
-                <td>{formatCurrency(p.baseSalary)}</td>
-                <td style={{ color: '#16a34a' }}>+{formatCurrency(p.bonus)}</td>
-                <td style={{ color: '#dc2626' }}>-{formatCurrency(p.deductions)}</td>
-                <td style={{ fontWeight: 700 }}>{formatCurrency(p.netPay)}</td>
+                <td>{formatINR(p.baseSalary)}</td>
+                <td style={{ color: '#16a34a' }}>+{formatINR(p.bonus)}</td>
+                <td style={{ color: '#dc2626' }}>-{formatINR(p.deductions)}</td>
+                <td style={{ fontWeight: 700 }}>{formatINR(p.netPay)}</td>
                 <td><span className={statusBadge(p.status)}>{STATUS_LABEL[p.status] || p.status}</span></td>
               </tr>
             ))}

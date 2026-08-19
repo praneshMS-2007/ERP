@@ -445,8 +445,14 @@ model Product {
   minStockLevel  Int             @default(0) @map("min_stock_level")
   unit           String
   status         ProductStatus
+  // A software/license product — can only ever be stocked in a VIRTUAL
+  // warehouse, never a REAL one. Enforced server-side wherever a warehouse
+  // is assigned, not just filtered in the dropdown.
+  isDigital      Boolean         @default(false) @map("is_digital")
   purchaseOrders PurchaseOrder[]
   stockMovements StockMovement[]
+  warehouseStock WarehouseStock[]
+  salesOrders    SalesOrder[]
   createdAt      DateTime        @default(now()) @map("created_at")
   updatedAt      DateTime        @updatedAt @map("updated_at")
 
@@ -471,18 +477,22 @@ model Supplier {
 }
 
 model PurchaseOrder {
-  id          String   @id @default(uuid())
-  orderNumber String?  @map("order_number")
-  supplierId  String   @map("supplier_id")
-  supplier    Supplier @relation(fields: [supplierId], references: [id])
-  productId   String   @map("product_id")
-  product     Product  @relation(fields: [productId], references: [id])
+  id          String     @id @default(uuid())
+  orderNumber String?    @map("order_number")
+  supplierId  String     @map("supplier_id")
+  supplier    Supplier   @relation(fields: [supplierId], references: [id])
+  productId   String     @map("product_id")
+  product     Product    @relation(fields: [productId], references: [id])
+  // Which warehouse the restock lands in once this PO is marked Delivered.
+  // Nullable because it postdates the module's first purchase orders.
+  warehouseId String?    @map("warehouse_id")
+  warehouse   Warehouse? @relation(fields: [warehouseId], references: [id])
   quantity    Int
-  totalAmount Float    @default(0) @map("total_amount")
-  orderDate   DateTime @map("order_date")
+  totalAmount Float      @default(0) @map("total_amount")
+  orderDate   DateTime   @map("order_date")
   status      POStatus
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  createdAt   DateTime   @default(now()) @map("created_at")
+  updatedAt   DateTime   @updatedAt @map("updated_at")
 
   @@map("purchase_orders")
 }
@@ -490,7 +500,11 @@ model PurchaseOrder {
 model StockMovement {
   id           String         @id @default(uuid())
   productId    String         @map("product_id")
-  product      Product        @relation(fields: [productId], references: [id])
+  product      Product        @relation(fields: [productId], references: [id], onDelete: Cascade)
+  // Which warehouse a SALE was fulfilled from or a RESTOCK landed in.
+  // Nullable for the same reason as PurchaseOrder.warehouseId above.
+  warehouseId  String?        @map("warehouse_id")
+  warehouse    Warehouse?     @relation(fields: [warehouseId], references: [id])
   changeAmount Int            @map("change_amount")
   reason       MovementReason
   date         DateTime
@@ -498,6 +512,67 @@ model StockMovement {
   updatedAt    DateTime       @updatedAt @map("updated_at")
 
   @@map("stock_movements")
+}
+
+model WarehouseStock {
+  id          String    @id @default(uuid())
+  warehouseId String    @map("warehouse_id")
+  warehouse   Warehouse @relation(fields: [warehouseId], references: [id])
+  productId   String    @map("product_id")
+  product     Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  quantity    Int       @default(0)
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  @@unique([warehouseId, productId])
+  @@map("warehouse_stock")
+}
+
+model RawMaterial {
+  id             String                      @id @default(uuid())
+  name           String
+  code           String                      @unique
+  unit           String
+  quantity       Int                         @default(0)
+  minLevel       Int                         @default(0) @map("min_level")
+  status         ProductStatus               @default(ACTIVE)
+  warehouseStock WarehouseRawMaterialStock[]
+  movements      RawMaterialMovement[]
+  createdAt      DateTime                    @default(now()) @map("created_at")
+  updatedAt      DateTime                    @updatedAt @map("updated_at")
+
+  @@map("raw_materials")
+}
+
+// Mirrors StockMovement — Product's own movement log can't be reused here
+// since its productId is required and Product-only. Every raw material
+// change (via Adjust, or an initial quantity at creation) is logged as
+// ADJUSTMENT; materials are never "sold," just adjusted up or down.
+model RawMaterialMovement {
+  id            String         @id @default(uuid())
+  rawMaterialId String         @map("raw_material_id")
+  rawMaterial   RawMaterial    @relation(fields: [rawMaterialId], references: [id], onDelete: Cascade)
+  warehouseId   String?        @map("warehouse_id")
+  warehouse     Warehouse?     @relation(fields: [warehouseId], references: [id])
+  changeAmount  Int            @map("change_amount")
+  reason        MovementReason
+  date          DateTime
+  createdAt     DateTime       @default(now()) @map("created_at")
+  updatedAt     DateTime       @updatedAt @map("updated_at")
+
+  @@map("raw_material_movements")
+}
+
+model WarehouseRawMaterialStock {
+  id            String      @id @default(uuid())
+  warehouseId   String      @map("warehouse_id")
+  warehouse     Warehouse   @relation(fields: [warehouseId], references: [id])
+  rawMaterialId String      @map("raw_material_id")
+  rawMaterial   RawMaterial @relation(fields: [rawMaterialId], references: [id], onDelete: Cascade)
+  quantity      Int         @default(0)
+  updatedAt     DateTime    @updatedAt @map("updated_at")
+
+  @@unique([warehouseId, rawMaterialId])
+  @@map("warehouse_raw_material_stock")
 }
 
 // ==========================================
@@ -673,16 +748,21 @@ model Income {
 }
 
 model Invoice {
-  id         String        @id @default(uuid())
-  invoiceNo  String        @unique @map("invoice_no")
-  clientId   String?       @map("client_id")
-  clientName String        @map("client_name")
-  amount     Float
-  dueDate    DateTime      @map("due_date")
-  status     InvoiceStatus @default(UNPAID)
-  payments   Payment[]
-  createdAt  DateTime      @default(now()) @map("created_at")
-  updatedAt  DateTime      @updatedAt @map("updated_at")
+  id          String        @id @default(uuid())
+  invoiceNo   String        @unique @map("invoice_no")
+  clientId    String?       @map("client_id")
+  clientName  String        @map("client_name")
+  amount      Float
+  // The "Create New Invoice" form already asked for this, but the column
+  // didn't exist here — every submission with a description filled in
+  // would have failed outright the moment this stopped silently swallowing
+  // errors client-side.
+  description String?
+  dueDate     DateTime      @map("due_date")
+  status      InvoiceStatus @default(UNPAID)
+  payments    Payment[]
+  createdAt   DateTime      @default(now()) @map("created_at")
+  updatedAt   DateTime      @updatedAt @map("updated_at")
 
   @@map("invoices")
 }
@@ -973,13 +1053,27 @@ model SupportTicket {
 }
 
 model Warehouse {
-  id        String   @id @default(uuid())
-  name      String
-  location  String
-  capacity  Int
-  manager   String?
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  id               String                      @id @default(uuid())
+  name             String
+  location         String
+  // REAL warehouses get a map pin (latitude/longitude); VIRTUAL ones don't
+  // have a physical location at all, so those stay null.
+  type             WarehouseType               @default(REAL)
+  latitude         Float?
+  longitude        Float?
+  // Tons, always — a kg input on the frontend is divided by 1000 before it
+  // ever reaches here. Float (not Int) so a kg entry that isn't an exact
+  // multiple of 1000 (e.g. 1500 kg = 1.5 tons) doesn't get rounded away.
+  capacity         Float
+  manager          String?
+  purchaseOrders    PurchaseOrder[]
+  stockMovements    StockMovement[]
+  productStock      WarehouseStock[]
+  rawMaterialStock  WarehouseRawMaterialStock[]
+  salesOrders       SalesOrder[]
+  materialMovements RawMaterialMovement[]
+  createdAt         DateTime                    @default(now()) @map("created_at")
+  updatedAt         DateTime                    @updatedAt @map("updated_at")
 
   @@map("warehouses")
 }
@@ -989,6 +1083,14 @@ model SalesOrder {
   orderNo     String      @unique @map("order_no")
   customerId  String      @map("customer_id")
   customer    Customer    @relation(fields: [customerId], references: [id])
+  // Nullable — rows created before this order had a real product/warehouse
+  // line item at all. Stock only actually moves once the order is marked
+  // DELIVERED, mirroring how a PurchaseOrder only restocks on delivery.
+  productId   String?     @map("product_id")
+  product     Product?    @relation(fields: [productId], references: [id])
+  warehouseId String?     @map("warehouse_id")
+  warehouse   Warehouse?  @relation(fields: [warehouseId], references: [id])
+  quantity    Int?
   totalAmount Float       @map("total_amount")
   status      OrderStatus @default(PENDING)
   createdAt   DateTime    @default(now()) @map("created_at")
@@ -1179,6 +1281,11 @@ enum MilestoneStatus {
 enum ProductStatus {
   ACTIVE
   INACTIVE
+}
+
+enum WarehouseType {
+  REAL
+  VIRTUAL
 }
 
 enum SupplierStatus {

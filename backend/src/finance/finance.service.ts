@@ -1,6 +1,7 @@
 import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { Prisma } from '@prisma/client';
+import { formatINR } from '../common/currency';
 
 @Injectable()
 export class FinanceService {
@@ -52,6 +53,15 @@ export class FinanceService {
     return this.prisma.expense.create({ data });
   }
 
+  async updateExpense(id: string, data: Prisma.ExpenseUncheckedUpdateInput) {
+    return this.prisma.expense.update({ where: { id }, data });
+  }
+
+  async deleteExpense(id: string) {
+    await this.prisma.expense.delete({ where: { id } });
+    return { message: 'Expense deleted.' };
+  }
+
   async getInvoices() {
     return this.prisma.invoice.findMany({
       include: { payments: true },
@@ -67,6 +77,19 @@ export class FinanceService {
     return this.prisma.invoice.create({ data });
   }
 
+  // Deliberately excludes `status` — that's only ever meant to move via
+  // real Payments (see createPayment below), never a direct edit, so this
+  // can't be used to fake an invoice into looking paid.
+  async updateInvoice(id: string, data: Prisma.InvoiceUncheckedUpdateInput) {
+    const { status, ...rest } = data;
+    return this.prisma.invoice.update({ where: { id }, data: rest });
+  }
+
+  async deleteInvoice(id: string) {
+    await this.prisma.invoice.delete({ where: { id } });
+    return { message: 'Invoice deleted.' };
+  }
+
   async getIncomes() {
     return this.prisma.income.findMany({
       orderBy: { date: 'desc' },
@@ -77,10 +100,32 @@ export class FinanceService {
     return this.prisma.income.create({ data });
   }
 
+  async updateIncome(id: string, data: Prisma.IncomeUncheckedUpdateInput) {
+    return this.prisma.income.update({ where: { id }, data });
+  }
+
+  async deleteIncome(id: string) {
+    await this.prisma.income.delete({ where: { id } });
+    return { message: 'Income deleted.' };
+  }
+
   async getBudgets() {
     return this.prisma.budget.findMany({
       orderBy: { startDate: 'desc' },
     });
+  }
+
+  async createBudget(data: Prisma.BudgetUncheckedCreateInput) {
+    return this.prisma.budget.create({ data });
+  }
+
+  async updateBudget(id: string, data: Prisma.BudgetUncheckedUpdateInput) {
+    return this.prisma.budget.update({ where: { id }, data });
+  }
+
+  async deleteBudget(id: string) {
+    await this.prisma.budget.delete({ where: { id } });
+    return { message: 'Budget deleted.' };
   }
 
   // ========== LEDGER & DOUBLE-ENTRY ACCOUNTING ==========
@@ -106,7 +151,7 @@ export class FinanceService {
       });
 
       if (Math.abs(totalDebits - totalCredits) > 0.01) {
-        throw new BadRequestException(`Double-Entry Violation: Total Debits ($${totalDebits}) must equal Total Credits ($${totalCredits}). Transaction rejected.`);
+        throw new BadRequestException(`Double-Entry Violation: Total Debits (${formatINR(totalDebits)}) must equal Total Credits (${formatINR(totalCredits)}). Transaction rejected.`);
       }
 
       return this.prisma.$transaction(

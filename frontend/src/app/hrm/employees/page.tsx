@@ -451,7 +451,7 @@ export default function EmployeeDirectory() {
         <FormField label="First Name" value={form.firstName} onChange={(v) => setForm({ ...form, firstName: v })} required placeholder="e.g. John" />
         <FormField label="Last Name" value={form.lastName} onChange={(v) => setForm({ ...form, lastName: v })} required placeholder="e.g. Smith" />
         <FormField label="Email" type="email" value={form.personalEmail} onChange={(v) => setForm({ ...form, personalEmail: v })} required placeholder="the address they applied from" />
-        <FormField label="Contact" value={form.contact} onChange={(v) => setForm({ ...form, contact: v })} placeholder="+1 555-0123" />
+        <FormField label="Contact" value={form.contact} onChange={(v) => setForm({ ...form, contact: v })} placeholder="+91 98765 43210" />
         <FormField label="Date of Joining" type="date" value={form.joinDate} onChange={(v) => setForm({ ...form, joinDate: v })} />
         <FormField label="Department" value={form.department} onChange={(v) => setForm({ ...form, department: v })} required placeholder="e.g. Engineering" />
         <FormField label="Designation" value={form.designation} onChange={(v) => setForm({ ...form, designation: v })} required placeholder="e.g. Full Stack Developer" />

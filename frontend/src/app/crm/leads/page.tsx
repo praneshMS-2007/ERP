@@ -179,7 +179,7 @@ export default function LeadsPage() {
         )}
         <FormField label="Full Name" value={addForm.name} onChange={(v) => setAddForm({ ...addForm, name: v })} required placeholder="e.g. Sarah Jenkins" />
         <FormField label="Email" type="email" value={addForm.email} onChange={(v) => setAddForm({ ...addForm, email: v })} placeholder="sarah@company.com" />
-        <FormField label="Phone" value={addForm.phone} onChange={(v) => setAddForm({ ...addForm, phone: v })} placeholder="+1 555-0123" />
+        <FormField label="Phone" value={addForm.phone} onChange={(v) => setAddForm({ ...addForm, phone: v })} placeholder="+91 98765 43210" />
         <FormField label="Company" value={addForm.company} onChange={(v) => setAddForm({ ...addForm, company: v })} placeholder="Nova Kinetic Ltd" />
         <FormField label="Source" type="select" value={addForm.source} onChange={(v) => setAddForm({ ...addForm, source: v })}
           options={[{ label: 'Website', value: 'WEBSITE' }, { label: 'Referral', value: 'REFERRAL' }, { label: 'LinkedIn', value: 'LINKEDIN' }, { label: 'Cold Call', value: 'COLD_CALL' }, { label: 'Trade Show', value: 'TRADE_SHOW' }]} />

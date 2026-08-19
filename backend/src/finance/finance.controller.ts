@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Param, Body } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Param, Body } from '@nestjs/common';
 import { FinanceService } from './finance.service';
 import { RequirePermission } from '../auth/decorators';
 
@@ -24,6 +24,18 @@ export class FinanceController {
     return this.financeService.createExpense(data);
   }
 
+  @Put('expenses/:id')
+  @RequirePermission('FINANCE', 'WRITE')
+  async updateExpense(@Param('id') id: string, @Body() data: any) {
+    return this.financeService.updateExpense(id, data);
+  }
+
+  @Delete('expenses/:id')
+  @RequirePermission('FINANCE', 'DELETE')
+  async deleteExpense(@Param('id') id: string) {
+    return this.financeService.deleteExpense(id);
+  }
+
   @Get('invoices')
   @RequirePermission('FINANCE', 'READ')
   async getInvoices() {
@@ -34,6 +46,18 @@ export class FinanceController {
   @RequirePermission('FINANCE', 'WRITE')
   async createInvoice(@Body() data: any) {
     return this.financeService.createInvoice(data);
+  }
+
+  @Put('invoices/:id')
+  @RequirePermission('FINANCE', 'WRITE')
+  async updateInvoice(@Param('id') id: string, @Body() data: any) {
+    return this.financeService.updateInvoice(id, data);
+  }
+
+  @Delete('invoices/:id')
+  @RequirePermission('FINANCE', 'DELETE')
+  async deleteInvoice(@Param('id') id: string) {
+    return this.financeService.deleteInvoice(id);
   }
 
   @Get('incomes')
@@ -48,10 +72,40 @@ export class FinanceController {
     return this.financeService.createIncome(data);
   }
 
+  @Put('incomes/:id')
+  @RequirePermission('FINANCE', 'WRITE')
+  async updateIncome(@Param('id') id: string, @Body() data: any) {
+    return this.financeService.updateIncome(id, data);
+  }
+
+  @Delete('incomes/:id')
+  @RequirePermission('FINANCE', 'DELETE')
+  async deleteIncome(@Param('id') id: string) {
+    return this.financeService.deleteIncome(id);
+  }
+
   @Get('budgets')
   @RequirePermission('FINANCE', 'READ')
   async getBudgets() {
     return this.financeService.getBudgets();
+  }
+
+  @Post('budgets')
+  @RequirePermission('FINANCE', 'WRITE')
+  async createBudget(@Body() data: any) {
+    return this.financeService.createBudget(data);
+  }
+
+  @Put('budgets/:id')
+  @RequirePermission('FINANCE', 'WRITE')
+  async updateBudget(@Param('id') id: string, @Body() data: any) {
+    return this.financeService.updateBudget(id, data);
+  }
+
+  @Delete('budgets/:id')
+  @RequirePermission('FINANCE', 'DELETE')
+  async deleteBudget(@Param('id') id: string) {
+    return this.financeService.deleteBudget(id);
   }
 
   @Get('payments')

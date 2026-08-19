@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuthenticatedUser, hasModuleAccess } from '../auth/permission.util';
+import { formatINR } from '../common/currency';
 
 @Injectable()
 export class AiService {
@@ -41,7 +42,7 @@ export class AiService {
 
     if (hasModuleAccess(user, 'FINANCE', 'READ')) {
       const incomeAgg = await this.prisma.income.aggregate({ _sum: { amount: true } });
-      lines.push(`- YTD Revenue: $${(incomeAgg._sum.amount || 0).toLocaleString()}`);
+      lines.push(`- YTD Revenue: ${formatINR(incomeAgg._sum.amount || 0)}`);
     }
 
     if (hasModuleAccess(user, 'INVENTORY', 'READ')) {

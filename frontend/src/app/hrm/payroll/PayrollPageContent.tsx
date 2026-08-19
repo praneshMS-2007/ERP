@@ -1,11 +1,12 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { FileText, Clock, DollarSign, Plus, Check, ChevronLeft, ChevronRight, Users, Edit2, Trash2, Undo2 } from 'lucide-react';
+import { FileText, Clock, IndianRupee, Plus, Check, ChevronLeft, ChevronRight, Users, Edit2, Trash2, Undo2 } from 'lucide-react';
 import { hrmApi, exportApi } from '../../../services/api';
 import ExportButton from '../../../components/ExportButton';
 import Modal, { FormField } from '../../../components/Modal';
 import { useAuth } from '../../../context/AuthContext';
+import { formatINR } from '../../../lib/currency';
 
 const AVATAR_COLORS = ['#2563eb', '#7c3aed', '#dc2626', '#16a34a', '#d97706', '#0891b2', '#db2777'];
 const STATUS_LABEL: Record<string, string> = { DRAFT: 'Draft', PAID: 'Paid', REJECTED: 'Returned to HR' };
@@ -182,7 +183,6 @@ export default function PayrollPageContent({ mode }: { mode: 'hr' | 'finance' })
     return 'badge';
   };
 
-  const formatCurrency = (n: number) => '$' + n.toLocaleString();
   const initialsOf = (e: any) => `${e.firstName?.charAt(0) || ''}${e.lastName?.charAt(0) || ''}`.toUpperCase();
   const colorOf = (e: any) => AVATAR_COLORS[((e.firstName?.length || 0) + (e.lastName?.length || 0)) % AVATAR_COLORS.length];
 
@@ -232,9 +232,9 @@ export default function PayrollPageContent({ mode }: { mode: 'hr' | 'finance' })
           <div className="kpi-card">
             <div className="kpi-card-header">
               <div className="kpi-card-label">Total Disbursed</div>
-              <div className="kpi-card-icon" style={{ background: '#eff6ff', color: '#2563eb' }}><DollarSign size={20} /></div>
+              <div className="kpi-card-icon" style={{ background: '#eff6ff', color: '#2563eb' }}><IndianRupee size={20} /></div>
             </div>
-            <div className="kpi-card-value">{formatCurrency(totalDisbursed)}</div>
+            <div className="kpi-card-value">{formatINR(totalDisbursed)}</div>
             <div className="kpi-card-trend up">Paid payrolls</div>
           </div>
           <div className="kpi-card">
@@ -242,7 +242,7 @@ export default function PayrollPageContent({ mode }: { mode: 'hr' | 'finance' })
               <div className="kpi-card-label">Pending Payment</div>
               <div className="kpi-card-icon" style={{ background: '#fef3c7', color: '#d97706' }}><Clock size={20} /></div>
             </div>
-            <div className="kpi-card-value">{formatCurrency(pendingTotal)}</div>
+            <div className="kpi-card-value">{formatINR(pendingTotal)}</div>
             <div className="kpi-card-trend neutral">{pendingCount} record{pendingCount === 1 ? '' : 's'}</div>
           </div>
           <div className="kpi-card">
@@ -328,10 +328,10 @@ export default function PayrollPageContent({ mode }: { mode: 'hr' | 'finance' })
                     <div style={{ fontSize: '11px', color: '#dc2626', marginTop: '4px', maxWidth: '220px' }}>Returned: {p.rejectedReason}</div>
                   )}
                 </td>
-                <td>{formatCurrency(p.baseSalary || 0)}</td>
-                <td style={{ color: '#16a34a' }}>+{formatCurrency(p.bonus || 0)}</td>
-                <td style={{ color: '#dc2626' }}>-{formatCurrency(p.deductions || 0)}</td>
-                <td style={{ fontWeight: 700 }}>{formatCurrency(p.netPay || 0)}</td>
+                <td>{formatINR(p.baseSalary || 0)}</td>
+                <td style={{ color: '#16a34a' }}>+{formatINR(p.bonus || 0)}</td>
+                <td style={{ color: '#dc2626' }}>-{formatINR(p.deductions || 0)}</td>
+                <td style={{ fontWeight: 700 }}>{formatINR(p.netPay || 0)}</td>
                 <td><span className={badgeClass(p.status)}>{STATUS_LABEL[p.status] || p.status}</span></td>
                 <td>
                   {mode === 'finance' && p.status === 'DRAFT' && canMarkPaid && (
@@ -407,7 +407,7 @@ export default function PayrollPageContent({ mode }: { mode: 'hr' | 'finance' })
         <div style={{ background: 'var(--color-background)', padding: '12px 16px', borderRadius: '10px', marginBottom: '16px' }}>
           <div style={{ fontSize: '12px', color: 'var(--color-text-muted)', fontWeight: 600 }}>Calculated Net Pay</div>
           <div style={{ fontSize: '24px', fontWeight: 800, color: '#16a34a' }}>
-            {formatCurrency((parseFloat(form.baseSalary || '0') + parseFloat(form.bonus || '0') - parseFloat(form.deductions || '0')))}
+            {formatINR((parseFloat(form.baseSalary || '0') + parseFloat(form.bonus || '0') - parseFloat(form.deductions || '0')))}
           </div>
         </div>
         <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>

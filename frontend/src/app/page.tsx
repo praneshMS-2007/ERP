@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 import {
   Building2,
   FolderKanban,
-  DollarSign,
+  IndianRupee,
   AlertTriangle,
   TrendingUp,
   UserPlus,
@@ -24,6 +24,7 @@ import { analyticsApi, hrmApi, projectApi, inventoryApi, financeApi, exportApi }
 import ExportButton from '../components/ExportButton';
 import { useAuth } from '../context/AuthContext';
 import EmployeeDashboard from '../components/dashboard/EmployeeDashboard';
+import { formatINRCompact } from '../lib/currency';
 
 export default function DashboardPage() {
   const { user } = useAuth();
@@ -160,12 +161,6 @@ function ExecutiveDashboard() {
     loadDashboard();
   }, []);
 
-  const formatCurrency = (n: number) => {
-    if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)}M`;
-    if (n >= 1_000) return `$${(n / 1_000).toFixed(1)}K`;
-    return `$${n}`;
-  };
-
   const totalUnits = inventoryBreakdown.reduce((s, c) => s + c.count, 0);
 
   return (
@@ -208,11 +203,11 @@ function ExecutiveDashboard() {
 
         <div className="kpi-card">
           <div className="kpi-card-top">
-            <div className="kpi-card-icon" style={{ background: '#fff7ed', color: '#ea580c' }}><DollarSign size={22} /></div>
+            <div className="kpi-card-icon" style={{ background: '#fff7ed', color: '#ea580c' }}><IndianRupee size={22} /></div>
             <div className="kpi-card-trend up">+{((kpis as any).revGrowthPct || 0)}% <TrendingUp size={16} /></div>
           </div>
           <div className="kpi-card-label">REVENUE</div>
-          <div className="kpi-card-value">{formatCurrency(kpis.totalRevenue)}</div>
+          <div className="kpi-card-value">{formatINRCompact(kpis.totalRevenue)}</div>
         </div>
 
         <div className="kpi-card">
@@ -240,7 +235,7 @@ function ExecutiveDashboard() {
             <div className="chart-wrap" style={{ height: '300px' }}>
               <BarChart
                 labels={revenueLabels.length > 0 ? revenueLabels : ['No Data']}
-                datasets={[{ label: 'Revenue ($)', data: revenueData.length > 0 ? revenueData : [0] }]}
+                datasets={[{ label: 'Revenue (₹)', data: revenueData.length > 0 ? revenueData : [0] }]}
               />
             </div>
           </div>
