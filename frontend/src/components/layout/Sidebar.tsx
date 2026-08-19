@@ -187,19 +187,16 @@ export default function Sidebar({ isOpen, toggleSidebar }: SidebarProps) {
   return (
     <aside className={`sidebar ${!isOpen ? 'collapsed' : ''}`}>
       {/* Header */}
-      <div className="sidebar-header" onClick={toggleSidebar} style={{ cursor: 'pointer' }}>
-        <div className="sidebar-logo-icon">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-            <rect x="3" y="3" width="7" height="7" rx="1" />
-            <rect x="14" y="3" width="7" height="7" rx="1" />
-            <rect x="3" y="14" width="7" height="7" rx="1" />
-            <rect x="14" y="14" width="7" height="7" rx="1" />
-          </svg>
+      <div className="sidebar-header" onClick={toggleSidebar} style={{ cursor: 'pointer', padding: '16px 18px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+        <div style={{ background: '#ffffff', borderRadius: '8px', padding: '4px 6px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, boxShadow: '0 2px 6px rgba(0,0,0,0.1)' }}>
+          <img src="/shuroq-logo.png" alt="Shuroq" style={{ height: '24px', maxWidth: isOpen ? '110px' : '28px', objectFit: 'contain' }} />
         </div>
-        <div className="sidebar-logo-text">
-          <span className="logo-title">Enterprise ERP</span>
-          <span className="logo-sub">Global Operations</span>
-        </div>
+        {isOpen && (
+          <div className="sidebar-logo-text" style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+            <span className="logo-title" style={{ fontSize: '13px', fontWeight: 800, color: '#f8fafc', letterSpacing: '0.02em', whiteSpace: 'nowrap' }}>ERP PLATFORM</span>
+            <span className="logo-sub" style={{ fontSize: '9.5px', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.06em', whiteSpace: 'nowrap' }}>Tech Redefined</span>
+          </div>
+        )}
       </div>
 
       {/* Navigation */}

@@ -114,17 +114,12 @@ export default function LoginPage() {
       <div style={{ flex: '1', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', padding: '56px 80px', background: '#ffffff' }}>
         
         {/* Top Logo Header */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <div style={{
-            width: '36px', height: '36px', background: '#2563eb', borderRadius: '8px',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#ffffff'
-          }}>
-            <Building2 size={20} />
-          </div>
-          <div>
-            <div style={{ fontSize: '18px', fontWeight: 700, color: '#111827', letterSpacing: '-0.01em', lineHeight: 1.1 }}>Enterprise ERP</div>
-            <div style={{ fontSize: '10px', fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.08em', marginTop: '2px' }}>GLOBAL OPERATIONS</div>
-          </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+          <img
+            src="/shuroq-logo.png"
+            alt="Shuroq - Tech Redefined"
+            style={{ height: '42px', objectFit: 'contain' }}
+          />
         </div>
 
         {/* Center Login Form */}
