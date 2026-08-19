@@ -8,6 +8,7 @@ import * as bcrypt from 'bcryptjs';
 import { normalisePan, normaliseAadhaar, normaliseUan, normaliseEsic, normaliseBankAccount, normaliseIfsc, normaliseEmail } from '../common/validators';
 import { encryptField, decryptField } from '../common/field-encryption';
 import { OfferLetterService } from './offer-letter.service';
+import { PayslipService } from './payslip.service';
 import { AnnouncementsService } from '../announcements/announcements.service';
 
 export interface RequestUser {
@@ -186,6 +187,7 @@ export class HrmService {
   constructor(
     private prisma: PrismaService,
     private offerLetterService: OfferLetterService,
+    private payslipService: PayslipService,
     private announcementsService: AnnouncementsService,
   ) {
     fs.mkdirSync(this.avatarDir, { recursive: true });
@@ -480,6 +482,7 @@ export class HrmService {
     const self = await this.resolveSelf(viewer);
     return this.prisma.payroll.findMany({
       where: { employeeId: self.id },
+      include: { payslipDocument: { select: { storagePath: true, fileName: true } } },
       orderBy: { createdAt: 'desc' },
     });
   }
@@ -1399,9 +1402,9 @@ export class HrmService {
 
     if (status === 'PAID') {
       // Use a transaction for atomicity
-      return this.prisma.$transaction(async (tx) => {
+      const updatedPayroll = await this.prisma.$transaction(async (tx) => {
         // 1. Update payroll status and payment date
-        const updatedPayroll = await tx.payroll.update({
+        const updated = await tx.payroll.update({
           where: { id },
           data: { status, paymentDate: new Date(), rejectedReason: null },
         });
@@ -1418,8 +1421,21 @@ export class HrmService {
         });
 
         this.logger.log(`Payroll ${id} paid. Auto-created expense of ${payroll.netPay}`);
-        return updatedPayroll;
+        return updated;
       });
+
+      // Deliberately outside the transaction and never allowed to throw —
+      // same contract as the offer-letter pipeline (see createEmployee): a
+      // slow mail server or a PDF rendering hiccup must not undo a payroll
+      // record Finance already successfully released. Whoever released it
+      // sees the outcome in the response and can follow up manually if it
+      // failed (no resend endpoint exists yet, matching offer letters).
+      const payslip = await this.payslipService.issueAndSend(id).catch((err) => {
+        this.logger.error(`Payslip pipeline threw for payroll ${id}: ${err.message}`);
+        return { documentId: null, fileUrl: null, emailed: false, error: err.message as string };
+      });
+
+      return { ...updatedPayroll, payslip };
     }
 
     if (status === 'REJECTED') {
@@ -1589,5 +1605,13 @@ export class HrmService {
     }
 
     return { year, totalEmployees: totalActive, data: results };
+  }
+
+  async sendOfferLetter(employeeId: string) {
+    return this.offerLetterService.issueAndSend(employeeId);
+  }
+
+  async sendPayslip(payrollId: string) {
+    return this.payslipService.issueAndSend(payrollId);
   }
 }

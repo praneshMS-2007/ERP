@@ -38,6 +38,12 @@ export class HrmController {
     return this.hrmService.updateEmployee(id, data);
   }
 
+  @Post('employees/:id/offer-letter')
+  @RequirePermission('HR', 'WRITE')
+  sendOfferLetter(@Param('id') id: string) {
+    return this.hrmService.sendOfferLetter(id);
+  }
+
   /**
    * Salary is a separate route from the rest of the profile so it can carry a
    * stricter permission — HR may edit a phone number without being able to
@@ -215,6 +221,12 @@ export class HrmController {
     @CurrentUser() user: RequestUser,
   ) {
     return this.hrmService.updatePayrollStatus(id, status, reason, user);
+  }
+
+  @Post('payrolls/:id/payslip')
+  @RequirePermission('HR', 'READ')
+  sendPayslip(@Param('id') id: string) {
+    return this.hrmService.sendPayslip(id);
   }
 
   // HR-only — the "resubmit" half of the Return to HR loop, and general
