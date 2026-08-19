@@ -140,8 +140,12 @@ export default function PayrollPageContent({ mode }: { mode: 'hr' | 'finance' })
   }
 
   async function handleMarkPaid(id: string) {
-    await hrmApi.updatePayrollStatus(id, 'PAID');
+    const result = await hrmApi.updatePayrollStatus(id, 'PAID');
     fetchAll();
+    const payslip = result?.payslip;
+    if (payslip && !payslip.emailed) {
+      alert(`Payroll marked paid, but the payslip email did not go out: ${payslip.error || 'unknown error'}. The record is still paid — you can address this separately.`);
+    }
   }
 
   function openReturnModal(id: string) {

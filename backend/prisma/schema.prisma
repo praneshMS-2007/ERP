@@ -834,6 +834,8 @@ model Payroll {
 
   payslipDocumentId String?   @unique @map("payslip_document_id")
   payslipDocument   Document? @relation(fields: [payslipDocumentId], references: [id])
+  payslipSentAt     DateTime? @map("payslip_sent_at")
+  payslipSendError  String?   @map("payslip_send_error")
 
   createdAt   DateTime      @default(now()) @map("created_at")
   updatedAt   DateTime      @updatedAt @map("updated_at")

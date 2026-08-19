@@ -1,8 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Wallet } from 'lucide-react';
-import { selfApi } from '../../services/api';
+import { Wallet, Download } from 'lucide-react';
+import { selfApi, uploadApi } from '../../services/api';
 import { formatINR } from '../../lib/currency';
 
 const STATUS_LABEL: Record<string, string> = { DRAFT: 'Draft', PAID: 'Paid', REJECTED: 'Returned to HR' };
@@ -77,13 +77,14 @@ export default function EmployeePayrollPage() {
               <th>Deductions</th>
               <th>Net Pay</th>
               <th>Status</th>
+              <th>Payslip</th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={6} style={{ textAlign: 'center', padding: '30px', color: 'var(--color-text-muted)' }}>Loading…</td></tr>
+              <tr><td colSpan={7} style={{ textAlign: 'center', padding: '30px', color: 'var(--color-text-muted)' }}>Loading…</td></tr>
             ) : payrolls.length === 0 ? (
-              <tr><td colSpan={6} style={{ textAlign: 'center', padding: '30px', color: 'var(--color-text-muted)' }}>No payroll records yet</td></tr>
+              <tr><td colSpan={7} style={{ textAlign: 'center', padding: '30px', color: 'var(--color-text-muted)' }}>No payroll records yet</td></tr>
             ) : payrolls.map((p) => (
               <tr key={p.id}>
                 <td style={{ fontWeight: 600 }}>{p.payPeriod}</td>
@@ -92,6 +93,18 @@ export default function EmployeePayrollPage() {
                 <td style={{ color: '#dc2626' }}>-{formatINR(p.deductions)}</td>
                 <td style={{ fontWeight: 700 }}>{formatINR(p.netPay)}</td>
                 <td><span className={statusBadge(p.status)}>{STATUS_LABEL[p.status] || p.status}</span></td>
+                <td>
+                  {p.payslipDocument ? (
+                    <button
+                      className="btn btn-secondary btn-sm"
+                      onClick={() => uploadApi.downloadFile(p.payslipDocument.storagePath, p.payslipDocument.fileName).catch((e: any) => alert(e.message || 'Download failed.'))}
+                    >
+                      <Download size={13} /> Download
+                    </button>
+                  ) : (
+                    <span style={{ color: 'var(--color-text-muted)', fontSize: 12.5 }}>—</span>
+                  )}
+                </td>
               </tr>
             ))}
           </tbody>
