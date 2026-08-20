@@ -448,19 +448,14 @@ export class OfferLetterService {
       doc.moveDown(0.5);
 
       // --- Intro ---
-      // The trailing space stays on the BOLD segment (not as a leading
-      // character of the plain segment that follows) \u2014 pdfkit's continued
-      // text + align:'justify' silently drops a leading space on the
-      // final segment of a continued run, gluing words together
-      // ("Engineerat Shuroq"). Verified against the real reference PDFs.
-      doc.fontSize(10.5).font('Helvetica').text(
+      doc.fontSize(10.5).font('Helvetica').fillColor(BRAND.black).text(
         'We are pleased to offer you the position of ',
-        M, doc.y, { continued: true, width: textW, align: 'justify' },
+        M, doc.y, { continued: true, width: textW, align: 'left', lineGap: 1.5 },
       );
       doc.font('Helvetica-Bold').text(`${d.roleTitle} (Part Time) `, { continued: true });
       doc.font('Helvetica').text(
         `at ${COMPANY.name} under the following terms and conditions:`,
-        { width: textW, align: 'justify' },
+        { width: textW, align: 'left', lineGap: 1.5 },
       );
       doc.moveDown(1);
 
@@ -496,8 +491,8 @@ export class OfferLetterService {
       this.clauseClean(doc, M, textW, '7. Confidentiality & Non-Disclosure (NDA)',
         `You may have access to confidential, proprietary, technical, business, or client information of ${COMPANY.name}. You agree to maintain strict confidentiality and not disclose or misuse such information.`);
       // Extra bold line per Aarif template
-      doc.fontSize(10.5).font('Helvetica-Bold')
-        .text('This offer letter and employment terms are strictly confidential.', M, doc.y, { width: textW, align: 'justify' });
+      doc.fontSize(10.5).font('Helvetica-Bold').fillColor(BRAND.black)
+        .text('This offer letter and employment terms are strictly confidential.', M, doc.y, { width: textW, align: 'left', lineGap: 1.5 });
       doc.moveDown(0.9);
 
       this.clauseClean(doc, M, textW, '8. Intellectual Property Ownership',
@@ -543,16 +538,15 @@ export class OfferLetterService {
       doc.font('Helvetica').text(d.candidateName);
       doc.moveDown(0.5);
 
-      // See the matching comment in renderPartTimeOfferLetter \u2014 the space
-      // must stay on the bold segment, not lead the plain segment after it.
-      doc.fontSize(10.5).font('Helvetica').text(
+      // --- Intro ---
+      doc.fontSize(10.5).font('Helvetica').fillColor(BRAND.black).text(
         'We are pleased to offer you the position of ',
-        M, doc.y, { continued: true, width: textW, align: 'justify' },
+        M, doc.y, { continued: true, width: textW, align: 'left', lineGap: 1.5 },
       );
       doc.font('Helvetica-Bold').text(`${d.roleTitle} `, { continued: true });
       doc.font('Helvetica').text(
         `at ${COMPANY.name} under the following terms and conditions:`,
-        { width: textW, align: 'justify' },
+        { width: textW, align: 'left', lineGap: 1.5 },
       );
       doc.moveDown(1);
 
@@ -650,9 +644,9 @@ export class OfferLetterService {
       doc.moveDown(0.5);
 
       // Reference doesn't bold the role/type here, unlike full-time/part-time.
-      doc.fontSize(10.5).font('Helvetica').text(
+      doc.fontSize(10.5).font('Helvetica').fillColor(BRAND.black).text(
         `We are pleased to offer you the position of ${d.roleTitle} Intern (Internship) at ${COMPANY.name} under the following terms and conditions:`,
-        M, doc.y, { width: textW, align: 'justify' },
+        M, doc.y, { width: textW, align: 'left', lineGap: 1.5 },
       );
       doc.moveDown(1);
 
@@ -769,52 +763,84 @@ export class OfferLetterService {
     doc.text(text, textX, y, { width: pageW - textX - M });
   }
 
+  /** Split a string into bold and normal segments so we can render cleanly without dangling continued states */
+  private parseSegments(body: string, boldPhrases: string[]): { text: string; bold: boolean }[] {
+    if (!boldPhrases || boldPhrases.length === 0) {
+      return [{ text: body, bold: false }];
+    }
+    type Range = { start: number; end: number };
+    const ranges: Range[] = [];
+    for (const phrase of boldPhrases) {
+      if (!phrase) continue;
+      let pos = 0;
+      while ((pos = body.indexOf(phrase, pos)) !== -1) {
+        ranges.push({ start: pos, end: pos + phrase.length });
+        pos += phrase.length;
+      }
+    }
+    if (ranges.length === 0) {
+      return [{ text: body, bold: false }];
+    }
+    ranges.sort((a, b) => a.start - b.start);
+    const nonOverlapping: Range[] = [];
+    let lastEnd = 0;
+    for (const r of ranges) {
+      if (r.start >= lastEnd) {
+        nonOverlapping.push(r);
+        lastEnd = r.end;
+      }
+    }
+    const segments: { text: string; bold: boolean }[] = [];
+    let curr = 0;
+    for (const r of nonOverlapping) {
+      if (r.start > curr) {
+        segments.push({ text: body.substring(curr, r.start), bold: false });
+      }
+      segments.push({ text: body.substring(r.start, r.end), bold: true });
+      curr = r.end;
+    }
+    if (curr < body.length) {
+      segments.push({ text: body.substring(curr), bold: false });
+    }
+    return segments;
+  }
+
   /**
    * A numbered clause for the clean offer letter style.
-   * Heading is bold and slightly larger. Body is justified.
-   * Optional boldPhrases array to bold specific terms within the body.
-   * gapAfterPt, when given, replaces the default trailing space with an
-   * exact point value — see computeFillGap, used to stretch a page's
-   * worth of clauses to fill the page the way the real reference PDFs do,
-   * instead of leaving a block of dead space above the forced page break.
+   * Heading is bold and left-aligned.
+   * Body is rendered with proper segmented tokens to eliminate dangling continued states.
    */
   private clauseClean(
     doc: PDFKit.PDFDocument, M: number, textW: number,
     heading: string, body: string, boldPhrases: string[] = [], gapAfterPt?: number,
   ) {
     doc.fontSize(12).font('Helvetica-Bold').fillColor(BRAND.black)
-      .text(heading, M, doc.y, { width: textW });
+      .text(heading, M, doc.y, { width: textW, align: 'left' });
     doc.moveDown(0.3);
 
-    if (boldPhrases.length === 0) {
-      doc.fontSize(10.5).font('Helvetica').text(body, M, doc.y, { width: textW, align: 'justify' });
-    } else {
-      // Simple bold-phrase injection: split on the first bold phrase found.
-      // The space right after a bold phrase is deliberately appended to the
-      // BOLD segment rather than left as the leading character of the next
-      // plain segment — pdfkit's continued-text + align:'justify' drops a
-      // leading space on the final segment of a continued run, gluing
-      // words together (e.g. "part-time rolefocused"). Verified against
-      // the real reference PDFs.
-      doc.fontSize(10.5).font('Helvetica');
-      let remaining = body;
-      for (const phrase of boldPhrases) {
-        const idx = remaining.indexOf(phrase);
-        if (idx === -1) continue;
-        const before = remaining.substring(0, idx);
-        if (before) doc.text(before, M, doc.y, { continued: true, width: textW, align: 'justify' });
-        let afterPhrase = remaining.substring(idx + phrase.length);
-        let boldText = phrase;
-        if (afterPhrase.startsWith(' ')) {
-          boldText += ' ';
-          afterPhrase = afterPhrase.substring(1);
-        }
-        doc.font('Helvetica-Bold').text(boldText, { continued: true });
-        doc.font('Helvetica');
-        remaining = afterPhrase;
+    const segments = this.parseSegments(body, boldPhrases);
+    doc.fontSize(10.5).fillColor(BRAND.black);
+    for (let i = 0; i < segments.length; i++) {
+      const seg = segments[i];
+      const isLast = i === segments.length - 1;
+      doc.font(seg.bold ? 'Helvetica-Bold' : 'Helvetica');
+      if (i === 0) {
+        doc.text(seg.text, M, doc.y, {
+          continued: !isLast,
+          width: textW,
+          align: 'left',
+          lineGap: 1.5,
+        });
+      } else {
+        doc.text(seg.text, {
+          continued: !isLast,
+          width: textW,
+          align: 'left',
+          lineGap: 1.5,
+        });
       }
-      if (remaining) doc.text(remaining, { width: textW, align: 'justify' });
     }
+
     if (gapAfterPt !== undefined) {
       doc.y += gapAfterPt;
     } else {
@@ -823,17 +849,14 @@ export class OfferLetterService {
   }
 
   /**
-   * Measures how tall a clause block (heading + body, at clauseClean's own
-   * font sizes) would render at the given width — a pure measurement pass,
-   * no drawing. boldPhrases isn't accounted for since splitting text across
-   * a bold sub-run doesn't materially change its wrapped height.
+   * Measures how tall a clause block (heading + body) would render at the given width.
    */
   private measureClauseHeight(doc: PDFKit.PDFDocument, textW: number, heading: string, body: string): number {
     doc.font('Helvetica-Bold').fontSize(12);
-    const headingH = doc.heightOfString(heading, { width: textW });
+    const headingH = doc.heightOfString(heading, { width: textW, align: 'left' });
     doc.font('Helvetica').fontSize(10.5);
-    const bodyH = doc.heightOfString(body, { width: textW, align: 'justify' });
-    return headingH + 4 + bodyH; // +4 ~= clauseClean's heading-to-body moveDown(0.3)
+    const bodyH = doc.heightOfString(body, { width: textW, align: 'left', lineGap: 1.5 });
+    return headingH + 4 + bodyH;
   }
 
   /**
