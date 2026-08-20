@@ -7,6 +7,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { MailerService } from '../common/mailer.service';
 import { decryptField } from '../common/field-encryption';
 import { formatINR } from '../common/currency';
+import { emailShell, logoAttachment, escapeHtml, EMAIL_BRAND } from '../common/email-template';
 
 const COMPANY = {
   name: 'Shuroq',
@@ -19,14 +20,23 @@ const COMPANY = {
 const BRAND = {
   darkBlue: '#1a2744',
   accentBlue: '#2b4d8a',
-  headerBg: '#4a86c8',
+  // Matches the original Shoab payslip exactly — extracted from PDF content stream:
+  // .9373 .9373 .9373 rg → RGB(239,239,239) for header bars (EMPLOYEE DETAILS, ATTENDENCE RECORD)
+  // .8118 .8863 .9529 rg → RGB(207,226,243) for NET SALARY PAYABLE highlight
+  headerBg: '#efefef',       // light gray — EMPLOYEE DETAILS & ATTENDENCE RECORD bars
+  netPayBg: '#cfe2f3',       // light blue — NET SALARY PAYABLE (A-B) row
   white: '#ffffff',
-  black: '#000000',
-  lightBlue: '#d6e4f0',
+  black: '#1f1f1f',          // near-black (original uses RGB 31,31,31, not pure black)
   border: '#000000',
 };
 
-const ASSETS_DIR = path.join(__dirname, '..', '..', 'assets', 'brand');
+// process.cwd(), not __dirname — see email-template.ts's ASSETS_DIR
+// comment for why: nest build's dist/ doesn't carry the assets/ folder,
+// so an __dirname-relative path silently 404s once running from dist
+// (the configuration `npm run start:dev` actually spawns), and this PDF's
+// logo was falling back to plain text as a result — same root cause
+// found while wiring the email logo attachment, fixed here too.
+const ASSETS_DIR = path.join(process.cwd(), 'assets', 'brand');
 const LOGO_PATH = path.join(ASSETS_DIR, 'shuroq-logo.png');
 
 interface PayslipData {
@@ -163,14 +173,14 @@ export class PayslipService {
     const result = await this.mailer.send({
       to: employee.personalEmail,
       subject: `Your payslip for ${data.payPeriod} \u2014 ${COMPANY.name}`,
-      html: `
-        <p>Hi ${employee.firstName},</p>
-        <p>Your payslip for <strong>${data.payPeriod}</strong> has been processed and paid. Please find it attached.</p>
-        <p>Net Pay: <strong>${formatINR(data.netPay)}</strong></p>
-        <p>If anything here looks off, reach out to ${COMPANY.email}.</p>
-        <p>Warm regards,<br>HR &amp; Finance, Shuroq</p>
-      `,
-      attachments: [{ filename: `Payslip - ${data.employeeName} - ${data.payPeriod}.pdf`, path: fullPath }],
+      html: emailShell({
+        previewText: `Your payslip for ${data.payPeriod} \u2014 Net Pay ${formatINR(data.netPay)}`,
+        bodyHtml: this.buildEmailHtml(employee.firstName, data),
+      }),
+      attachments: [
+        { filename: `Payslip - ${data.employeeName} - ${data.payPeriod}.pdf`, path: fullPath },
+        logoAttachment(),
+      ],
     });
 
     await this.prisma.payroll.update({
@@ -191,6 +201,103 @@ export class PayslipService {
       emailed: result.sent,
       error: result.sent ? undefined : result.error,
     };
+  }
+
+  // =====================================================================
+  // EMAIL BODY — same content and sequence as the PDF's build(), just as
+  // HTML table markup instead of pdfkit draw calls. Table-based (not
+  // div/flex) because that's what actually survives Outlook's HTML
+  // stripping.
+  // =====================================================================
+
+  private buildEmailHtml(firstName: string, d: PayslipData): string {
+    const gross = d.baseSalary + d.hra + d.specialAllowance + d.bonus;
+    const totalDed = d.tds + d.providentFund + d.professionalTax + d.lossOfPay;
+    const f = (n: number) => `Rs. ${(n || 0).toLocaleString('en-IN')}`;
+    const font = "font-family: Arial, Helvetica, sans-serif;";
+    const cell = `padding: 7px 8px; border: 1px solid ${EMAIL_BRAND.border}; ${font} font-size: 12.5px; color: ${EMAIL_BRAND.text};`;
+    const cellRight = `${cell} text-align: right;`;
+    const cellLabel = `${cell} font-weight: bold; background-color: ${EMAIL_BRAND.lightBlue}; width: 40%;`;
+
+    function detailRow(label1: string, val1: string, label2: string, val2: string): string {
+      return `
+        <tr>
+          <td style="${cellLabel}">${escapeHtml(label1)}</td>
+          <td style="${cell}">${escapeHtml(val1)}</td>
+          <td style="${cellLabel}">${escapeHtml(label2)}</td>
+          <td style="${cell}">${escapeHtml(val2)}</td>
+        </tr>`;
+    }
+
+    function moneyRow(left: string, leftAmt: string, right: string, rightAmt: string, bold = false): string {
+      const w = bold ? 'font-weight: bold;' : '';
+      return `
+        <tr>
+          <td style="${cell} ${w}">${escapeHtml(left)}</td>
+          <td style="${cellRight} ${w}">${leftAmt}</td>
+          <td style="${cell} ${w}">${escapeHtml(right)}</td>
+          <td style="${cellRight} ${w}">${rightAmt}</td>
+        </tr>`;
+    }
+
+    return `
+      <p style="${font} font-size: 14px; color: ${EMAIL_BRAND.text}; margin: 0 0 4px 0;">Hi ${escapeHtml(firstName)},</p>
+      <p style="${font} font-size: 14px; color: ${EMAIL_BRAND.text}; margin: 0 0 20px 0;">Your payslip for <strong>${escapeHtml(d.payPeriod)}</strong> has been processed and paid. The full breakdown is below, and a copy is attached as a PDF for your records.</p>
+
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom: 4px;">
+        <tr><td style="background-color: ${EMAIL_BRAND.headerBg}; padding: 8px 10px;">
+          <span style="${font} font-size: 13px; font-weight: bold; color: #ffffff; letter-spacing: 0.5px;">PAYSLIP &mdash; ${escapeHtml(d.payPeriod.toUpperCase())}</span>
+        </td></tr>
+      </table>
+
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom: 14px;">
+        <tr><td style="${cellLabel}" colspan="4">EMPLOYEE DETAILS</td></tr>
+      </table>
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom: 18px; border-collapse: collapse;">
+        ${detailRow('EMPLOYEE NAME', d.employeeName, 'DATE OF JOINING', d.joinDate)}
+        ${detailRow('ROLE', d.designation, 'EMPLOYEE ID', d.empCode)}
+        <tr>
+          <td style="${cellLabel}">PAN NUMBER</td>
+          <td style="${cell}" colspan="3">${escapeHtml(d.pan)}</td>
+        </tr>
+        <tr>
+          <td style="${cellLabel}">BANK ACCOUNT NO</td>
+          <td style="${cell}" colspan="3">${escapeHtml(d.bankAccountNo)}</td>
+        </tr>
+      </table>
+
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse: collapse; margin-bottom: 0;">
+        <tr>
+          <td style="${cellLabel}" colspan="2">EARNINGS</td>
+          <td style="${cellLabel}" colspan="2">DEDUCTIONS</td>
+        </tr>
+        ${moneyRow('Basic Salary', f(d.baseSalary), 'Income Tax (TDS)', f(d.tds))}
+        ${moneyRow('HRA', f(d.hra), 'Provident Fund', f(d.providentFund))}
+        ${moneyRow('Special Allowance', f(d.specialAllowance), 'Professional Tax', f(d.professionalTax))}
+        ${moneyRow('Bonus/Incentives', f(d.bonus), 'Loss of Pay (LOP)', f(d.lossOfPay))}
+        ${moneyRow('Gross Total (A)', f(gross), 'Total Deductions (B)', f(totalDed), true)}
+      </table>
+
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse: collapse; margin-top: 14px;">
+        <tr>
+          <td style="${cell} font-weight: bold; background-color: ${EMAIL_BRAND.lightBlue};">NET SALARY PAYABLE (A - B)</td>
+          <td style="${cellRight} font-weight: bold; background-color: ${EMAIL_BRAND.lightBlue};">${f(d.netPay)}</td>
+        </tr>
+        <tr>
+          <td style="${cell}" colspan="2"><strong>AMOUNT IN WORDS:</strong> ${escapeHtml(numberToWords(d.netPay))} Rupees only</td>
+        </tr>
+      </table>
+
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top: 18px; border-collapse: collapse;">
+        <tr><td style="background-color: ${EMAIL_BRAND.lightBlue}; ${cell} font-weight: bold;">ATTENDENCE RECORD</td></tr>
+        <tr><td style="${cell}">TOTAL DAYS IN MONTH: ${d.totalDaysInMonth}<br />EFFECTIVE WORK DAYS: ${d.effectiveWorkDays}<br />TOTAL LEAVES TAKEN: ${d.leavesTaken}</td></tr>
+      </table>
+
+      <p style="${font} font-size: 11px; font-style: italic; color: ${EMAIL_BRAND.muted}; margin: 18px 0 0 0; background-color: ${EMAIL_BRAND.lightBlue}; padding: 8px 10px;">This is a computer-generated document and does not require a signature.</p>
+
+      <p style="${font} font-size: 13px; color: ${EMAIL_BRAND.text}; margin: 22px 0 0 0;">If anything here looks off, reach out to ${COMPANY.email}.</p>
+      <p style="${font} font-size: 13px; color: ${EMAIL_BRAND.text}; margin: 4px 0 0 0;">Warm regards,<br />HR &amp; Finance, Shuroq</p>
+    `;
   }
 
   // =====================================================================
@@ -245,10 +352,11 @@ export class PayslipService {
     doc.moveDown(0.8);
 
     // === EMPLOYEE DETAILS HEADER BAR ===
+    // Original: light gray (#efefef) background with black text — NOT blue with white text
     const edY = doc.y;
     doc.save();
     doc.rect(M, edY, contentW, 20).fill(BRAND.headerBg);
-    doc.fontSize(10).font('Helvetica-Bold').fillColor(BRAND.white)
+    doc.fontSize(10).font('Helvetica-Bold').fillColor(BRAND.black)
       .text('EMPLOYEE DETAILS', M, edY + 4, { align: 'center', width: contentW });
     doc.restore();
     doc.y = edY + 22;
@@ -355,11 +463,14 @@ export class PayslipService {
     doc.y = ty + 8;
 
     // === NET SALARY PAYABLE (A - B) ===
+    // Original: light blue (#cfe2f3) background with black text
     const netY = doc.y;
     doc.save();
+    doc.rect(M, netY, contentW - 65, 20).fill(BRAND.netPayBg);
     doc.rect(M, netY, contentW - 65, 20).stroke(BRAND.border);
     doc.fontSize(10).font('Helvetica-Bold').fillColor(BRAND.black)
       .text('NET SALARY PAYABLE (A - B)', M + 5, netY + 4);
+    doc.rect(M + contentW - 65, netY, 65, 20).fill(BRAND.netPayBg);
     doc.rect(M + contentW - 65, netY, 65, 20).stroke(BRAND.border);
     doc.text(String(d.netPay), M + contentW - 65, netY + 4, { width: 60, align: 'right' });
     doc.restore();
@@ -375,9 +486,10 @@ export class PayslipService {
 
     // === ATTENDANCE RECORD ===
     const attY = doc.y;
-    // Header bar (partial width to match the original)
+    // Header bar — original uses same gray (#efefef) as EMPLOYEE DETAILS, partial width
     doc.save();
-    doc.rect(M, attY, contentW * 0.45, 18).fill(BRAND.lightBlue).stroke(BRAND.border);
+    doc.rect(M, attY, contentW * 0.45, 18).fill(BRAND.headerBg);
+    doc.rect(M, attY, contentW * 0.45, 18).stroke(BRAND.border);
     doc.fontSize(9).font('Helvetica-Bold').fillColor(BRAND.black)
       .text('ATTENDENCE RECORD', M + 5, attY + 4);
     doc.restore();
@@ -390,15 +502,11 @@ export class PayslipService {
     doc.moveDown(1);
 
     // === DECLARATION ===
-    doc.fontSize(11).font('Helvetica-Bold').text('DECLARATION', M + 5);
+    // Original: bold heading on white background, italic text below — no colored bar
+    doc.fontSize(11).font('Helvetica-Bold').fillColor(BRAND.black).text('DECLARATION', M + 5);
     doc.moveDown(0.3);
-    // Light blue background line
-    const declY = doc.y;
-    doc.save();
-    doc.rect(M, declY, contentW, 18).fill(BRAND.lightBlue);
     doc.fontSize(9).font('Helvetica-Oblique').fillColor(BRAND.black)
-      .text('This is a computer-generated document and does not require a signature.', M + 5, declY + 4, { width: contentW - 10 });
-    doc.restore();
+      .text('This is a computer-generated document and does not require a signature.', M + 5, doc.y, { width: contentW - 10 });
   }
 
   // --- Detail row helpers ---
