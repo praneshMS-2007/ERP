@@ -16,6 +16,11 @@ export interface RequiredPermission {
 export const RequirePermission = (module: string, action: string) =>
   SetMetadata(PERMISSION_KEY, { module, action } as RequiredPermission);
 
+// ========== @RequireRole(...roles) ==========
+// Declares specific role(s) required to access a route (e.g. @RequireRole('SUPER_ADMIN'))
+export const ROLE_KEY = 'requiredRoles';
+export const RequireRole = (...roles: string[]) => SetMetadata(ROLE_KEY, roles);
+
 // ========== @CurrentUser() ==========
 // Parameter decorator to extract the current user from the request
 export const CurrentUser = createParamDecorator(

@@ -1,6 +1,6 @@
 import { Injectable, CanActivate, ExecutionContext, ForbiddenException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import { PERMISSION_KEY, RequiredPermission, IS_PUBLIC_KEY } from './decorators';
+import { PERMISSION_KEY, RequiredPermission, ROLE_KEY, IS_PUBLIC_KEY } from './decorators';
 import { hasModuleAccess } from './permission.util';
 
 @Injectable()
@@ -15,17 +15,34 @@ export class RolesGuard implements CanActivate {
     ]);
     if (isPublic) return true;
 
+    const request = context.switchToHttp().getRequest();
+    const user = request.user;
+
+    // Check if the route has a @RequireRole() decorator
+    const requiredRoles = this.reflector.getAllAndOverride<string[]>(ROLE_KEY, [
+      context.getHandler(),
+      context.getClass(),
+    ]);
+
+    if (requiredRoles && requiredRoles.length > 0) {
+      if (!user || !user.role) {
+        throw new ForbiddenException('Access denied: Authentication required');
+      }
+      if (!requiredRoles.includes(user.role)) {
+        throw new ForbiddenException(
+          `Access denied: Restricted to ${requiredRoles.join(', ')} only`,
+        );
+      }
+    }
+
     // Check if the route has a @RequirePermission() decorator
     const requiredPermission = this.reflector.getAllAndOverride<RequiredPermission>(PERMISSION_KEY, [
       context.getHandler(),
       context.getClass(),
     ]);
 
-    // If no permission required, allow access (only JWT auth needed)
+    // If no permission required, allow access (only JWT auth / role check needed)
     if (!requiredPermission) return true;
-
-    const request = context.switchToHttp().getRequest();
-    const user = request.user;
 
     if (!user) {
       throw new ForbiddenException('Access denied: No permissions found');

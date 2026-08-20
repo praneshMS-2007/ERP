@@ -135,7 +135,7 @@ const allNavItems: NavItem[] = [
   // No gate at all — visible to every signed-in account, management and
   // Employee alike, matching "independent section for every user account."
   { name: 'Announcements', path: '/announcements', icon: Megaphone },
-  { name: 'Analytics', path: '/analytics', icon: BarChart3, requiredModule: 'ANALYTICS' },
+  { name: 'Analytics', path: '/analytics', icon: BarChart3, requiredRoles: ['SUPER_ADMIN'] },
   { name: 'AI Assistant', path: '/ai', icon: Sparkles },
   { name: 'Settings', path: '/settings', icon: Settings },
 ];

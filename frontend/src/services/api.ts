@@ -187,6 +187,16 @@ export const hrmApi = {
     mutateApi('/hrm/employees', { method: 'POST', body: JSON.stringify(data) }),
   createPayroll: (data: any) => mutateApi('/hrm/payrolls', { method: 'POST', body: JSON.stringify(data) }),
   updatePayroll: (id: string, data: any) => mutateApi(`/hrm/payrolls/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  previewPayroll: (employeeId: string, periodStart: string, periodEnd: string, manual: {
+    baseSalary?: number; hra?: number; specialAllowance?: number; bonus?: number;
+    tds?: number; providentFund?: number; professionalTax?: number; lossOfPay?: number;
+  }) => {
+    const params = new URLSearchParams({ employeeId, periodStart, periodEnd });
+    for (const [k, v] of Object.entries(manual)) {
+      if (v !== undefined) params.set(k, String(v));
+    }
+    return mutateApi(`/hrm/payrolls/preview?${params.toString()}`);
+  },
   deletePayroll: (id: string) => mutateApi(`/hrm/payrolls/${id}`, { method: 'DELETE' }),
   updatePayrollStatus: (id: string, status: string, reason?: string) =>
     mutateApi(`/hrm/payrolls/${id}/status`, { method: 'PUT', body: JSON.stringify({ status, reason }) }),
@@ -356,10 +366,73 @@ export const uploadApi = {
   },
 };
 
+export interface AuditLogFilterParams {
+  startDate?: string;
+  endDate?: string;
+  userId?: string;
+  department?: string;
+  module?: string;
+  actionType?: string;
+  search?: string;
+  page?: number;
+  limit?: number;
+}
+
 export const analyticsApi = {
   getDashboardMetrics: () => fetchApi('/analytics/dashboard'),
   getRevenueTrend: () => fetchApi('/analytics/revenue-trend'),
   getRetention: () => fetchApi('/analytics/retention'),
+  getAuditLogs: (params?: AuditLogFilterParams) => {
+    const sp = new URLSearchParams();
+    if (params) {
+      Object.entries(params).forEach(([k, v]) => {
+        if (v !== undefined && v !== null && v !== '' && v !== 'ALL') {
+          sp.append(k, String(v));
+        }
+      });
+    }
+    const qs = sp.toString();
+    return fetchApi(`/analytics/audit-logs${qs ? `?${qs}` : ''}`);
+  },
+  getManagers: () => fetchApi('/analytics/managers'),
+  getDepartments: () => fetchApi('/analytics/departments'),
+  getAuditStats: (params?: AuditLogFilterParams) => {
+    const sp = new URLSearchParams();
+    if (params) {
+      Object.entries(params).forEach(([k, v]) => {
+        if (v !== undefined && v !== null && v !== '' && v !== 'ALL') {
+          sp.append(k, String(v));
+        }
+      });
+    }
+    const qs = sp.toString();
+    return fetchApi(`/analytics/stats${qs ? `?${qs}` : ''}`);
+  },
+  exportAuditLogs: async (params?: AuditLogFilterParams) => {
+    const sp = new URLSearchParams();
+    if (params) {
+      Object.entries(params).forEach(([k, v]) => {
+        if (v !== undefined && v !== null && v !== '' && v !== 'ALL') {
+          sp.append(k, String(v));
+        }
+      });
+    }
+    const qs = sp.toString();
+    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+    const res = await fetch(`${API_BASE}/analytics/export${qs ? `?${qs}` : ''}`, {
+      headers: {
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+    });
+    if (!res.ok) throw new Error('Export failed');
+    const blob = await res.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `audit-trail-${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+    window.URL.revokeObjectURL(url);
+  },
 };
 
 export const authApi = {

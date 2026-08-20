@@ -1,341 +1,1479 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
+import { useAuth } from '@/context/AuthContext';
 import {
-  TrendingUp,
-  BarChart2,
-  PieChart,
-  Download,
+  ShieldAlert,
+  ShieldCheck,
+  Activity,
+  Calendar,
   Filter,
-  IndianRupee,
-  Users,
-  Box,
-  FolderKanban,
-  Zap,
+  Download,
+  RefreshCw,
+  Search,
+  User,
+  Building,
+  Layers,
+  ArrowUpDown,
+  Clock,
+  ExternalLink,
+  ChevronLeft,
+  ChevronRight,
+  PlusCircle,
+  Edit3,
+  Trash2,
+  CheckCircle2,
+  LogIn,
+  AlertCircle,
+  Eye,
+  X,
+  FileSpreadsheet,
+  FileText,
+  ListFilter,
+  BarChart2,
+  TrendingUp,
+  SlidersHorizontal,
 } from 'lucide-react';
-import { BarChart, LineChart, DoughnutChart } from '@/components/dashboard/Charts';
-import { analyticsApi } from '../../services/api';
-import { formatINRCompact } from '../../lib/currency';
+import { analyticsApi, AuditLogFilterParams } from '@/services/api';
+import { BarChart, DoughnutChart } from '@/components/dashboard/Charts';
+
+interface AuditLogItem {
+  id: string;
+  userId: string | null;
+  userName: string | null;
+  userEmail: string | null;
+  role: string | null;
+  department: string | null;
+  actionType: string;
+  action: string;
+  module: string;
+  entityType: string | null;
+  entityId: string | null;
+  description: string;
+  ipAddress: string | null;
+  userAgent: string | null;
+  details: string | null;
+  timestamp: string;
+  user?: {
+    id: string;
+    email: string | null;
+    username: string | null;
+    role?: { id: string; name: string };
+    employee?: {
+      id: string;
+      firstName: string;
+      lastName: string;
+      empCode: string | null;
+      avatarUrl: string | null;
+      department?: { id: string; name: string };
+      designation?: { id: string; title: string };
+    };
+  };
+}
+
+interface ManagerOption {
+  id: string;
+  displayName: string;
+  email: string;
+  role: string;
+  department: string;
+  empCode: string | null;
+}
+
+interface AuditStats {
+  totalEvents: number;
+  activeManagersCount: number;
+  mostActiveModule: string;
+  actionBreakdown: Record<string, number>;
+  moduleBreakdown: Record<string, number>;
+  timeline: { date: string; total: number; create: number; update: number; delete: number }[];
+  topActiveManagers: { userId: string; count: number; name: string; role: string; department: string }[];
+}
+
+const ACTION_COLORS: Record<string, { bg: string; text: string; border: string; icon: any }> = {
+  CREATE: { bg: '#ecfdf5', text: '#065f46', border: '#a7f3d0', icon: PlusCircle },
+  UPDATE: { bg: '#eff6ff', text: '#1e40af', border: '#bfdbfe', icon: Edit3 },
+  DELETE: { bg: '#fef2f2', text: '#991b1b', border: '#fecaca', icon: Trash2 },
+  STATUS_CHANGE: { bg: '#faf5ff', text: '#6b21a8', border: '#e9d5ff', icon: CheckCircle2 },
+  LOGIN: { bg: '#fffbeb', text: '#92400e', border: '#fde68a', icon: LogIn },
+  OTHER: { bg: '#f3f4f6', text: '#374151', border: '#e5e7eb', icon: Activity },
+};
+
+const MODULE_COLORS: Record<string, string> = {
+  HR: '#2563eb',
+  INVENTORY: '#059669',
+  FINANCE: '#d97706',
+  CRM: '#7c3aed',
+  PROJECTS: '#0284c7',
+  ADMIN: '#dc2626',
+  SETTINGS: '#4b5563',
+  OTHER: '#6b7280',
+};
 
 export default function AnalyticsPage() {
-  const [metrics, setMetrics] = useState({
-    totalRevenue: 0,
-    inventoryTurnover: 0,
-    projectSuccessRate: 0,
-    departmentCosts: {
-      labels: ['Engineering', 'Marketing', 'Sales', 'Operations', 'HR'],
-      data: [45, 20, 15, 12, 8]
-    }
-  });
+  const { user } = useAuth();
+  const isSuperAdmin = user?.role === 'SUPER_ADMIN';
 
-  // Real math from actual join/departure dates — see AnalyticsService.getRetention.
-  // null while loading; { insufficientData: true } is a legitimate, honest
-  // result for a dataset with no 12-month history yet, not an error.
-  const [retention, setRetention] = useState<{ insufficientData: boolean; retentionPercent: number | null; headcountAtPeriodStart: number; leaversInPeriod: number } | null>(null);
+  // Filters
+  const [datePreset, setDatePreset] = useState<'today' | 'yesterday' | '7days' | '30days' | 'custom'>('7days');
+  const [startDate, setStartDate] = useState<string>('');
+  const [endDate, setEndDate] = useState<string>('');
+  const [selectedManager, setSelectedManager] = useState<string>('ALL');
+  const [selectedDepartment, setSelectedDepartment] = useState<string>('ALL');
+  const [selectedModule, setSelectedModule] = useState<string>('ALL');
+  const [selectedActionType, setSelectedActionType] = useState<string>('ALL');
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [page, setPage] = useState<number>(1);
+  const [limit, setLimit] = useState<number>(20);
 
-  const [revenueTrend, setRevenueTrend] = useState({
-    labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep'],
-    data: [1.2, 1.4, 1.3, 1.8, 2.1, 2.0, 2.4, 2.8, 3.1]
-  });
+  // View mode
+  const [viewMode, setViewMode] = useState<'timeline' | 'table'>('timeline');
 
+  // Data states
+  const [logs, setLogs] = useState<AuditLogItem[]>([]);
+  const [pagination, setPagination] = useState({ total: 0, page: 1, limit: 20, totalPages: 1 });
+  const [managers, setManagers] = useState<ManagerOption[]>([]);
+  const [departments, setDepartments] = useState<string[]>([]);
+  const [stats, setStats] = useState<AuditStats | null>(null);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [refreshing, setRefreshing] = useState<boolean>(false);
+
+  // Modal inspection
+  const [inspectedLog, setInspectedLog] = useState<AuditLogItem | null>(null);
+
+  // Set date ranges on preset change
   useEffect(() => {
-    async function fetchData() {
+    const now = new Date();
+    const toDateStr = (d: Date) => d.toISOString().split('T')[0];
+
+    if (datePreset === 'today') {
+      const todayStr = toDateStr(now);
+      setStartDate(todayStr);
+      setEndDate(todayStr);
+    } else if (datePreset === 'yesterday') {
+      const yesterday = new Date(now);
+      yesterday.setDate(yesterday.getDate() - 1);
+      const yStr = toDateStr(yesterday);
+      setStartDate(yStr);
+      setEndDate(yStr);
+    } else if (datePreset === '7days') {
+      const past = new Date(now);
+      past.setDate(past.getDate() - 7);
+      setStartDate(toDateStr(past));
+      setEndDate(toDateStr(now));
+    } else if (datePreset === '30days') {
+      const past = new Date(now);
+      past.setDate(past.getDate() - 30);
+      setStartDate(toDateStr(past));
+      setEndDate(toDateStr(now));
+    }
+  }, [datePreset]);
+
+  // Load static filter options (managers & departments)
+  useEffect(() => {
+    if (!isSuperAdmin) return;
+    async function loadOptions() {
       try {
-        const [dashMetrics, revTrend, retentionData] = await Promise.all([
-          analyticsApi.getDashboardMetrics(),
-          analyticsApi.getRevenueTrend(),
-          analyticsApi.getRetention(),
+        const [mgrs, depts] = await Promise.all([
+          analyticsApi.getManagers(),
+          analyticsApi.getDepartments(),
         ]);
-
-        if (dashMetrics && !Array.isArray(dashMetrics)) {
-          setMetrics({
-            totalRevenue: dashMetrics.revenueYTD || dashMetrics.totalRevenue || 0,
-            // Inventory Turnover and Project Success Rate below are still the
-            // fabricated formulas flagged in the 14 Aug audit — Employee
-            // Retention is the only tile fixed so far; the rest is Phase 5.
-            inventoryTurnover: dashMetrics.inventoryValue ? Math.round((dashMetrics.inventoryValue / 100000) * 10) / 10 : 4.8,
-            projectSuccessRate: dashMetrics.activeProjects ? Math.min(98, 85 + dashMetrics.activeProjects * 2) : 91,
-            departmentCosts: dashMetrics.departmentCosts || {
-              labels: ['Engineering', 'Marketing', 'Sales', 'Operations', 'HR'],
-              data: [45, 20, 15, 12, 8],
-            },
-          });
-        }
-
-        if (revTrend && !Array.isArray(revTrend) && revTrend.labels && revTrend.data) {
-          setRevenueTrend({
-            labels: revTrend.labels,
-            data: revTrend.data,
-          });
-        }
-
-        if (retentionData && !Array.isArray(retentionData)) {
-          setRetention(retentionData);
-        }
-      } catch (e) {
-        console.error('Failed to fetch analytics data:', e);
+        if (Array.isArray(mgrs)) setManagers(mgrs);
+        if (Array.isArray(depts)) setDepartments(depts);
+      } catch (err) {
+        console.error('Failed to load filter options:', err);
       }
     }
+    loadOptions();
+  }, [isSuperAdmin]);
+
+  // Fetch Audit Logs and Telemetry Stats
+  const fetchData = useCallback(async () => {
+    if (!isSuperAdmin) return;
+    setLoading(true);
+    try {
+      const params: AuditLogFilterParams = {
+        startDate: startDate || undefined,
+        endDate: endDate || undefined,
+        userId: selectedManager !== 'ALL' ? selectedManager : undefined,
+        department: selectedDepartment !== 'ALL' ? selectedDepartment : undefined,
+        module: selectedModule !== 'ALL' ? selectedModule : undefined,
+        actionType: selectedActionType !== 'ALL' ? selectedActionType : undefined,
+        search: searchQuery.trim() || undefined,
+        page,
+        limit,
+      };
+
+      const [logsRes, statsRes] = await Promise.all([
+        analyticsApi.getAuditLogs(params),
+        analyticsApi.getAuditStats(params),
+      ]);
+
+      if (logsRes?.data) {
+        setLogs(logsRes.data);
+        setPagination(logsRes.pagination || { total: logsRes.data.length, page: 1, limit, totalPages: 1 });
+      }
+      if (statsRes) {
+        setStats(statsRes);
+      }
+    } catch (err) {
+      console.error('Failed to fetch audit data:', err);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [
+    isSuperAdmin,
+    startDate,
+    endDate,
+    selectedManager,
+    selectedDepartment,
+    selectedModule,
+    selectedActionType,
+    searchQuery,
+    page,
+    limit,
+  ]);
+
+  useEffect(() => {
     fetchData();
-  }, []);
+  }, [fetchData]);
 
-  const [activeTab, setActiveTab] = useState<'enterprise' | 'sales' | 'hr'>('enterprise');
+  const handleRefresh = () => {
+    setRefreshing(true);
+    fetchData();
+  };
 
+  const handleExportCsv = async () => {
+    try {
+      await analyticsApi.exportAuditLogs({
+        startDate: startDate || undefined,
+        endDate: endDate || undefined,
+        userId: selectedManager !== 'ALL' ? selectedManager : undefined,
+        department: selectedDepartment !== 'ALL' ? selectedDepartment : undefined,
+        module: selectedModule !== 'ALL' ? selectedModule : undefined,
+        actionType: selectedActionType !== 'ALL' ? selectedActionType : undefined,
+        search: searchQuery.trim() || undefined,
+      });
+    } catch (err) {
+      alert('Failed to export audit logs');
+    }
+  };
+
+  const handleResetFilters = () => {
+    setDatePreset('7days');
+    setSelectedManager('ALL');
+    setSelectedDepartment('ALL');
+    setSelectedModule('ALL');
+    setSelectedActionType('ALL');
+    setSearchQuery('');
+    setPage(1);
+  };
+
+  // Format date helper
+  const formatTimestamp = (ts: string) => {
+    const d = new Date(ts);
+    return {
+      date: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+      time: d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+    };
+  };
+
+  // Format relative time helper
+  const getRelativeTime = (ts: string) => {
+    const diffMs = Date.now() - new Date(ts).getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return `${diffMins}m ago`;
+    const diffHours = Math.floor(diffMins / 60);
+    if (diffHours < 24) return `${diffHours}h ago`;
+    const diffDays = Math.floor(diffHours / 24);
+    return `${diffDays}d ago`;
+  };
+
+  // Chart Data Preparation
+  const timelineChartData = useMemo(() => {
+    if (!stats?.timeline || stats.timeline.length === 0) {
+      return { labels: [], data: [] };
+    }
+    return {
+      labels: stats.timeline.map((t) => t.date.slice(5)),
+      data: stats.timeline.map((t) => t.total),
+    };
+  }, [stats?.timeline]);
+
+  const moduleChartData = useMemo(() => {
+    if (!stats?.moduleBreakdown) {
+      return { labels: [], data: [] };
+    }
+    const filtered = Object.entries(stats.moduleBreakdown).filter(([_, count]) => count > 0);
+    return {
+      labels: filtered.map(([k]) => k),
+      data: filtered.map(([_, v]) => v),
+    };
+  }, [stats?.moduleBreakdown]);
+
+  // ==========================================
+  // ACCESS DENIED VIEW (STRICT RBAC LOCKDOWN)
+  // ==========================================
+  if (!isSuperAdmin) {
+    return (
+      <div style={{ padding: '60px 24px', display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '70vh' }}>
+        <div style={{
+          maxWidth: '540px',
+          width: '100%',
+          background: '#ffffff',
+          borderRadius: '16px',
+          padding: '40px 32px',
+          boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+          border: '1px solid #fee2e2',
+          textAlign: 'center',
+        }}>
+          <div style={{
+            width: '64px',
+            height: '64px',
+            background: '#fef2f2',
+            color: '#dc2626',
+            borderRadius: '50%',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            margin: '0 auto 20px auto',
+          }}>
+            <ShieldAlert size={36} />
+          </div>
+          <h2 style={{ fontSize: '22px', fontWeight: 'bold', color: '#111827', margin: '0 0 8px 0' }}>
+            Access Restricted — Super Admin Only
+          </h2>
+          <p style={{ fontSize: '14px', color: '#4b5563', lineHeight: '1.6', margin: '0 0 24px 0' }}>
+            The Enterprise Telemetry &amp; Audit Trail module contains confidential operational activity logs and is strictly reserved for the <strong>SUPER_ADMIN</strong> role.
+          </p>
+          <div style={{ background: '#f9fafb', padding: '12px 16px', borderRadius: '8px', fontSize: '13px', color: '#6b7280', marginBottom: '24px' }}>
+            Current Authenticated Role: <strong style={{ color: '#111827' }}>{user?.role || 'Unauthenticated'}</strong>
+          </div>
+          <a
+            href="/"
+            className="btn btn-primary"
+            style={{ width: '100%', justifyContent: 'center', padding: '10px 16px', fontSize: '14px' }}
+          >
+            Return to Dashboard
+          </a>
+        </div>
+      </div>
+    );
+  }
+
+  // ==========================================
+  // SUPER ADMIN DASHBOARD VIEW
+  // ==========================================
   return (
-    <div className="fade-in">
-      {/* Page Header */}
-      <div className="page-header">
+    <div className="fade-in" style={{ paddingBottom: '60px' }}>
+      {/* Top Header */}
+      <div style={{
+        display: 'flex',
+        flexWrap: 'wrap',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        gap: '16px',
+        marginBottom: '24px',
+        background: '#ffffff',
+        padding: '20px 24px',
+        borderRadius: '12px',
+        border: '1px solid #e5e7eb',
+        boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.05)',
+      }}>
         <div>
-          <h1>Enterprise Analytics</h1>
-          <p>Comprehensive data visualization across all operational modules.</p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '4px' }}>
+            <h1 style={{ fontSize: '24px', fontWeight: 'bold', color: '#111827', margin: 0 }}>
+              Super Admin Analytics &amp; Activity Trail
+            </h1>
+            <span style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '4px',
+              background: '#ecfdf5',
+              color: '#065f46',
+              fontSize: '11px',
+              fontWeight: 700,
+              padding: '3px 8px',
+              borderRadius: '9999px',
+              border: '1px solid #a7f3d0',
+            }}>
+              <ShieldCheck size={12} /> SUPER_ADMIN SECURED
+            </span>
+            <span style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '4px',
+              background: '#f0fdf4',
+              color: '#16a34a',
+              fontSize: '11px',
+              fontWeight: 600,
+              padding: '3px 8px',
+              borderRadius: '9999px',
+            }}>
+              <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#22c55e' }} />
+              Live Telemetry
+            </span>
+          </div>
+          <p style={{ fontSize: '13.5px', color: '#6b7280', margin: 0 }}>
+            Comprehensive audit logs and operational timeline of all department managers with zero mocking.
+          </p>
         </div>
-        <div className="page-header-actions">
-          <button className="btn btn-secondary">
-            <Filter size={16} /> Filter Date Range
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+          <button
+            onClick={handleRefresh}
+            disabled={refreshing}
+            className="btn btn-secondary"
+            style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', padding: '8px 14px' }}
+          >
+            <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />
+            {refreshing ? 'Refreshing...' : 'Refresh'}
           </button>
-          <button className="btn btn-primary">
-            <Download size={16} /> Export PDF Report
+          <button
+            onClick={handleExportCsv}
+            className="btn btn-primary"
+            style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', padding: '8px 14px' }}
+          >
+            <Download size={14} />
+            Export Audit Trail (CSV)
           </button>
         </div>
       </div>
 
-      {/* Tabs */}
-      <div style={{ display: 'flex', gap: '24px', borderBottom: '1px solid var(--color-border)', marginBottom: '24px' }}>
-        <button 
-          onClick={() => setActiveTab('enterprise')}
-          style={{ padding: '0 0 12px 0', border: 'none', background: 'none', cursor: 'pointer', fontWeight: 600, color: activeTab === 'enterprise' ? 'var(--color-primary)' : 'var(--color-text-muted)', borderBottom: activeTab === 'enterprise' ? '2px solid var(--color-primary)' : '2px solid transparent' }}
-        >
-          Enterprise Overview
-        </button>
-        <button 
-          onClick={() => setActiveTab('sales')}
-          style={{ padding: '0 0 12px 0', border: 'none', background: 'none', cursor: 'pointer', fontWeight: 600, color: activeTab === 'sales' ? 'var(--color-primary)' : 'var(--color-text-muted)', borderBottom: activeTab === 'sales' ? '2px solid var(--color-primary)' : '2px solid transparent' }}
-        >
-          Sales Performance
-        </button>
-        <button 
-          onClick={() => setActiveTab('hr')}
-          style={{ padding: '0 0 12px 0', border: 'none', background: 'none', cursor: 'pointer', fontWeight: 600, color: activeTab === 'hr' ? 'var(--color-primary)' : 'var(--color-text-muted)', borderBottom: activeTab === 'hr' ? '2px solid var(--color-primary)' : '2px solid transparent' }}
-        >
-          HR Metrics
-        </button>
+      {/* KPI Stats Cards */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+        gap: '16px',
+        marginBottom: '24px',
+      }}>
+        {/* Total Operations */}
+        <div style={{
+          background: '#ffffff',
+          borderRadius: '12px',
+          padding: '20px',
+          border: '1px solid #e5e7eb',
+          boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+            <span style={{ fontSize: '12.5px', fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+              Total Operations Logged
+            </span>
+            <div style={{ width: '36px', height: '36px', borderRadius: '8px', background: '#eff6ff', color: '#2563eb', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Activity size={20} />
+            </div>
+          </div>
+          <div style={{ fontSize: '28px', fontWeight: 'bold', color: '#111827' }}>
+            {stats?.totalEvents?.toLocaleString() || 0}
+          </div>
+          <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '6px' }}>
+            In selected range ({startDate || 'All'} to {endDate || 'Now'})
+          </div>
+        </div>
+
+        {/* Active Managers */}
+        <div style={{
+          background: '#ffffff',
+          borderRadius: '12px',
+          padding: '20px',
+          border: '1px solid #e5e7eb',
+          boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+            <span style={{ fontSize: '12.5px', fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+              Active Management Accounts
+            </span>
+            <div style={{ width: '36px', height: '36px', borderRadius: '8px', background: '#ecfdf5', color: '#059669', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <User size={20} />
+            </div>
+          </div>
+          <div style={{ fontSize: '28px', fontWeight: 'bold', color: '#111827' }}>
+            {stats?.activeManagersCount || 0}
+          </div>
+          <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '6px' }}>
+            Distinct managers executing actions
+          </div>
+        </div>
+
+        {/* Action Type Breakdown */}
+        <div style={{
+          background: '#ffffff',
+          borderRadius: '12px',
+          padding: '20px',
+          border: '1px solid #e5e7eb',
+          boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+            <span style={{ fontSize: '12.5px', fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+              Action Breakdown
+            </span>
+            <div style={{ width: '36px', height: '36px', borderRadius: '8px', background: '#fdf4ff', color: '#a855f7', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <SlidersHorizontal size={20} />
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: '8px', marginTop: '4px', flexWrap: 'wrap' }}>
+            <span style={{ fontSize: '12px', fontWeight: 600, color: '#065f46', background: '#d1fae5', padding: '2px 8px', borderRadius: '6px' }}>
+              +{stats?.actionBreakdown?.CREATE || 0} Creates
+            </span>
+            <span style={{ fontSize: '12px', fontWeight: 600, color: '#1e40af', background: '#dbeafe', padding: '2px 8px', borderRadius: '6px' }}>
+              ~{stats?.actionBreakdown?.UPDATE || 0} Updates
+            </span>
+            <span style={{ fontSize: '12px', fontWeight: 600, color: '#991b1b', background: '#fee2e2', padding: '2px 8px', borderRadius: '6px' }}>
+              -{stats?.actionBreakdown?.DELETE || 0} Deletes
+            </span>
+          </div>
+          <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '8px' }}>
+            Real mutation distribution
+          </div>
+        </div>
+
+        {/* Most Active Module */}
+        <div style={{
+          background: '#ffffff',
+          borderRadius: '12px',
+          padding: '20px',
+          border: '1px solid #e5e7eb',
+          boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+            <span style={{ fontSize: '12.5px', fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+              Peak Activity Module
+            </span>
+            <div style={{ width: '36px', height: '36px', borderRadius: '8px', background: '#fff7ed', color: '#ea580c', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Layers size={20} />
+            </div>
+          </div>
+          <div style={{ fontSize: '28px', fontWeight: 'bold', color: '#111827' }}>
+            {stats?.mostActiveModule || 'None'}
+          </div>
+          <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '6px' }}>
+            Highest operational volume module
+          </div>
+        </div>
       </div>
 
-      {activeTab === 'enterprise' && (
-        <>
-          {/* KPI Overview */}
-      <div className="kpi-grid" style={{ marginBottom: '24px' }}>
-        <div className="kpi-card">
-          <div className="kpi-card-header">
-            <div className="kpi-card-label">Total Revenue YTD</div>
-            <div className="kpi-card-icon" style={{ background: '#f0fdf4', color: '#16a34a' }}><IndianRupee size={20} /></div>
-          </div>
-          <div className="kpi-card-value">{formatINRCompact(metrics.totalRevenue)}</div>
-          <div className="kpi-card-trend up"><TrendingUp size={14} /> +18.5% YoY</div>
-        </div>
-        <div className="kpi-card">
-          <div className="kpi-card-header">
-            <div className="kpi-card-label">Employee Retention</div>
-            <div className="kpi-card-icon" style={{ background: '#eff6ff', color: '#2563eb' }}><Users size={20} /></div>
-          </div>
-          {!retention ? (
-            <div className="kpi-card-value" style={{ color: 'var(--color-text-muted)', fontSize: '20px' }}>Loading…</div>
-          ) : retention.insufficientData ? (
-            <>
-              <div className="kpi-card-value" style={{ fontSize: '20px', color: 'var(--color-text-muted)' }}>Insufficient data</div>
-              <div className="kpi-card-trend" style={{ color: 'var(--color-text-muted)' }}>
-                Needs 12 months of employment history — no one in this dataset had joined that far back yet
+      {/* Visual Activity Charts */}
+      {stats && stats.totalEvents > 0 && (
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))',
+          gap: '16px',
+          marginBottom: '24px',
+        }}>
+          {/* Daily Activity Volume Chart */}
+          <div style={{
+            background: '#ffffff',
+            borderRadius: '12px',
+            padding: '20px',
+            border: '1px solid #e5e7eb',
+            boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+              <div>
+                <h3 style={{ fontSize: '15px', fontWeight: 700, color: '#111827', margin: '0 0 2px 0' }}>
+                  Daily Activity Trend
+                </h3>
+                <span style={{ fontSize: '12px', color: '#6b7280' }}>Total management mutations over time</span>
               </div>
-            </>
-          ) : (
-            <>
-              <div className="kpi-card-value">{retention.retentionPercent}%</div>
-              <div className="kpi-card-trend" style={{ color: 'var(--color-text-muted)' }}>
-                {retention.leaversInPeriod} left of {retention.headcountAtPeriodStart} employed 12 months ago
-              </div>
-            </>
-          )}
-        </div>
-        <div className="kpi-card">
-          <div className="kpi-card-header">
-            <div className="kpi-card-label">Inventory Turnover</div>
-            <div className="kpi-card-icon" style={{ background: '#fef3c7', color: '#d97706' }}><Box size={20} /></div>
-          </div>
-          <div className="kpi-card-value">{metrics.inventoryTurnover}x</div>
-          <div className="kpi-card-trend neutral" style={{color: 'var(--color-text-muted)'}}>Industry avg: 4.2x</div>
-        </div>
-        <div className="kpi-card">
-          <div className="kpi-card-header">
-            <div className="kpi-card-label">Project Success Rate</div>
-            <div className="kpi-card-icon" style={{ background: '#fdf4ff', color: '#c026d3' }}><FolderKanban size={20} /></div>
-          </div>
-          <div className="kpi-card-value">{metrics.projectSuccessRate}%</div>
-          <div className="kpi-card-trend up"><TrendingUp size={14} /> +5% YoY</div>
-        </div>
-      </div>
-
-      {/* Main Charts Row */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '24px' }}>
-        {/* Revenue vs Target */}
-        <div className="chart-card">
-          <div className="chart-card-header">
-            <div className="chart-card-title">Revenue vs. Target (2024)</div>
-            <BarChart2 size={18} style={{ color: 'var(--color-text-muted)' }} />
-          </div>
-          <div className="chart-wrap" style={{ height: '300px' }}>
-            <LineChart
-              labels={revenueTrend.labels}
-              datasets={[
-                { label: 'Actual Revenue (₹)', data: revenueTrend.data }
-              ]}
-            />
-          </div>
-        </div>
-
-        {/* Operational Costs */}
-        <div className="chart-card">
-          <div className="chart-card-header">
-            <div className="chart-card-title">Departmental Operating Costs</div>
-            <PieChart size={18} style={{ color: 'var(--color-text-muted)' }} />
-          </div>
-          <div className="chart-wrap" style={{ height: '300px', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-            <div style={{ width: '240px', height: '240px' }}>
-              <DoughnutChart
-                labels={metrics.departmentCosts?.labels || ['Engineering', 'Marketing', 'Sales', 'Operations', 'HR']}
-                dataPoints={metrics.departmentCosts?.data || [45, 20, 15, 12, 8]}
+              <BarChart2 size={18} color="#6b7280" />
+            </div>
+            <div style={{ height: '180px' }}>
+              <BarChart
+                labels={timelineChartData.labels}
+                datasets={[{ label: 'Audit Operations', data: timelineChartData.data }]}
               />
             </div>
-            {/* Custom Legend */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginLeft: '24px' }}>
-              {(metrics.departmentCosts?.labels || ['Engineering', 'Marketing', 'Sales', 'Operations', 'HR']).map((label: string, idx: number) => {
-                const colors = ['#2563eb', '#3b82f6', '#60a5fa', '#93c5fd', '#1d4ed8'];
-                const data = metrics.departmentCosts?.data || [45, 20, 15, 12, 8];
+          </div>
+
+          {/* Module Breakdown Chart */}
+          <div style={{
+            background: '#ffffff',
+            borderRadius: '12px',
+            padding: '20px',
+            border: '1px solid #e5e7eb',
+            boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+              <div>
+                <h3 style={{ fontSize: '15px', fontWeight: 700, color: '#111827', margin: '0 0 2px 0' }}>
+                  Operational Module Distribution
+                </h3>
+                <span style={{ fontSize: '12px', color: '#6b7280' }}>Activity share across departments</span>
+              </div>
+              <TrendingUp size={18} color="#6b7280" />
+            </div>
+            <div style={{ height: '180px' }}>
+              <DoughnutChart labels={moduleChartData.labels} dataPoints={moduleChartData.data} />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Filter Controls Bar */}
+      <div style={{
+        background: '#ffffff',
+        borderRadius: '12px',
+        padding: '20px',
+        border: '1px solid #e5e7eb',
+        boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.05)',
+        marginBottom: '20px',
+      }}>
+        {/* Date Presets Row */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px', flexWrap: 'wrap' }}>
+          <span style={{ fontSize: '13px', fontWeight: 600, color: '#4b5563', marginRight: '4px' }}>
+            Time Horizon:
+          </span>
+          {(['today', 'yesterday', '7days', '30days', 'custom'] as const).map((p) => {
+            const labels: Record<string, string> = {
+              today: 'Today',
+              yesterday: 'Yesterday',
+              '7days': 'Last 7 Days',
+              '30days': 'Last 30 Days',
+              custom: 'Custom Range',
+            };
+            const active = datePreset === p;
+            return (
+              <button
+                key={p}
+                onClick={() => setDatePreset(p)}
+                style={{
+                  padding: '6px 12px',
+                  borderRadius: '8px',
+                  fontSize: '12.5px',
+                  fontWeight: active ? 600 : 500,
+                  border: active ? '1px solid #2563eb' : '1px solid #e5e7eb',
+                  background: active ? '#eff6ff' : '#ffffff',
+                  color: active ? '#1d4ed8' : '#4b5563',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease',
+                }}
+              >
+                {labels[p]}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Dynamic Filters Grid */}
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+          gap: '12px',
+          alignItems: 'center',
+        }}>
+          {/* Start Date */}
+          <div>
+            <label style={{ display: 'block', fontSize: '11.5px', fontWeight: 600, color: '#6b7280', marginBottom: '4px' }}>
+              From Date
+            </label>
+            <input
+              type="date"
+              value={startDate}
+              onChange={(e) => {
+                setStartDate(e.target.value);
+                setDatePreset('custom');
+              }}
+              style={{
+                width: '100%',
+                padding: '8px 10px',
+                borderRadius: '8px',
+                border: '1px solid #d1d5db',
+                fontSize: '13px',
+                color: '#111827',
+              }}
+            />
+          </div>
+
+          {/* End Date */}
+          <div>
+            <label style={{ display: 'block', fontSize: '11.5px', fontWeight: 600, color: '#6b7280', marginBottom: '4px' }}>
+              To Date
+            </label>
+            <input
+              type="date"
+              value={endDate}
+              onChange={(e) => {
+                setEndDate(e.target.value);
+                setDatePreset('custom');
+              }}
+              style={{
+                width: '100%',
+                padding: '8px 10px',
+                borderRadius: '8px',
+                border: '1px solid #d1d5db',
+                fontSize: '13px',
+                color: '#111827',
+              }}
+            />
+          </div>
+
+          {/* Manager / Account Dropdown */}
+          <div>
+            <label style={{ display: 'block', fontSize: '11.5px', fontWeight: 600, color: '#6b7280', marginBottom: '4px' }}>
+              Manager / User Account
+            </label>
+            <select
+              value={selectedManager}
+              onChange={(e) => {
+                setSelectedManager(e.target.value);
+                setPage(1);
+              }}
+              style={{
+                width: '100%',
+                padding: '8px 10px',
+                borderRadius: '8px',
+                border: '1px solid #d1d5db',
+                fontSize: '13px',
+                color: '#111827',
+                background: '#ffffff',
+              }}
+            >
+              <option value="ALL">All Managers &amp; Users</option>
+              {managers.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.displayName} ({m.role}) — {m.department}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Department Dropdown */}
+          <div>
+            <label style={{ display: 'block', fontSize: '11.5px', fontWeight: 600, color: '#6b7280', marginBottom: '4px' }}>
+              Department
+            </label>
+            <select
+              value={selectedDepartment}
+              onChange={(e) => {
+                setSelectedDepartment(e.target.value);
+                setPage(1);
+              }}
+              style={{
+                width: '100%',
+                padding: '8px 10px',
+                borderRadius: '8px',
+                border: '1px solid #d1d5db',
+                fontSize: '13px',
+                color: '#111827',
+                background: '#ffffff',
+              }}
+            >
+              <option value="ALL">All Departments</option>
+              {departments.map((d) => (
+                <option key={d} value={d}>
+                  {d}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Module Dropdown */}
+          <div>
+            <label style={{ display: 'block', fontSize: '11.5px', fontWeight: 600, color: '#6b7280', marginBottom: '4px' }}>
+              Module
+            </label>
+            <select
+              value={selectedModule}
+              onChange={(e) => {
+                setSelectedModule(e.target.value);
+                setPage(1);
+              }}
+              style={{
+                width: '100%',
+                padding: '8px 10px',
+                borderRadius: '8px',
+                border: '1px solid #d1d5db',
+                fontSize: '13px',
+                color: '#111827',
+                background: '#ffffff',
+              }}
+            >
+              <option value="ALL">All Modules</option>
+              <option value="HR">HR Management</option>
+              <option value="INVENTORY">Inventory</option>
+              <option value="FINANCE">Finance</option>
+              <option value="CRM">CRM</option>
+              <option value="PROJECTS">Projects</option>
+              <option value="ADMIN">Admin / Users</option>
+              <option value="SETTINGS">Settings</option>
+            </select>
+          </div>
+
+          {/* Action Type Dropdown */}
+          <div>
+            <label style={{ display: 'block', fontSize: '11.5px', fontWeight: 600, color: '#6b7280', marginBottom: '4px' }}>
+              Action Type
+            </label>
+            <select
+              value={selectedActionType}
+              onChange={(e) => {
+                setSelectedActionType(e.target.value);
+                setPage(1);
+              }}
+              style={{
+                width: '100%',
+                padding: '8px 10px',
+                borderRadius: '8px',
+                border: '1px solid #d1d5db',
+                fontSize: '13px',
+                color: '#111827',
+                background: '#ffffff',
+              }}
+            >
+              <option value="ALL">All Action Types</option>
+              <option value="CREATE">CREATE (+)</option>
+              <option value="UPDATE">UPDATE (~)</option>
+              <option value="DELETE">DELETE (-)</option>
+              <option value="STATUS_CHANGE">STATUS_CHANGE (✓)</option>
+              <option value="LOGIN">LOGIN (→)</option>
+            </select>
+          </div>
+        </div>
+
+        {/* Free Text Search & View Mode Switcher */}
+        <div style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          gap: '12px',
+          marginTop: '16px',
+          flexWrap: 'wrap',
+        }}>
+          <div style={{ position: 'relative', flex: '1', minWidth: '240px' }}>
+            <Search size={16} color="#9ca3af" style={{ position: 'absolute', left: '12px', top: '10px' }} />
+            <input
+              type="text"
+              placeholder="Search by description, target record, entity ID, actor name..."
+              value={searchQuery}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                setPage(1);
+              }}
+              style={{
+                width: '100%',
+                padding: '8px 12px 8px 36px',
+                borderRadius: '8px',
+                border: '1px solid #d1d5db',
+                fontSize: '13px',
+                color: '#111827',
+              }}
+            />
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <button
+              onClick={handleResetFilters}
+              style={{
+                background: 'none',
+                border: 'none',
+                color: '#4b5563',
+                fontSize: '12.5px',
+                fontWeight: 500,
+                cursor: 'pointer',
+                textDecoration: 'underline',
+              }}
+            >
+              Reset Filters
+            </button>
+
+            {/* View Mode Toggle */}
+            <div style={{
+              display: 'inline-flex',
+              background: '#f3f4f6',
+              padding: '3px',
+              borderRadius: '8px',
+              border: '1px solid #e5e7eb',
+            }}>
+              <button
+                onClick={() => setViewMode('timeline')}
+                style={{
+                  padding: '5px 12px',
+                  borderRadius: '6px',
+                  fontSize: '12px',
+                  fontWeight: viewMode === 'timeline' ? 600 : 500,
+                  background: viewMode === 'timeline' ? '#ffffff' : 'transparent',
+                  color: viewMode === 'timeline' ? '#111827' : '#6b7280',
+                  boxShadow: viewMode === 'timeline' ? '0 1px 2px 0 rgba(0, 0, 0, 0.05)' : 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                }}
+              >
+                Timeline View
+              </button>
+              <button
+                onClick={() => setViewMode('table')}
+                style={{
+                  padding: '5px 12px',
+                  borderRadius: '6px',
+                  fontSize: '12px',
+                  fontWeight: viewMode === 'table' ? 600 : 500,
+                  background: viewMode === 'table' ? '#ffffff' : 'transparent',
+                  color: viewMode === 'table' ? '#111827' : '#6b7280',
+                  boxShadow: viewMode === 'table' ? '0 1px 2px 0 rgba(0, 0, 0, 0.05)' : 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                }}
+              >
+                Data Table View
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Main Content Area */}
+      {loading ? (
+        <div style={{
+          background: '#ffffff',
+          borderRadius: '12px',
+          padding: '60px',
+          textAlign: 'center',
+          border: '1px solid #e5e7eb',
+          color: '#6b7280',
+        }}>
+          <RefreshCw size={28} className="animate-spin" style={{ margin: '0 auto 12px auto', color: '#2563eb' }} />
+          <div style={{ fontSize: '15px', fontWeight: 600, color: '#111827' }}>Loading Activity Trail...</div>
+          <p style={{ fontSize: '13px', margin: '4px 0 0 0' }}>Retrieving live audit telemetry from database</p>
+        </div>
+      ) : logs.length === 0 ? (
+        <div style={{
+          background: '#ffffff',
+          borderRadius: '12px',
+          padding: '60px 20px',
+          textAlign: 'center',
+          border: '1px solid #e5e7eb',
+        }}>
+          <div style={{
+            width: '48px',
+            height: '48px',
+            borderRadius: '50%',
+            background: '#f3f4f6',
+            color: '#9ca3af',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            margin: '0 auto 16px auto',
+          }}>
+            <Activity size={24} />
+          </div>
+          <h3 style={{ fontSize: '16px', fontWeight: 600, color: '#111827', margin: '0 0 6px 0' }}>
+            No Audit Logs Found
+          </h3>
+          <p style={{ fontSize: '13.5px', color: '#6b7280', margin: '0 0 16px 0' }}>
+            No management operations match the selected date range and filter criteria.
+          </p>
+          <button onClick={handleResetFilters} className="btn btn-secondary" style={{ fontSize: '13px' }}>
+            Clear Filters
+          </button>
+        </div>
+      ) : viewMode === 'timeline' ? (
+        /* TIMELINE VIEW */
+        <div style={{
+          background: '#ffffff',
+          borderRadius: '12px',
+          padding: '24px',
+          border: '1px solid #e5e7eb',
+          boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.05)',
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+            <div style={{ fontSize: '14px', fontWeight: 600, color: '#374151' }}>
+              Showing {logs.length} of {pagination.total} audit events
+            </div>
+            <div style={{ fontSize: '12.5px', color: '#6b7280' }}>
+              Page {pagination.page} of {pagination.totalPages}
+            </div>
+          </div>
+
+          <div style={{ position: 'relative', paddingLeft: '32px' }}>
+            {/* Timeline Vertical Bar */}
+            <div style={{
+              position: 'absolute',
+              left: '11px',
+              top: '8px',
+              bottom: '8px',
+              width: '2px',
+              background: '#e5e7eb',
+            }} />
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+              {logs.map((log) => {
+                const actionMeta = ACTION_COLORS[log.actionType] || ACTION_COLORS.OTHER;
+                const ActionIcon = actionMeta.icon;
+                const moduleColor = MODULE_COLORS[log.module] || MODULE_COLORS.OTHER;
+                const ts = formatTimestamp(log.timestamp);
+                const relTime = getRelativeTime(log.timestamp);
+
+                const actorName = log.userName || (log.user?.employee ? `${log.user.employee.firstName} ${log.user.employee.lastName}`.trim() : log.user?.username || log.userEmail || 'System');
+                const actorRole = log.role || log.user?.role?.name || 'USER';
+                const actorDept = log.department || log.user?.employee?.department?.name || 'General';
+
                 return (
-                  <div key={label} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px' }}>
-                    <div style={{ width: '12px', height: '12px', borderRadius: '3px', background: colors[idx % colors.length] }} />
-                    <span style={{ fontWeight: 600 }}>{label}</span>
-                    <span style={{ color: 'var(--color-text-muted)' }}>{data[idx]}%</span>
+                  <div
+                    key={log.id}
+                    style={{
+                      position: 'relative',
+                      background: '#f9fafb',
+                      borderRadius: '10px',
+                      padding: '16px 20px',
+                      border: '1px solid #e5e7eb',
+                      transition: 'box-shadow 0.15s ease',
+                    }}
+                    onMouseEnter={(e) => (e.currentTarget.style.boxShadow = '0 4px 6px -1px rgba(0, 0, 0, 0.05)')}
+                    onMouseLeave={(e) => (e.currentTarget.style.boxShadow = 'none')}
+                  >
+                    {/* Node Dot on vertical line */}
+                    <div style={{
+                      position: 'absolute',
+                      left: '-28px',
+                      top: '20px',
+                      width: '18px',
+                      height: '18px',
+                      borderRadius: '50%',
+                      background: actionMeta.bg,
+                      border: `2px solid ${actionMeta.text}`,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}>
+                      <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: actionMeta.text }} />
+                    </div>
+
+                    {/* Event Content Header */}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '8px', marginBottom: '8px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                        {/* Action Badge */}
+                        <span style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                          background: actionMeta.bg,
+                          color: actionMeta.text,
+                          border: `1px solid ${actionMeta.border}`,
+                          fontSize: '11px',
+                          fontWeight: 700,
+                          padding: '2px 8px',
+                          borderRadius: '6px',
+                        }}>
+                          <ActionIcon size={12} />
+                          {log.actionType}
+                        </span>
+
+                        {/* Module Badge */}
+                        <span style={{
+                          display: 'inline-block',
+                          background: '#ffffff',
+                          color: moduleColor,
+                          border: `1px solid ${moduleColor}30`,
+                          fontSize: '11px',
+                          fontWeight: 700,
+                          padding: '2px 8px',
+                          borderRadius: '6px',
+                        }}>
+                          {log.module}
+                        </span>
+
+                        {log.entityType && (
+                          <span style={{ fontSize: '12px', fontWeight: 600, color: '#4b5563' }}>
+                            {log.entityType} {log.entityId ? `#${log.entityId.slice(0, 8)}` : ''}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Timestamp */}
+                      <div style={{ fontSize: '12px', color: '#6b7280', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <Clock size={13} />
+                        <span>{ts.date} at {ts.time}</span>
+                        <span style={{ fontWeight: 600, color: '#9ca3af' }}>({relTime})</span>
+                      </div>
+                    </div>
+
+                    {/* Description */}
+                    <div style={{ fontSize: '14px', fontWeight: 600, color: '#111827', marginBottom: '10px' }}>
+                      {log.description}
+                    </div>
+
+                    {/* Actor Details Footer */}
+                    <div style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      flexWrap: 'wrap',
+                      gap: '8px',
+                      paddingTop: '10px',
+                      borderTop: '1px solid #e5e7eb',
+                      fontSize: '12px',
+                      color: '#4b5563',
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <div style={{
+                          width: '24px',
+                          height: '24px',
+                          borderRadius: '50%',
+                          background: '#2563eb',
+                          color: '#ffffff',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontSize: '11px',
+                          fontWeight: 'bold',
+                        }}>
+                          {actorName.charAt(0).toUpperCase()}
+                        </div>
+                        <span style={{ fontWeight: 600, color: '#111827' }}>{actorName}</span>
+                        <span style={{ color: '#9ca3af' }}>•</span>
+                        <span style={{ color: '#6b7280' }}>{actorRole}</span>
+                        <span style={{ color: '#9ca3af' }}>•</span>
+                        <span style={{ color: '#6b7280' }}>{actorDept}</span>
+                      </div>
+
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        {log.ipAddress && (
+                          <span style={{ color: '#9ca3af', fontFamily: 'monospace', fontSize: '11px' }}>
+                            IP: {log.ipAddress}
+                          </span>
+                        )}
+                        <button
+                          onClick={() => setInspectedLog(log)}
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            background: '#ffffff',
+                            border: '1px solid #d1d5db',
+                            borderRadius: '6px',
+                            padding: '3px 8px',
+                            fontSize: '11.5px',
+                            fontWeight: 600,
+                            color: '#374151',
+                            cursor: 'pointer',
+                          }}
+                        >
+                          <Eye size={12} /> Inspect
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 );
               })}
             </div>
           </div>
         </div>
-      </div>
+      ) : (
+        /* DATA TABLE VIEW */
+        <div style={{
+          background: '#ffffff',
+          borderRadius: '12px',
+          border: '1px solid #e5e7eb',
+          boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.05)',
+          overflow: 'hidden',
+        }}>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
+              <thead>
+                <tr style={{ background: '#f9fafb', borderBottom: '1px solid #e5e7eb', color: '#4b5563', fontSize: '12px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                  <th style={{ padding: '12px 16px' }}>Timestamp</th>
+                  <th style={{ padding: '12px 16px' }}>Manager / Actor</th>
+                  <th style={{ padding: '12px 16px' }}>Role &amp; Dept</th>
+                  <th style={{ padding: '12px 16px' }}>Action</th>
+                  <th style={{ padding: '12px 16px' }}>Module</th>
+                  <th style={{ padding: '12px 16px' }}>Description</th>
+                  <th style={{ padding: '12px 16px', textAlign: 'right' }}>Inspect</th>
+                </tr>
+              </thead>
+              <tbody>
+                {logs.map((log) => {
+                  const actionMeta = ACTION_COLORS[log.actionType] || ACTION_COLORS.OTHER;
+                  const ActionIcon = actionMeta.icon;
+                  const ts = formatTimestamp(log.timestamp);
+                  const actorName = log.userName || (log.user?.employee ? `${log.user.employee.firstName} ${log.user.employee.lastName}`.trim() : log.user?.username || log.userEmail || 'System');
+                  const actorRole = log.role || log.user?.role?.name || 'USER';
+                  const actorDept = log.department || log.user?.employee?.department?.name || 'General';
 
-      {/* Secondary Metrics Row */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px' }}>
-        {/* Resource Efficiency */}
-        <div className="card" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-          <h3 style={{ fontSize: '16px', fontWeight: 700, marginBottom: '24px', alignSelf: 'flex-start' }}>Resource Efficiency</h3>
-          
-          <div style={{ position: 'relative', width: '160px', height: '160px', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '50%', background: 'conic-gradient(#2563eb 82%, #e5e7eb 0)' }}>
-            <div style={{ width: '130px', height: '130px', borderRadius: '50%', background: 'white', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-              <span style={{ fontSize: '32px', fontWeight: 800, color: '#111827' }}>82%</span>
-              <span style={{ fontSize: '11px', color: '#6b7280', fontWeight: 600 }}>OPTIMAL</span>
-            </div>
-          </div>
-          
-          <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', marginTop: '24px' }}>
-            <div style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: '12px', color: 'var(--color-text-muted)' }}>Peak Dept</div>
-              <div style={{ fontSize: '13px', fontWeight: 700, color: '#2563eb' }}>R&D Team</div>
-            </div>
-            <div style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: '12px', color: 'var(--color-text-muted)' }}>Peak Hour</div>
-              <div style={{ fontSize: '13px', fontWeight: 700, color: '#16a34a' }}>10:00 AM</div>
-            </div>
+                  return (
+                    <tr key={log.id} style={{ borderBottom: '1px solid #f3f4f6', transition: 'background 0.15s ease' }}>
+                      <td style={{ padding: '12px 16px', whiteSpace: 'nowrap', color: '#6b7280' }}>
+                        <div style={{ fontWeight: 600, color: '#111827' }}>{ts.date}</div>
+                        <div style={{ fontSize: '11.5px', color: '#9ca3af' }}>{ts.time}</div>
+                      </td>
+                      <td style={{ padding: '12px 16px', whiteSpace: 'nowrap' }}>
+                        <div style={{ fontWeight: 600, color: '#111827' }}>{actorName}</div>
+                        <div style={{ fontSize: '11.5px', color: '#6b7280' }}>{log.userEmail || ''}</div>
+                      </td>
+                      <td style={{ padding: '12px 16px', whiteSpace: 'nowrap' }}>
+                        <span style={{ display: 'inline-block', fontSize: '11px', fontWeight: 600, color: '#374151', background: '#f3f4f6', padding: '2px 6px', borderRadius: '4px', marginRight: '4px' }}>
+                          {actorRole}
+                        </span>
+                        <div style={{ fontSize: '11.5px', color: '#6b7280', marginTop: '2px' }}>{actorDept}</div>
+                      </td>
+                      <td style={{ padding: '12px 16px', whiteSpace: 'nowrap' }}>
+                        <span style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                          background: actionMeta.bg,
+                          color: actionMeta.text,
+                          border: `1px solid ${actionMeta.border}`,
+                          fontSize: '11px',
+                          fontWeight: 700,
+                          padding: '2px 8px',
+                          borderRadius: '6px',
+                        }}>
+                          <ActionIcon size={12} />
+                          {log.actionType}
+                        </span>
+                      </td>
+                      <td style={{ padding: '12px 16px', whiteSpace: 'nowrap' }}>
+                        <span style={{
+                          display: 'inline-block',
+                          background: '#ffffff',
+                          color: MODULE_COLORS[log.module] || '#4b5563',
+                          border: `1px solid ${(MODULE_COLORS[log.module] || '#4b5563')}30`,
+                          fontSize: '11px',
+                          fontWeight: 700,
+                          padding: '2px 8px',
+                          borderRadius: '6px',
+                        }}>
+                          {log.module}
+                        </span>
+                      </td>
+                      <td style={{ padding: '12px 16px', maxWidth: '300px' }}>
+                        <div style={{ fontWeight: 500, color: '#111827', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {log.description}
+                        </div>
+                        {log.entityId && (
+                          <div style={{ fontSize: '11px', color: '#9ca3af', fontFamily: 'monospace' }}>
+                            ID: {log.entityId}
+                          </div>
+                        )}
+                      </td>
+                      <td style={{ padding: '12px 16px', textAlign: 'right', whiteSpace: 'nowrap' }}>
+                        <button
+                          onClick={() => setInspectedLog(log)}
+                          style={{
+                            background: '#ffffff',
+                            border: '1px solid #d1d5db',
+                            borderRadius: '6px',
+                            padding: '4px 10px',
+                            fontSize: '12px',
+                            fontWeight: 600,
+                            color: '#374151',
+                            cursor: 'pointer',
+                          }}
+                        >
+                          Details
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         </div>
+      )}
 
-        {/* Project Milestones */}
-        <div className="card">
-          <h3 style={{ fontSize: '16px', fontWeight: 700, marginBottom: '16px' }}>Project Milestones</h3>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            {[
-              { id: '01', title: 'Quarterly Audit', desc: 'Financial compliance review', status: 'In Progress', color: '#2563eb' },
-              { id: '02', title: 'ERP Core Update', desc: 'Version 2.4 deployment', status: 'Pending', color: '#d97706' },
-              { id: '03', title: 'Q3 Strategic Planning', desc: 'Board review preparation', status: 'Completed', color: '#16a34a' },
-            ].map((m) => (
-              <div key={m.id} style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
-                <div style={{ fontSize: '20px', fontWeight: 800, color: '#e5e7eb' }}>{m.id}</div>
-                <div style={{ flex: 1 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontSize: '14px', fontWeight: 700 }}>{m.title}</span>
-                    <span style={{ fontSize: '11px', fontWeight: 600, color: m.color, background: m.color + '15', padding: '2px 6px', borderRadius: '4px' }}>{m.status}</span>
-                  </div>
-                  <div style={{ fontSize: '12px', color: 'var(--color-text-secondary)', marginTop: '4px' }}>{m.desc}</div>
+      {/* Pagination Controls */}
+      {pagination.totalPages > 1 && (
+        <div style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          marginTop: '20px',
+          background: '#ffffff',
+          padding: '14px 20px',
+          borderRadius: '10px',
+          border: '1px solid #e5e7eb',
+        }}>
+          <div style={{ fontSize: '13px', color: '#6b7280' }}>
+            Showing page <strong>{pagination.page}</strong> of <strong>{pagination.totalPages}</strong> ({pagination.total} total events)
+          </div>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={page <= 1}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+                padding: '6px 12px',
+                borderRadius: '6px',
+                border: '1px solid #d1d5db',
+                background: page <= 1 ? '#f9fafb' : '#ffffff',
+                color: page <= 1 ? '#9ca3af' : '#374151',
+                cursor: page <= 1 ? 'not-allowed' : 'pointer',
+                fontSize: '12.5px',
+                fontWeight: 500,
+              }}
+            >
+              <ChevronLeft size={14} /> Previous
+            </button>
+            <button
+              onClick={() => setPage((p) => Math.min(pagination.totalPages, p + 1))}
+              disabled={page >= pagination.totalPages}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+                padding: '6px 12px',
+                borderRadius: '6px',
+                border: '1px solid #d1d5db',
+                background: page >= pagination.totalPages ? '#f9fafb' : '#ffffff',
+                color: page >= pagination.totalPages ? '#9ca3af' : '#374151',
+                cursor: page >= pagination.totalPages ? 'not-allowed' : 'pointer',
+                fontSize: '12.5px',
+                fontWeight: 500,
+              }}
+            >
+              Next <ChevronRight size={14} />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Detail Inspection Modal */}
+      {inspectedLog && (
+        <div style={{
+          position: 'fixed',
+          inset: 0,
+          background: 'rgba(0, 0, 0, 0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 9999,
+          padding: '20px',
+        }}>
+          <div style={{
+            background: '#ffffff',
+            borderRadius: '16px',
+            width: '100%',
+            maxWidth: '680px',
+            maxHeight: '90vh',
+            overflowY: 'auto',
+            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+            border: '1px solid #e5e7eb',
+          }}>
+            {/* Modal Header */}
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              padding: '20px 24px',
+              borderBottom: '1px solid #e5e7eb',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Activity size={20} color="#2563eb" />
+                <h3 style={{ fontSize: '17px', fontWeight: 700, color: '#111827', margin: 0 }}>
+                  Audit Event Inspection
+                </h3>
+              </div>
+              <button
+                onClick={() => setInspectedLog(null)}
+                style={{ background: 'none', border: 'none', color: '#6b7280', cursor: 'pointer', padding: '4px' }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div style={{ padding: '24px' }}>
+              {/* Event Summary Box */}
+              <div style={{ background: '#f9fafb', borderRadius: '10px', padding: '16px', border: '1px solid #e5e7eb', marginBottom: '20px' }}>
+                <div style={{ fontSize: '15px', fontWeight: 700, color: '#111827', marginBottom: '4px' }}>
+                  {inspectedLog.description}
+                </div>
+                <div style={{ fontSize: '12px', color: '#6b7280' }}>
+                  Raw Action: <code style={{ background: '#e5e7eb', padding: '2px 6px', borderRadius: '4px', color: '#111827' }}>{inspectedLog.action}</code>
                 </div>
               </div>
-            ))}
+
+              {/* Two Column Key-Value Details */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '20px', fontSize: '13px' }}>
+                <div>
+                  <span style={{ color: '#6b7280', display: 'block', fontSize: '11.5px', textTransform: 'uppercase', fontWeight: 600 }}>Actor</span>
+                  <strong style={{ color: '#111827' }}>{inspectedLog.userName || 'System'}</strong>
+                  <div style={{ color: '#6b7280', fontSize: '12px' }}>{inspectedLog.userEmail}</div>
+                </div>
+                <div>
+                  <span style={{ color: '#6b7280', display: 'block', fontSize: '11.5px', textTransform: 'uppercase', fontWeight: 600 }}>Role &amp; Department</span>
+                  <strong style={{ color: '#111827' }}>{inspectedLog.role || 'USER'}</strong>
+                  <div style={{ color: '#6b7280', fontSize: '12px' }}>{inspectedLog.department || 'General'}</div>
+                </div>
+                <div>
+                  <span style={{ color: '#6b7280', display: 'block', fontSize: '11.5px', textTransform: 'uppercase', fontWeight: 600 }}>Module</span>
+                  <strong style={{ color: '#111827' }}>{inspectedLog.module}</strong>
+                </div>
+                <div>
+                  <span style={{ color: '#6b7280', display: 'block', fontSize: '11.5px', textTransform: 'uppercase', fontWeight: 600 }}>Action Type</span>
+                  <strong style={{ color: '#111827' }}>{inspectedLog.actionType}</strong>
+                </div>
+                <div>
+                  <span style={{ color: '#6b7280', display: 'block', fontSize: '11.5px', textTransform: 'uppercase', fontWeight: 600 }}>Timestamp (UTC)</span>
+                  <div style={{ color: '#111827' }}>{inspectedLog.timestamp}</div>
+                </div>
+                <div>
+                  <span style={{ color: '#6b7280', display: 'block', fontSize: '11.5px', textTransform: 'uppercase', fontWeight: 600 }}>IP Address</span>
+                  <div style={{ color: '#111827', fontFamily: 'monospace' }}>{inspectedLog.ipAddress || '—'}</div>
+                </div>
+              </div>
+
+              {/* User Agent */}
+              {inspectedLog.userAgent && (
+                <div style={{ marginBottom: '20px' }}>
+                  <span style={{ color: '#6b7280', display: 'block', fontSize: '11.5px', textTransform: 'uppercase', fontWeight: 600, marginBottom: '4px' }}>Client User-Agent</span>
+                  <div style={{ background: '#f3f4f6', padding: '8px 12px', borderRadius: '6px', fontSize: '11.5px', fontFamily: 'monospace', color: '#4b5563', wordBreak: 'break-all' }}>
+                    {inspectedLog.userAgent}
+                  </div>
+                </div>
+              )}
+
+              {/* Sanitized Payload / State Details JSON */}
+              <div>
+                <span style={{ color: '#6b7280', display: 'block', fontSize: '11.5px', textTransform: 'uppercase', fontWeight: 600, marginBottom: '6px' }}>Sanitized Mutation Payload</span>
+                <pre style={{
+                  background: '#0f172a',
+                  color: '#e2e8f0',
+                  padding: '16px',
+                  borderRadius: '8px',
+                  fontSize: '12px',
+                  fontFamily: 'monospace',
+                  overflowX: 'auto',
+                  maxHeight: '220px',
+                  lineHeight: '1.5',
+                }}>
+                  {inspectedLog.details ? (
+                    (() => {
+                      try {
+                        return JSON.stringify(JSON.parse(inspectedLog.details), null, 2);
+                      } catch {
+                        return inspectedLog.details;
+                      }
+                    })()
+                  ) : (
+                    '// No body payload recorded for this operation'
+                  )}
+                </pre>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div style={{
+              display: 'flex',
+              justifyContent: 'flex-end',
+              padding: '16px 24px',
+              borderTop: '1px solid #e5e7eb',
+              background: '#f9fafb',
+              borderBottomLeftRadius: '16px',
+              borderBottomRightRadius: '16px',
+            }}>
+              <button onClick={() => setInspectedLog(null)} className="btn btn-secondary" style={{ fontSize: '13px' }}>
+                Close
+              </button>
+            </div>
           </div>
-          <button className="btn btn-secondary btn-sm" style={{ width: '100%', marginTop: '24px', justifyContent: 'center' }}>View All Milestones</button>
-        </div>
-
-        {/* Inventory Turnover Trends */}
-        <div className="card">
-          <h3 style={{ fontSize: '16px', fontWeight: 700, marginBottom: '16px' }}>Inventory Turnover Trends</h3>
-          <table className="data-table" style={{ fontSize: '12px' }}>
-            <thead>
-              <tr>
-                <th style={{ padding: '8px 12px' }}>Category</th>
-                <th style={{ padding: '8px 12px' }}>Current Level</th>
-                <th style={{ padding: '8px 12px' }}>Status</th>
-                <th style={{ padding: '8px 12px', textAlign: 'right' }}>Reorder Qty</th>
-              </tr>
-            </thead>
-            <tbody>
-              {[
-                { cat: 'Processors', level: '1,240', status: 'HEALTHY', statusColor: '#16a34a', qty: '-' },
-                { cat: 'Fiber Optics', level: '120', status: 'CRITICAL', statusColor: '#dc2626', qty: '500' },
-                { cat: 'Displays', level: '450', status: 'WARNING', statusColor: '#d97706', qty: '200' },
-                { cat: 'Sensors', level: '8,420', status: 'HEALTHY', statusColor: '#16a34a', qty: '-' },
-              ].map((row, i) => (
-                <tr key={i}>
-                  <td style={{ padding: '10px 12px', fontWeight: 600 }}>{row.cat}</td>
-                  <td style={{ padding: '10px 12px' }}>{row.level}</td>
-                  <td style={{ padding: '10px 12px' }}>
-                    <span style={{ fontSize: '10px', fontWeight: 700, color: row.statusColor }}>{row.status}</span>
-                  </td>
-                  <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 600 }}>{row.qty}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-      </>
-      )}
-
-      {activeTab === 'sales' && (
-        <div className="card" style={{ marginBottom: '24px', textAlign: 'center', padding: '48px' }}>
-          <h2 style={{ fontSize: '20px', fontWeight: 700, marginBottom: '8px' }}>Sales Performance Dashboard</h2>
-          <p style={{ color: 'var(--color-text-muted)' }}>Detailed breakdown of sales orders, regional performance, and top customers will appear here.</p>
         </div>
       )}
-
-      {activeTab === 'hr' && (
-        <div className="card" style={{ marginBottom: '24px', textAlign: 'center', padding: '48px' }}>
-          <h2 style={{ fontSize: '20px', fontWeight: 700, marginBottom: '8px' }}>Human Resources Metrics</h2>
-          <p style={{ color: 'var(--color-text-muted)' }}>Analysis of timesheet compliance and payroll trends will appear here.</p>
-        </div>
-      )}
-      
-      {/* Footer Status Bar */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 24px', background: 'white', borderTop: '1px solid var(--color-border-light)', fontSize: '12px', color: 'var(--color-text-secondary)', fontWeight: 500, borderRadius: '8px', marginBottom: '24px' }}>
-        <div style={{ display: 'flex', gap: '24px', alignItems: 'center' }}>
-          <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#16a34a' }}></div> System Online
-          </span>
-          <span>Last Sync: Just now</span>
-        </div>
-        <div style={{ display: 'flex', gap: '24px' }}>
-          <span style={{ cursor: 'pointer' }} className="hover:text-blue-600">Documentation</span>
-          <span style={{ cursor: 'pointer' }} className="hover:text-blue-600">API Support</span>
-          <span style={{ cursor: 'pointer' }} className="hover:text-blue-600">Security Audit</span>
-          <span>&copy; 2024 Shuroq</span>
-        </div>
-      </div>
     </div>
   );
 }

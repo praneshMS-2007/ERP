@@ -803,6 +803,12 @@ model Payroll {
   deductions  Float         @default(0)
   netPay      Float         @map("net_pay")
   payPeriod   String        @map("pay_period")
+  // The actual date bounds behind payPeriod's human label — needed so the
+  // attendance/leave metrics below can be (re)computed against the exact
+  // real range, not parsed back out of free text. Nullable only because
+  // rows created before this field existed have no real range on file.
+  periodStart DateTime?     @map("period_start")
+  periodEnd   DateTime?     @map("period_end")
   status      PayrollStatus @default(DRAFT)
   paymentDate DateTime?     @map("payment_date")
 
@@ -1145,20 +1151,29 @@ model ProjectHoliday {
 // ==========================================
 
 model AuditLog {
-  id        String   @id @default(uuid())
-  userId    String?  @map("user_id")
-  user      User?    @relation(fields: [userId], references: [id])
-  action    String
-  module    String
-  // The id of the record the action touched, e.g. an Employee or Payroll
-  // row — without this, an audit row says "someone edited HR" but not who
-  // or what, which isn't useful for reconstructing what actually happened.
-  entityId  String?  @map("entity_id")
-  ipAddress String?  @map("ip_address")
-  details   String?
-  timestamp DateTime @default(now())
+  id          String   @id @default(uuid())
+  userId      String?  @map("user_id")
+  user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  userName    String?  @map("user_name")
+  userEmail   String?  @map("user_email")
+  role        String?  @map("role")
+  department  String?  @map("department")
+  actionType  String   @default("UPDATE") @map("action_type") // CREATE, UPDATE, DELETE, STATUS_CHANGE, LOGIN, EXPORT
+  action      String   // Raw route or internal action code (e.g. "POST /api/hrm/employees")
+  module      String   // HR, INVENTORY, FINANCE, CRM, PROJECTS, ADMIN, SETTINGS
+  entityType  String?  @map("entity_type") // Employee, Payroll, Product, Order, Lead, etc.
+  entityId    String?  @map("entity_id")
+  description String?  // Human-readable summary of what changed
+  ipAddress   String?  @map("ip_address")
+  userAgent   String?  @map("user_agent")
+  details     String?  @db.Text // Sanitized JSON string of payload / state diff
+  timestamp   DateTime @default(now())
 
+  @@index([timestamp])
+  @@index([userId, timestamp])
   @@index([module, timestamp])
+  @@index([department, timestamp])
+  @@index([actionType, timestamp])
   @@map("audit_logs")
 }
 
