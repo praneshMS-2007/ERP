@@ -1,0 +1,154 @@
+<!--
+  Reference template — not executed at runtime. The live version of this
+  template is compiled in code at backend/src/hrm/payslip.service.ts
+  (buildEmailHtml) wrapped by backend/src/common/email-template.ts
+  (emailShell). This file exists as a plain, portable copy of the same
+  markup with {{placeholder}} tokens instead of real interpolation, for
+  reference/handoff purposes. See README.md in this folder for the full
+  variable list and trigger notes.
+-->
+<!DOCTYPE html>
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Shuroq</title>
+<style>
+  body { margin: 0; padding: 0; background-color: #f2f4f8; }
+  table { border-collapse: collapse; }
+  img { border: 0; display: block; }
+  a { color: #2b4d8a; }
+  @media only screen and (max-width: 620px) {
+    .email-container { width: 100% !important; }
+  }
+</style>
+</head>
+<body style="margin:0; padding:0; background-color:#f2f4f8;">
+  <div style="display:none; max-height:0; overflow:hidden; opacity:0;">Your payslip for {{PAY_PERIOD}} — Net Pay {{NET_PAY_FORMATTED}}</div>
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f2f4f8;">
+    <tr>
+      <td align="center" style="padding: 24px 12px;">
+        <table role="presentation" class="email-container" width="600" cellpadding="0" cellspacing="0" style="width:600px; max-width:600px; background-color:#ffffff; border:1px solid #d7dee8; border-radius:8px; overflow:hidden;">
+
+          <!-- HEADER -->
+          <tr>
+            <td align="center" style="padding: 28px 24px 18px 24px; border-bottom: 1px solid #d7dee8;">
+              <img src="cid:shuroq-logo" width="150" alt="Shuroq" style="width:150px; max-width:60%; height:auto;" />
+            </td>
+          </tr>
+
+          <!-- BODY -->
+          <tr>
+            <td style="padding: 28px 32px; font-family: Arial, Helvetica, sans-serif; color:#1f2530;">
+
+              <p style="font-size:14px; margin:0 0 4px 0;">Hi {{EMPLOYEE_FIRST_NAME}},</p>
+              <p style="font-size:14px; margin:0 0 20px 0;">Your payslip for <strong>{{PAY_PERIOD}}</strong> has been processed and paid. The full breakdown is below, and a copy is attached as a PDF for your records.</p>
+
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom: 4px;">
+                <tr><td style="background-color:#4a86c8; padding: 8px 10px;">
+                  <span style="font-size:13px; font-weight:bold; color:#ffffff; letter-spacing:0.5px;">PAYSLIP &mdash; {{PAY_PERIOD_UPPERCASE}}</span>
+                </td></tr>
+              </table>
+
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom: 14px;">
+                <tr><td style="font-weight:bold; background-color:#eef3fa; border:1px solid #d7dee8; padding:7px 8px; font-size:12.5px;" colspan="4">EMPLOYEE DETAILS</td></tr>
+              </table>
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom: 18px;">
+                <tr>
+                  <td style="font-weight:bold; background-color:#eef3fa; border:1px solid #d7dee8; padding:7px 8px; font-size:12.5px; width:40%;">EMPLOYEE NAME</td>
+                  <td style="border:1px solid #d7dee8; padding:7px 8px; font-size:12.5px;">{{EMPLOYEE_NAME}}</td>
+                  <td style="font-weight:bold; background-color:#eef3fa; border:1px solid #d7dee8; padding:7px 8px; font-size:12.5px; width:40%;">DATE OF JOINING</td>
+                  <td style="border:1px solid #d7dee8; padding:7px 8px; font-size:12.5px;">{{DATE_OF_JOINING}}</td>
+                </tr>
+                <tr>
+                  <td style="font-weight:bold; background-color:#eef3fa; border:1px solid #d7dee8; padding:7px 8px; font-size:12.5px;">ROLE</td>
+                  <td style="border:1px solid #d7dee8; padding:7px 8px; font-size:12.5px;">{{ROLE}}</td>
+                  <td style="font-weight:bold; background-color:#eef3fa; border:1px solid #d7dee8; padding:7px 8px; font-size:12.5px;">EMPLOYEE ID</td>
+                  <td style="border:1px solid #d7dee8; padding:7px 8px; font-size:12.5px;">{{EMPLOYEE_ID}}</td>
+                </tr>
+                <tr>
+                  <td style="font-weight:bold; background-color:#eef3fa; border:1px solid #d7dee8; padding:7px 8px; font-size:12.5px;">PAN NUMBER</td>
+                  <td style="border:1px solid #d7dee8; padding:7px 8px; font-size:12.5px;" colspan="3">{{PAN_NUMBER}}</td>
+                </tr>
+                <tr>
+                  <td style="font-weight:bold; background-color:#eef3fa; border:1px solid #d7dee8; padding:7px 8px; font-size:12.5px;">BANK ACCOUNT NO</td>
+                  <td style="border:1px solid #d7dee8; padding:7px 8px; font-size:12.5px;" colspan="3">{{BANK_ACCOUNT_NO}}</td>
+                </tr>
+              </table>
+
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td style="font-weight:bold; background-color:#eef3fa; border:1px solid #d7dee8; padding:7px 8px; font-size:12.5px;" colspan="2">EARNINGS</td>
+                  <td style="font-weight:bold; background-color:#eef3fa; border:1px solid #d7dee8; padding:7px 8px; font-size:12.5px;" colspan="2">DEDUCTIONS</td>
+                </tr>
+                <tr>
+                  <td style="border:1px solid #d7dee8; padding:7px 8px; font-size:12.5px;">Basic Salary</td>
+                  <td style="border:1px solid #d7dee8; padding:7px 8px; font-size:12.5px; text-align:right;">{{BASIC_SALARY}}</td>
+                  <td style="border:1px solid #d7dee8; padding:7px 8px; font-size:12.5px;">Income Tax (TDS)</td>
+                  <td style="border:1px solid #d7dee8; padding:7px 8px; font-size:12.5px; text-align:right;">{{TDS}}</td>
+                </tr>
+                <tr>
+                  <td style="border:1px solid #d7dee8; padding:7px 8px; font-size:12.5px;">HRA</td>
+                  <td style="border:1px solid #d7dee8; padding:7px 8px; font-size:12.5px; text-align:right;">{{HRA}}</td>
+                  <td style="border:1px solid #d7dee8; padding:7px 8px; font-size:12.5px;">Provident Fund</td>
+                  <td style="border:1px solid #d7dee8; padding:7px 8px; font-size:12.5px; text-align:right;">{{PROVIDENT_FUND}}</td>
+                </tr>
+                <tr>
+                  <td style="border:1px solid #d7dee8; padding:7px 8px; font-size:12.5px;">Special Allowance</td>
+                  <td style="border:1px solid #d7dee8; padding:7px 8px; font-size:12.5px; text-align:right;">{{SPECIAL_ALLOWANCE}}</td>
+                  <td style="border:1px solid #d7dee8; padding:7px 8px; font-size:12.5px;">Professional Tax</td>
+                  <td style="border:1px solid #d7dee8; padding:7px 8px; font-size:12.5px; text-align:right;">{{PROFESSIONAL_TAX}}</td>
+                </tr>
+                <tr>
+                  <td style="border:1px solid #d7dee8; padding:7px 8px; font-size:12.5px;">Bonus/Incentives</td>
+                  <td style="border:1px solid #d7dee8; padding:7px 8px; font-size:12.5px; text-align:right;">{{BONUS}}</td>
+                  <td style="border:1px solid #d7dee8; padding:7px 8px; font-size:12.5px;">Loss of Pay (LOP)</td>
+                  <td style="border:1px solid #d7dee8; padding:7px 8px; font-size:12.5px; text-align:right;">{{LOSS_OF_PAY}}</td>
+                </tr>
+                <tr>
+                  <td style="border:1px solid #d7dee8; padding:7px 8px; font-size:12.5px; font-weight:bold;">Gross Total (A)</td>
+                  <td style="border:1px solid #d7dee8; padding:7px 8px; font-size:12.5px; font-weight:bold; text-align:right;">{{GROSS_TOTAL}}</td>
+                  <td style="border:1px solid #d7dee8; padding:7px 8px; font-size:12.5px; font-weight:bold;">Total Deductions (B)</td>
+                  <td style="border:1px solid #d7dee8; padding:7px 8px; font-size:12.5px; font-weight:bold; text-align:right;">{{TOTAL_DEDUCTIONS}}</td>
+                </tr>
+              </table>
+
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top: 14px;">
+                <tr>
+                  <td style="border:1px solid #d7dee8; padding:7px 8px; font-size:12.5px; font-weight:bold; background-color:#eef3fa;">NET SALARY PAYABLE (A - B)</td>
+                  <td style="border:1px solid #d7dee8; padding:7px 8px; font-size:12.5px; font-weight:bold; background-color:#eef3fa; text-align:right;">{{NET_PAY_FORMATTED}}</td>
+                </tr>
+                <tr>
+                  <td style="border:1px solid #d7dee8; padding:7px 8px; font-size:12.5px;" colspan="2"><strong>AMOUNT IN WORDS:</strong> {{NET_PAY_IN_WORDS}} Rupees only</td>
+                </tr>
+              </table>
+
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top: 18px;">
+                <tr><td style="background-color:#eef3fa; border:1px solid #d7dee8; padding:7px 8px; font-size:12.5px; font-weight:bold;">ATTENDENCE RECORD</td></tr>
+                <tr><td style="border:1px solid #d7dee8; padding:7px 8px; font-size:12.5px;">TOTAL DAYS IN MONTH: {{TOTAL_DAYS_IN_MONTH}}<br />EFFECTIVE WORK DAYS: {{EFFECTIVE_WORK_DAYS}}<br />TOTAL LEAVES TAKEN: {{LEAVES_TAKEN}}</td></tr>
+              </table>
+
+              <p style="font-size:11px; font-style:italic; color:#66707f; margin: 18px 0 0 0; background-color:#eef3fa; padding: 8px 10px;">This is a computer-generated document and does not require a signature.</p>
+
+              <p style="font-size:13px; margin: 22px 0 0 0;">If anything here looks off, reach out to {{HR_SUPPORT_EMAIL}}.</p>
+              <p style="font-size:13px; margin: 4px 0 0 0;">Warm regards,<br />HR &amp; Finance, Shuroq</p>
+
+            </td>
+          </tr>
+
+          <!-- FOOTER -->
+          <tr>
+            <td style="padding: 20px 32px 28px 32px; border-top: 1px solid #d7dee8; font-family: Arial, Helvetica, sans-serif; font-size: 11.5px; line-height: 1.6; color: #66707f;">
+              Shuroq &middot; Hyderabad, Telangana, India<br />
+              <a href="mailto:hr-team@shuroq.com" style="color:#66707f; text-decoration: underline;">hr-team@shuroq.com</a>
+              &middot;
+              <a href="https://www.shuroq.com" style="color:#66707f; text-decoration: underline;">www.shuroq.com</a>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>

@@ -18,6 +18,18 @@ export interface RequestUser {
   permissions?: { module: string; action: string }[];
 }
 
+/** Every money figure on a payslip — typed in by HR/Finance, never derived. */
+export interface PayrollManualInput {
+  baseSalary: number;
+  hra: number;
+  specialAllowance: number;
+  bonus: number;
+  tds: number;
+  providentFund: number;
+  professionalTax: number;
+  lossOfPay: number;
+}
+
 /**
  * Roles createEmployee() is allowed to hand out. EMPLOYEE is the default
  * (every ordinary hire); the rest are the "management" tier a Super Admin
@@ -1344,13 +1356,132 @@ export class HrmService {
   }
 
   /**
-   * BUSINESS LOGIC: Auto-calculate netPay when creating payroll.
-   * netPay = baseSalary + bonus - deductions
+   * The engine behind a payroll run. Every money figure — Basic Salary,
+   * HRA, Special Allowance, Bonus, TDS, Provident Fund, Professional Tax,
+   * Loss of Pay — is typed in by HR/Finance and taken as given; this only
+   * does the arithmetic (Gross Total, Total Deductions, Net Pay) and one
+   * thing HR should never have to type by hand: attendance. Total Days /
+   * Working Days / Leaves Taken / Effective Work Days are walked day-by-day
+   * over the real period against real Attendance and Holiday rows, same
+   * weekend/holiday rules as buildAttendanceCalendar (Sat/Sun and Holiday
+   * rows are never working days; a working day with no Attendance row is
+   * an implicit absence if it's already in the past, exactly like
+   * everywhere else absence is inferred in this app — a leave-approval's
+   * auto-marked ABSENT rows are picked up the same way, no separate
+   * leave-counting logic needed).
+   *
+   * Earlier version of this tried to also derive Basic/HRA/Special
+   * Allowance from SalaryStructure and compute PF/Professional Tax via
+   * formula — reverted on explicit product direction: every money figure
+   * stays a manual entry in the Add Payroll modal, matching the real
+   * payslip's own fields one-for-one.
    */
-  async createPayroll(data: Prisma.PayrollUncheckedCreateInput) {
+  private async computeAttendanceMetrics(
+    employeeId: string,
+    joinDate: Date,
+    periodStart: Date,
+    periodEnd: Date,
+  ) {
+    const [holidays, attendanceRows] = await Promise.all([
+      this.prisma.holiday.findMany({ where: { date: { gte: periodStart, lte: periodEnd } } }),
+      this.prisma.attendance.findMany({ where: { employeeId, date: { gte: periodStart, lte: periodEnd } } }),
+    ]);
+    const holidaySet = new Set(holidays.map((h) => this.toDateKey(h.date)));
+    const attendanceByDay = new Map(attendanceRows.map((a) => [this.toDateKey(a.date), a]));
+
+    const today = new Date();
+    const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    const joinStart = new Date(joinDate.getFullYear(), joinDate.getMonth(), joinDate.getDate());
+
+    const totalDaysInMonth = Math.round((periodEnd.getTime() - periodStart.getTime()) / 86400000) + 1;
+    let workingDaysInMonth = 0;
+    let leavesTaken = 0;
+
+    for (let d = new Date(periodStart); d <= periodEnd; d.setDate(d.getDate() + 1)) {
+      if (d < joinStart) continue; // not yet employed — not tracked either way
+      const dayOfWeek = d.getDay();
+      if (dayOfWeek === 0 || dayOfWeek === 6) continue; // weekend
+      const key = this.toDateKey(d);
+      if (holidaySet.has(key)) continue; // holiday
+
+      workingDaysInMonth++;
+      const row = attendanceByDay.get(key);
+      if (row) {
+        if (row.status === 'ABSENT') leavesTaken++;
+      } else if (d < todayStart) {
+        // Past working day, nothing marked — implicit absence, same "no
+        // row = absent" rule buildAttendanceCalendar already uses.
+        leavesTaken++;
+      }
+      // A today-or-future day with nothing marked yet isn't an absence —
+      // it just hasn't happened yet.
+    }
+
+    const effectiveWorkDays = workingDaysInMonth - leavesTaken;
+    return { totalDaysInMonth, workingDaysInMonth, leavesTaken, effectiveWorkDays };
+  }
+
+  private async computePayrollBreakdown(
+    employeeId: string,
+    joinDate: Date,
+    periodStart: Date,
+    periodEnd: Date,
+    manual: {
+      baseSalary: number; hra: number; specialAllowance: number; bonus: number;
+      tds: number; providentFund: number; professionalTax: number; lossOfPay: number;
+    },
+  ) {
+    const attendance = await this.computeAttendanceMetrics(employeeId, joinDate, periodStart, periodEnd);
+
+    const { baseSalary, hra, specialAllowance, bonus, tds, providentFund, professionalTax, lossOfPay } = manual;
+    const grossTotal = baseSalary + hra + specialAllowance + bonus;
+    const deductions = tds + providentFund + professionalTax + lossOfPay;
+    const netPay = grossTotal - deductions;
+
+    return {
+      baseSalary, hra, specialAllowance, bonus,
+      tds, providentFund, professionalTax, lossOfPay, deductions,
+      netPay,
+      ...attendance,
+    };
+  }
+
+  /**
+   * Lets HR see the computed Gross/Deductions/Net Pay and real attendance
+   * before committing to a payroll record — same inputs, same math as
+   * createPayroll, just never persisted.
+   */
+  async previewPayroll(
+    employeeId: string,
+    periodStartRaw: string,
+    periodEndRaw: string,
+    manual: PayrollManualInput,
+  ) {
+    const employee = await this.prisma.employee.findUnique({
+      where: { id: employeeId },
+      select: { status: true, joinDate: true },
+    });
+    if (!employee) throw new NotFoundException('Employee not found');
+    if (employee.status === 'INACTIVE') {
+      throw new BadRequestException('This person is a former employee — payroll cannot be run for them.');
+    }
+    const periodStart = new Date(periodStartRaw);
+    const periodEnd = new Date(periodEndRaw);
+    if (Number.isNaN(periodStart.getTime()) || Number.isNaN(periodEnd.getTime()) || periodStart > periodEnd) {
+      throw new BadRequestException('A valid period start and end date are required.');
+    }
+    return this.computePayrollBreakdown(employeeId, employee.joinDate, periodStart, periodEnd, manual);
+  }
+
+  async createPayroll(data: {
+    employeeId: string;
+    payPeriod: string;
+    periodStart: string;
+    periodEnd: string;
+  } & Partial<PayrollManualInput>) {
     const employee = await this.prisma.employee.findUnique({
       where: { id: data.employeeId },
-      select: { status: true },
+      select: { status: true, joinDate: true },
     });
     if (!employee) throw new NotFoundException('Employee not found');
     if (employee.status === 'INACTIVE') {
@@ -1359,15 +1490,37 @@ export class HrmService {
     if (!data.payPeriod || !String(data.payPeriod).trim()) {
       throw new BadRequestException('A pay period (e.g. "August 2026") is required.');
     }
+    const periodStart = new Date(data.periodStart);
+    const periodEnd = new Date(data.periodEnd);
+    if (Number.isNaN(periodStart.getTime()) || Number.isNaN(periodEnd.getTime()) || periodStart > periodEnd) {
+      throw new BadRequestException('A valid period start and end date are required.');
+    }
     const existing = await this.prisma.payroll.findUnique({
       where: { employeeId_payPeriod: { employeeId: data.employeeId, payPeriod: data.payPeriod } },
     });
     if (existing) {
       throw new BadRequestException(`A payroll record for "${data.payPeriod}" already exists for this person.`);
     }
-    const netPay = (data.baseSalary || 0) + (data.bonus || 0) - (data.deductions || 0);
+
+    const breakdown = await this.computePayrollBreakdown(data.employeeId, employee.joinDate, periodStart, periodEnd, {
+      baseSalary: data.baseSalary ?? 0,
+      hra: data.hra ?? 0,
+      specialAllowance: data.specialAllowance ?? 0,
+      bonus: data.bonus ?? 0,
+      tds: data.tds ?? 0,
+      providentFund: data.providentFund ?? 0,
+      professionalTax: data.professionalTax ?? 0,
+      lossOfPay: data.lossOfPay ?? 0,
+    });
+
     return this.prisma.payroll.create({
-      data: { ...data, netPay },
+      data: {
+        employeeId: data.employeeId,
+        payPeriod: data.payPeriod,
+        periodStart,
+        periodEnd,
+        ...breakdown,
+      },
     });
   }
 
@@ -1460,9 +1613,12 @@ export class HrmService {
    */
   async updatePayroll(
     id: string,
-    data: { payPeriod?: string; baseSalary?: number; bonus?: number; deductions?: number },
+    data: { payPeriod?: string } & Partial<PayrollManualInput>,
   ) {
-    const payroll = await this.prisma.payroll.findUnique({ where: { id } });
+    const payroll = await this.prisma.payroll.findUnique({
+      where: { id },
+      include: { employee: { select: { joinDate: true } } },
+    });
     if (!payroll) throw new NotFoundException('Payroll record not found');
     if (payroll.status === 'PAID') {
       throw new BadRequestException('A paid payroll record cannot be edited.');
@@ -1480,15 +1636,30 @@ export class HrmService {
         throw new BadRequestException(`A payroll record for "${payPeriod}" already exists for this person.`);
       }
     }
+    if (!payroll.periodStart || !payroll.periodEnd) {
+      throw new BadRequestException('This record predates period-based payroll and cannot be recomputed — delete it and create a new one instead.');
+    }
 
-    const baseSalary = data.baseSalary ?? payroll.baseSalary;
-    const bonus = data.bonus ?? payroll.bonus;
-    const deductions = data.deductions ?? payroll.deductions;
-    const netPay = baseSalary + bonus - deductions;
+    // Recomputed fresh, not just patched — attendance/leave data may have
+    // changed since this record was first created (that's the whole point
+    // of the Return-to-HR loop: fix something and resubmit).
+    const breakdown = await this.computePayrollBreakdown(
+      payroll.employeeId, payroll.employee.joinDate, payroll.periodStart, payroll.periodEnd,
+      {
+        baseSalary: data.baseSalary ?? payroll.baseSalary,
+        hra: data.hra ?? payroll.hra,
+        specialAllowance: data.specialAllowance ?? payroll.specialAllowance,
+        bonus: data.bonus ?? payroll.bonus,
+        tds: data.tds ?? payroll.tds,
+        providentFund: data.providentFund ?? payroll.providentFund,
+        professionalTax: data.professionalTax ?? payroll.professionalTax,
+        lossOfPay: data.lossOfPay ?? payroll.lossOfPay,
+      },
+    );
 
     return this.prisma.payroll.update({
       where: { id },
-      data: { payPeriod, baseSalary, bonus, deductions, netPay, status: 'DRAFT', rejectedReason: null },
+      data: { payPeriod, ...breakdown, status: 'DRAFT', rejectedReason: null },
     });
   }
 

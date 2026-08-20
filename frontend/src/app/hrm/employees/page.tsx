@@ -48,7 +48,7 @@ export default function EmployeeDirectory() {
   const [accountKind, setAccountKind] = useState<'EMPLOYEE' | 'MANAGEMENT'>('EMPLOYEE');
   const [form, setForm] = useState({
     firstName: '', lastName: '', personalEmail: '', contact: '',
-    department: '', designation: '', empType: 'FULL_TIME', joinDate: '', roleName: '',
+    department: '', designation: '', empType: 'FULL_TIME', joinDate: '', engagementEndDate: '', roleName: '',
     username: '', password: '',
   });
   const [showPassword, setShowPassword] = useState(false);
@@ -159,6 +159,10 @@ export default function EmployeeDirectory() {
       setAddError('Choose which management role this account should have.');
       return;
     }
+    if (form.empType === 'INTERN' && !form.engagementEndDate) {
+      setAddError('Internship end date is required for interns — it drives the Duration line on their offer letter.');
+      return;
+    }
     if (!form.username.trim()) {
       setAddError('Choose a username for this account.');
       return;
@@ -177,7 +181,7 @@ export default function EmployeeDirectory() {
       });
       setShowAddModal(false);
       setAccountKind('EMPLOYEE');
-      setForm({ firstName: '', lastName: '', personalEmail: '', contact: '', department: '', designation: '', empType: 'FULL_TIME', joinDate: '', roleName: '', username: '', password: '' });
+      setForm({ firstName: '', lastName: '', personalEmail: '', contact: '', department: '', designation: '', empType: 'FULL_TIME', joinDate: '', engagementEndDate: '', roleName: '', username: '', password: '' });
       fetchAll();
     } catch (e: any) {
       setAddError(e.message || 'Could not add this employee.');
@@ -457,6 +461,9 @@ export default function EmployeeDirectory() {
         <FormField label="Designation" value={form.designation} onChange={(v) => setForm({ ...form, designation: v })} required placeholder="e.g. Full Stack Developer" />
         <FormField label="Employment Type" type="select" value={form.empType} onChange={(v) => setForm({ ...form, empType: v })}
           options={[{ label: 'Full Time', value: 'FULL_TIME' }, { label: 'Part Time', value: 'PART_TIME' }, { label: 'Contract', value: 'CONTRACT' }, { label: 'Intern', value: 'INTERN' }]} />
+        {form.empType === 'INTERN' && (
+          <FormField label="Internship End Date" type="date" value={form.engagementEndDate} onChange={(v) => setForm({ ...form, engagementEndDate: v })} required />
+        )}
 
         <div style={{ borderTop: '1px solid var(--color-border)', margin: '16px 0', paddingTop: '16px' }}>
           <p style={{ fontSize: 12.5, color: 'var(--color-text-muted)', margin: '0 0 12px' }}>

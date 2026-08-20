@@ -43,8 +43,21 @@ export default function PayrollPageContent({ mode }: { mode: 'hr' | 'finance' })
   const today = new Date();
   const firstOfMonth = toLocalDateStr(new Date(today.getFullYear(), today.getMonth(), 1));
   const lastOfMonth = toLocalDateStr(new Date(today.getFullYear(), today.getMonth() + 1, 0));
-  const defaultForm = { periodStart: firstOfMonth, periodEnd: lastOfMonth, baseSalary: '', bonus: '', deductions: '' };
+  const defaultForm = {
+    periodStart: firstOfMonth, periodEnd: lastOfMonth,
+    baseSalary: '', hra: '', specialAllowance: '', bonus: '',
+    tds: '', providentFund: '', professionalTax: '', lossOfPay: '',
+  };
   const [form, setForm] = useState(defaultForm);
+
+  // Read-only computed Gross Total / Total Deductions / Net Pay and real
+  // attendance, shown before HR commits — see hrmApi.previewPayroll. Every
+  // money figure (Basic Salary, HRA, Special Allowance, Bonus, TDS,
+  // Provident Fund, Professional Tax, Loss of Pay) is typed in by hand;
+  // only attendance is computed automatically from real records.
+  const [preview, setPreview] = useState<any | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewError, setPreviewError] = useState<string | null>(null);
 
   // Return to HR — Finance's way of sending a record back with a reason
   // instead of paying it; HR sees the reason and edits/resubmits.
@@ -96,26 +109,72 @@ export default function PayrollPageContent({ mode }: { mode: 'hr' | 'finance' })
     setEditingPayroll(null);
     setForm(defaultForm);
     setRunError(null);
+    setPreview(null);
+    setPreviewError(null);
     setShowRunModal(true);
   }
 
   function openEditModal(p: any) {
     setEditingPayroll(p);
-    setForm({ ...defaultForm, baseSalary: String(p.baseSalary ?? ''), bonus: String(p.bonus ?? ''), deductions: String(p.deductions ?? '') });
+    setForm({
+      periodStart: p.periodStart ? String(p.periodStart).slice(0, 10) : defaultForm.periodStart,
+      periodEnd: p.periodEnd ? String(p.periodEnd).slice(0, 10) : defaultForm.periodEnd,
+      baseSalary: String(p.baseSalary ?? ''),
+      hra: String(p.hra ?? ''),
+      specialAllowance: String(p.specialAllowance ?? ''),
+      bonus: String(p.bonus ?? ''),
+      tds: String(p.tds ?? ''),
+      providentFund: String(p.providentFund ?? ''),
+      professionalTax: String(p.professionalTax ?? ''),
+      lossOfPay: String(p.lossOfPay ?? ''),
+    });
     setRunError(null);
+    setPreview(null);
+    setPreviewError(null);
     setShowRunModal(true);
   }
 
+  function manualPayrollFields() {
+    return {
+      baseSalary: parseFloat(form.baseSalary || '0'),
+      hra: parseFloat(form.hra || '0'),
+      specialAllowance: parseFloat(form.specialAllowance || '0'),
+      bonus: parseFloat(form.bonus || '0'),
+      tds: parseFloat(form.tds || '0'),
+      providentFund: parseFloat(form.providentFund || '0'),
+      professionalTax: parseFloat(form.professionalTax || '0'),
+      lossOfPay: parseFloat(form.lossOfPay || '0'),
+    };
+  }
+
+  // Recomputes the read-only Gross/Deductions/Net Pay + attendance whenever
+  // the period or any manual figure changes — debounced so it doesn't fire
+  // on every keystroke.
+  useEffect(() => {
+    if (!showRunModal || !selectedEmployeeId || !form.periodStart || !form.periodEnd) return;
+    if (new Date(form.periodEnd) < new Date(form.periodStart)) return;
+    const timer = setTimeout(async () => {
+      setPreviewLoading(true);
+      setPreviewError(null);
+      try {
+        const result = await hrmApi.previewPayroll(selectedEmployeeId, form.periodStart, form.periodEnd, manualPayrollFields());
+        setPreview(result);
+      } catch (e: any) {
+        setPreview(null);
+        setPreviewError(e.message || 'Could not compute this payroll.');
+      } finally {
+        setPreviewLoading(false);
+      }
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [showRunModal, selectedEmployeeId, form.periodStart, form.periodEnd, form.baseSalary, form.hra, form.specialAllowance, form.bonus, form.tds, form.providentFund, form.professionalTax, form.lossOfPay]);
+
   async function handleSaveModal() {
-    if (!form.baseSalary) return;
+    if (!preview) return;
     setRunError(null);
     try {
       if (editingPayroll) {
-        await hrmApi.updatePayroll(editingPayroll.id, {
-          baseSalary: parseFloat(form.baseSalary),
-          bonus: parseFloat(form.bonus || '0'),
-          deductions: parseFloat(form.deductions || '0'),
-        });
+        await hrmApi.updatePayroll(editingPayroll.id, manualPayrollFields());
       } else {
         if (!selectedEmployeeId || !form.periodStart || !form.periodEnd) return;
         if (new Date(form.periodEnd) < new Date(form.periodStart)) {
@@ -125,14 +184,15 @@ export default function PayrollPageContent({ mode }: { mode: 'hr' | 'finance' })
         await hrmApi.createPayroll({
           employeeId: selectedEmployeeId,
           payPeriod: formatPeriodLabel(form.periodStart, form.periodEnd),
-          baseSalary: parseFloat(form.baseSalary),
-          bonus: parseFloat(form.bonus || '0'),
-          deductions: parseFloat(form.deductions || '0'),
+          periodStart: form.periodStart,
+          periodEnd: form.periodEnd,
+          ...manualPayrollFields(),
         });
       }
       setShowRunModal(false);
       setEditingPayroll(null);
       setForm(defaultForm);
+      setPreview(null);
       fetchAll();
     } catch (e: any) {
       setRunError(e.message || 'Could not save this payroll record.');
@@ -405,18 +465,65 @@ export default function PayrollPageContent({ mode }: { mode: 'hr' | 'finance' })
             )}
           </>
         )}
-        <FormField label="Base Salary" type="number" value={form.baseSalary} onChange={(v) => setForm({ ...form, baseSalary: v })} required placeholder="5000" />
-        <FormField label="Bonus" type="number" value={form.bonus} onChange={(v) => setForm({ ...form, bonus: v })} placeholder="500" />
-        <FormField label="Deductions" type="number" value={form.deductions} onChange={(v) => setForm({ ...form, deductions: v })} placeholder="200" />
-        <div style={{ background: 'var(--color-background)', padding: '12px 16px', borderRadius: '10px', marginBottom: '16px' }}>
-          <div style={{ fontSize: '12px', color: 'var(--color-text-muted)', fontWeight: 600 }}>Calculated Net Pay</div>
-          <div style={{ fontSize: '24px', fontWeight: 800, color: '#16a34a' }}>
-            {formatINR((parseFloat(form.baseSalary || '0') + parseFloat(form.bonus || '0') - parseFloat(form.deductions || '0')))}
-          </div>
+
+        <p style={{ fontSize: '12px', color: 'var(--color-text-muted)', margin: '0 0 14px' }}>
+          Every figure below is typed in by hand, same as the payslip's own fields — only attendance for this
+          period is pulled automatically from real records.
+        </p>
+        <div style={{ display: 'flex', gap: '14px' }}>
+          <div style={{ flex: 1 }}><FormField label="Basic Salary" type="number" value={form.baseSalary} onChange={(v) => setForm({ ...form, baseSalary: v })} placeholder="50000" /></div>
+          <div style={{ flex: 1 }}><FormField label="HRA" type="number" value={form.hra} onChange={(v) => setForm({ ...form, hra: v })} placeholder="20000" /></div>
         </div>
+        <div style={{ display: 'flex', gap: '14px' }}>
+          <div style={{ flex: 1 }}><FormField label="Special Allowance" type="number" value={form.specialAllowance} onChange={(v) => setForm({ ...form, specialAllowance: v })} placeholder="10000" /></div>
+          <div style={{ flex: 1 }}><FormField label="Bonus / Incentives" type="number" value={form.bonus} onChange={(v) => setForm({ ...form, bonus: v })} placeholder="500" /></div>
+        </div>
+        <div style={{ display: 'flex', gap: '14px' }}>
+          <div style={{ flex: 1 }}><FormField label="Income Tax (TDS)" type="number" value={form.tds} onChange={(v) => setForm({ ...form, tds: v })} placeholder="0" /></div>
+          <div style={{ flex: 1 }}><FormField label="Provident Fund" type="number" value={form.providentFund} onChange={(v) => setForm({ ...form, providentFund: v })} placeholder="0" /></div>
+        </div>
+        <div style={{ display: 'flex', gap: '14px' }}>
+          <div style={{ flex: 1 }}><FormField label="Professional Tax" type="number" value={form.professionalTax} onChange={(v) => setForm({ ...form, professionalTax: v })} placeholder="0" /></div>
+          <div style={{ flex: 1 }}><FormField label="Loss of Pay (LOP)" type="number" value={form.lossOfPay} onChange={(v) => setForm({ ...form, lossOfPay: v })} placeholder="0" /></div>
+        </div>
+
+        {previewLoading && (
+          <p style={{ fontSize: '12.5px', color: 'var(--color-text-muted)', margin: '4px 0 16px' }}>Computing…</p>
+        )}
+        {previewError && (
+          <div style={{ padding: '10px 14px', marginBottom: 16, background: '#fef2f2', border: '1px solid #fecaca', color: '#dc2626', borderRadius: 8, fontSize: 13, fontWeight: 600 }}>{previewError}</div>
+        )}
+        {preview && !previewLoading && (
+          <div style={{ background: 'var(--color-background)', padding: '14px 16px', borderRadius: '10px', marginBottom: '16px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px 16px', fontSize: '12.5px', marginBottom: '10px' }}>
+              <div>Basic Salary</div><div style={{ textAlign: 'right' }}>{formatINR(preview.baseSalary)}</div>
+              <div>HRA</div><div style={{ textAlign: 'right' }}>{formatINR(preview.hra)}</div>
+              <div>Special Allowance</div><div style={{ textAlign: 'right' }}>{formatINR(preview.specialAllowance)}</div>
+              <div>Bonus / Incentives</div><div style={{ textAlign: 'right' }}>{formatINR(preview.bonus)}</div>
+              <div style={{ fontWeight: 700, borderTop: '1px solid var(--color-border)', paddingTop: 4 }}>Gross Total (A)</div>
+              <div style={{ fontWeight: 700, textAlign: 'right', borderTop: '1px solid var(--color-border)', paddingTop: 4 }}>{formatINR(preview.baseSalary + preview.hra + preview.specialAllowance + preview.bonus)}</div>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px 16px', fontSize: '12.5px', marginBottom: '10px' }}>
+              <div>Income Tax (TDS)</div><div style={{ textAlign: 'right', color: '#dc2626' }}>-{formatINR(preview.tds)}</div>
+              <div>Provident Fund</div><div style={{ textAlign: 'right', color: '#dc2626' }}>-{formatINR(preview.providentFund)}</div>
+              <div>Professional Tax</div><div style={{ textAlign: 'right', color: '#dc2626' }}>-{formatINR(preview.professionalTax)}</div>
+              <div>Loss of Pay (LOP)</div><div style={{ textAlign: 'right', color: '#dc2626' }}>-{formatINR(preview.lossOfPay)}</div>
+              <div style={{ fontWeight: 700, borderTop: '1px solid var(--color-border)', paddingTop: 4 }}>Total Deductions (B)</div>
+              <div style={{ fontWeight: 700, textAlign: 'right', color: '#dc2626', borderTop: '1px solid var(--color-border)', paddingTop: 4 }}>-{formatINR(preview.deductions)}</div>
+            </div>
+            <div style={{ borderTop: '1px solid var(--color-border)', paddingTop: '10px', marginBottom: '10px' }}>
+              <div style={{ fontSize: '12px', color: 'var(--color-text-muted)', fontWeight: 600 }}>Net Salary Payable (A - B)</div>
+              <div style={{ fontSize: '24px', fontWeight: 800, color: '#16a34a' }}>{formatINR(preview.netPay)}</div>
+            </div>
+            <div style={{ borderTop: '1px solid var(--color-border)', paddingTop: '10px', fontSize: '12px', color: 'var(--color-text-muted)' }}>
+              {preview.totalDaysInMonth} days in period &middot; {preview.workingDaysInMonth} working days &middot; {preview.leavesTaken} leave{preview.leavesTaken === 1 ? '' : 's'} taken &middot; {preview.effectiveWorkDays} effective work days
+            </div>
+          </div>
+        )}
+
         <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
           <button className="btn btn-secondary" onClick={() => setShowRunModal(false)}>Cancel</button>
-          <button className="btn btn-primary" onClick={handleSaveModal}>{editingPayroll ? 'Save Changes' : 'Add Payroll'}</button>
+          <button className="btn btn-primary" onClick={handleSaveModal} disabled={!preview || previewLoading}>{editingPayroll ? 'Save Changes' : 'Add Payroll'}</button>
         </div>
       </Modal>
 

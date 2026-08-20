@@ -38,7 +38,11 @@ export class MailerService {
     to: string;
     subject: string;
     html: string;
-    attachments?: { filename: string; path: string }[];
+    // cid lets an attachment double as an inline image the html can
+    // reference via <img src="cid:the-cid">  — used for the logo header
+    // in the branded templates instead of a data: URI, which several
+    // mail clients (notably Outlook desktop) strip from inbound HTML.
+    attachments?: { filename: string; path: string; cid?: string }[];
   }): Promise<{ sent: true } | { sent: false; error: string }> {
     const transporter = this.getTransporter();
     if (!transporter) {

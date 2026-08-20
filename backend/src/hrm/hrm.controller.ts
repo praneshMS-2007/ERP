@@ -2,7 +2,7 @@ import { Controller, Get, Post, Body, Param, Put, Delete, Query, BadRequestExcep
 import { FileInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
 import { HrmService } from './hrm.service';
-import type { RequestUser } from './hrm.service';
+import type { RequestUser, PayrollManualInput } from './hrm.service';
 import { Prisma } from '@prisma/client';
 import { RequirePermission, CurrentUser } from '../auth/decorators';
 
@@ -205,8 +205,35 @@ export class HrmController {
   // records — see updatePayrollStatus for the other half.
   @Post('payrolls')
   @RequirePermission('HR', 'WRITE')
-  createPayroll(@Body() data: Prisma.PayrollUncheckedCreateInput) {
+  createPayroll(@Body() data: { employeeId: string; payPeriod: string; periodStart: string; periodEnd: string } & Partial<PayrollManualInput>) {
     return this.hrmService.createPayroll(data);
+  }
+
+  // Lets the Add Payroll modal show the computed Gross/Deductions/Net Pay
+  // and real attendance before HR commits to creating the record — same
+  // HR:WRITE gate as createPayroll since it's part of that same flow, just
+  // non-persisting. Every money figure below is what HR just typed into
+  // the modal, echoed back through the same math createPayroll will use.
+  @Get('payrolls/preview')
+  @RequirePermission('HR', 'WRITE')
+  previewPayroll(
+    @Query('employeeId') employeeId: string,
+    @Query('periodStart') periodStart: string,
+    @Query('periodEnd') periodEnd: string,
+    @Query('baseSalary') baseSalary?: string,
+    @Query('hra') hra?: string,
+    @Query('specialAllowance') specialAllowance?: string,
+    @Query('bonus') bonus?: string,
+    @Query('tds') tds?: string,
+    @Query('providentFund') providentFund?: string,
+    @Query('professionalTax') professionalTax?: string,
+    @Query('lossOfPay') lossOfPay?: string,
+  ) {
+    const num = (v?: string) => (v !== undefined ? Number(v) : 0);
+    return this.hrmService.previewPayroll(employeeId, periodStart, periodEnd, {
+      baseSalary: num(baseSalary), hra: num(hra), specialAllowance: num(specialAllowance), bonus: num(bonus),
+      tds: num(tds), providentFund: num(providentFund), professionalTax: num(professionalTax), lossOfPay: num(lossOfPay),
+    });
   }
 
   // Gate deliberately broad (HR:READ) — the real "Finance/Admin only, never
@@ -235,7 +262,7 @@ export class HrmController {
   @RequirePermission('HR', 'WRITE')
   updatePayroll(
     @Param('id') id: string,
-    @Body() data: { payPeriod?: string; baseSalary?: number; bonus?: number; deductions?: number },
+    @Body() data: { payPeriod?: string } & Partial<PayrollManualInput>,
   ) {
     return this.hrmService.updatePayroll(id, data);
   }
