@@ -1332,148 +1332,326 @@ export default function AnalyticsPage() {
         </div>
       )}
 
-      {/* Detail Inspection Modal */}
-      {inspectedLog && (
-        <div style={{
-          position: 'fixed',
-          inset: 0,
-          background: 'rgba(0, 0, 0, 0.5)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 9999,
-          padding: '20px',
-        }}>
-          <div style={{
-            background: '#ffffff',
-            borderRadius: '16px',
-            width: '100%',
-            maxWidth: '680px',
-            maxHeight: '90vh',
-            overflowY: 'auto',
-            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
-            border: '1px solid #e5e7eb',
-          }}>
-            {/* Modal Header */}
-            <div style={{
+      {inspectedLog && (() => {
+        const actionMeta = ACTION_COLORS[inspectedLog.actionType] || ACTION_COLORS.OTHER;
+        const ActionIcon = actionMeta.icon;
+        const moduleColor = MODULE_COLORS[inspectedLog.module] || MODULE_COLORS.OTHER;
+        const ts = formatTimestamp(inspectedLog.timestamp);
+        const relTime = getRelativeTime(inspectedLog.timestamp);
+        const actorName = inspectedLog.userName || (inspectedLog.user?.employee ? `${inspectedLog.user.employee.firstName} ${inspectedLog.user.employee.lastName}`.trim() : inspectedLog.user?.username || inspectedLog.userEmail || 'System');
+        const actorRole = inspectedLog.role || inspectedLog.user?.role?.name || 'USER';
+        const actorDept = inspectedLog.department || inspectedLog.user?.employee?.department?.name || 'General';
+        const actorInitial = actorName.charAt(0).toUpperCase();
+
+        // Parse payload
+        let parsedDetails: any = null;
+        if (inspectedLog.details) {
+          try {
+            parsedDetails = typeof inspectedLog.details === 'string' ? JSON.parse(inspectedLog.details) : inspectedLog.details;
+          } catch {
+            parsedDetails = inspectedLog.details;
+          }
+        }
+
+        const requestPayload = parsedDetails?.request || (parsedDetails && !parsedDetails.response ? parsedDetails : null);
+        const responsePayload = parsedDetails?.response || null;
+
+        return (
+          <div
+            style={{
+              position: 'fixed',
+              inset: 0,
+              background: 'rgba(0, 0, 0, 0.55)',
               display: 'flex',
-              justifyContent: 'space-between',
               alignItems: 'center',
-              padding: '20px 24px',
-              borderBottom: '1px solid #e5e7eb',
+              justifyContent: 'center',
+              zIndex: 9999,
+              padding: '20px',
+            }}
+            onClick={(e) => { if (e.target === e.currentTarget) setInspectedLog(null); }}
+          >
+            <div style={{
+              background: '#ffffff',
+              borderRadius: '16px',
+              width: '100%',
+              maxWidth: '720px',
+              maxHeight: '92vh',
+              overflowY: 'auto',
+              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+              border: '1px solid #e5e7eb',
             }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <Activity size={20} color="#2563eb" />
-                <h3 style={{ fontSize: '17px', fontWeight: 700, color: '#111827', margin: 0 }}>
-                  Audit Event Inspection
-                </h3>
-              </div>
-              <button
-                onClick={() => setInspectedLog(null)}
-                style={{ background: 'none', border: 'none', color: '#6b7280', cursor: 'pointer', padding: '4px' }}
-              >
-                <X size={20} />
-              </button>
-            </div>
-
-            {/* Modal Body */}
-            <div style={{ padding: '24px' }}>
-              {/* Event Summary Box */}
-              <div style={{ background: '#f9fafb', borderRadius: '10px', padding: '16px', border: '1px solid #e5e7eb', marginBottom: '20px' }}>
-                <div style={{ fontSize: '15px', fontWeight: 700, color: '#111827', marginBottom: '4px' }}>
-                  {inspectedLog.description}
+              {/* ── MODAL HEADER ──────────────────────────────────── */}
+              <div style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                padding: '16px 24px',
+                borderBottom: '1px solid #e5e7eb',
+                background: '#f9fafb',
+                borderTopLeftRadius: '16px',
+                borderTopRightRadius: '16px',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <Activity size={18} color="#2563eb" />
+                  <h3 style={{ fontSize: '16px', fontWeight: 700, color: '#111827', margin: 0 }}>
+                    Audit Event Inspector
+                  </h3>
                 </div>
-                <div style={{ fontSize: '12px', color: '#6b7280' }}>
-                  Raw Action: <code style={{ background: '#e5e7eb', padding: '2px 6px', borderRadius: '4px', color: '#111827' }}>{inspectedLog.action}</code>
-                </div>
-              </div>
-
-              {/* Two Column Key-Value Details */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '20px', fontSize: '13px' }}>
-                <div>
-                  <span style={{ color: '#6b7280', display: 'block', fontSize: '11.5px', textTransform: 'uppercase', fontWeight: 600 }}>Actor</span>
-                  <strong style={{ color: '#111827' }}>{inspectedLog.userName || 'System'}</strong>
-                  <div style={{ color: '#6b7280', fontSize: '12px' }}>{inspectedLog.userEmail}</div>
-                </div>
-                <div>
-                  <span style={{ color: '#6b7280', display: 'block', fontSize: '11.5px', textTransform: 'uppercase', fontWeight: 600 }}>Role &amp; Department</span>
-                  <strong style={{ color: '#111827' }}>{inspectedLog.role || 'USER'}</strong>
-                  <div style={{ color: '#6b7280', fontSize: '12px' }}>{inspectedLog.department || 'General'}</div>
-                </div>
-                <div>
-                  <span style={{ color: '#6b7280', display: 'block', fontSize: '11.5px', textTransform: 'uppercase', fontWeight: 600 }}>Module</span>
-                  <strong style={{ color: '#111827' }}>{inspectedLog.module}</strong>
-                </div>
-                <div>
-                  <span style={{ color: '#6b7280', display: 'block', fontSize: '11.5px', textTransform: 'uppercase', fontWeight: 600 }}>Action Type</span>
-                  <strong style={{ color: '#111827' }}>{inspectedLog.actionType}</strong>
-                </div>
-                <div>
-                  <span style={{ color: '#6b7280', display: 'block', fontSize: '11.5px', textTransform: 'uppercase', fontWeight: 600 }}>Timestamp (UTC)</span>
-                  <div style={{ color: '#111827' }}>{inspectedLog.timestamp}</div>
-                </div>
-                <div>
-                  <span style={{ color: '#6b7280', display: 'block', fontSize: '11.5px', textTransform: 'uppercase', fontWeight: 600 }}>IP Address</span>
-                  <div style={{ color: '#111827', fontFamily: 'monospace' }}>{inspectedLog.ipAddress || '—'}</div>
-                </div>
+                <button
+                  onClick={() => setInspectedLog(null)}
+                  style={{ background: '#f3f4f6', border: '1px solid #e5e7eb', borderRadius: '8px', color: '#6b7280', cursor: 'pointer', padding: '4px 6px', display: 'flex', alignItems: 'center' }}
+                >
+                  <X size={18} />
+                </button>
               </div>
 
-              {/* User Agent */}
-              {inspectedLog.userAgent && (
-                <div style={{ marginBottom: '20px' }}>
-                  <span style={{ color: '#6b7280', display: 'block', fontSize: '11.5px', textTransform: 'uppercase', fontWeight: 600, marginBottom: '4px' }}>Client User-Agent</span>
-                  <div style={{ background: '#f3f4f6', padding: '8px 12px', borderRadius: '6px', fontSize: '11.5px', fontFamily: 'monospace', color: '#4b5563', wordBreak: 'break-all' }}>
-                    {inspectedLog.userAgent}
+              <div style={{ padding: '24px' }}>
+
+                {/* ── HERO: WHAT HAPPENED ──────────────────────────── */}
+                <div style={{
+                  background: 'linear-gradient(135deg, #eff6ff 0%, #f0fdf4 100%)',
+                  borderRadius: '12px',
+                  padding: '20px',
+                  border: '1px solid #dbeafe',
+                  marginBottom: '20px',
+                }}>
+                  <div style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px', color: '#6b7280', marginBottom: '8px' }}>
+                    What Happened
+                  </div>
+                  <div style={{ fontSize: '17px', fontWeight: 700, color: '#111827', lineHeight: '1.5', marginBottom: '12px' }}>
+                    {inspectedLog.description || 'No description available'}
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                    <span style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                      background: actionMeta.bg,
+                      color: actionMeta.text,
+                      border: `1px solid ${actionMeta.border}`,
+                      fontSize: '11px',
+                      fontWeight: 700,
+                      padding: '3px 10px',
+                      borderRadius: '6px',
+                    }}>
+                      <ActionIcon size={12} />
+                      {inspectedLog.actionType}
+                    </span>
+                    <span style={{
+                      display: 'inline-block',
+                      background: '#ffffff',
+                      color: moduleColor,
+                      border: `1px solid ${moduleColor}40`,
+                      fontSize: '11px',
+                      fontWeight: 700,
+                      padding: '3px 10px',
+                      borderRadius: '6px',
+                    }}>
+                      {inspectedLog.module} Module
+                    </span>
+                    {inspectedLog.entityType && (
+                      <span style={{
+                        display: 'inline-block',
+                        background: '#ffffff',
+                        color: '#374151',
+                        border: '1px solid #e5e7eb',
+                        fontSize: '11px',
+                        fontWeight: 600,
+                        padding: '3px 10px',
+                        borderRadius: '6px',
+                      }}>
+                        Entity: {inspectedLog.entityType}
+                      </span>
+                    )}
                   </div>
                 </div>
-              )}
 
-              {/* Sanitized Payload / State Details JSON */}
-              <div>
-                <span style={{ color: '#6b7280', display: 'block', fontSize: '11.5px', textTransform: 'uppercase', fontWeight: 600, marginBottom: '6px' }}>Sanitized Mutation Payload</span>
-                <pre style={{
-                  background: '#0f172a',
-                  color: '#e2e8f0',
+                {/* ── WHO DID IT ───────────────────────────────────── */}
+                <div style={{
+                  background: '#ffffff',
+                  borderRadius: '10px',
                   padding: '16px',
-                  borderRadius: '8px',
-                  fontSize: '12px',
-                  fontFamily: 'monospace',
-                  overflowX: 'auto',
-                  maxHeight: '220px',
-                  lineHeight: '1.5',
+                  border: '1px solid #e5e7eb',
+                  marginBottom: '16px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '14px',
                 }}>
-                  {inspectedLog.details ? (
-                    (() => {
-                      try {
-                        return JSON.stringify(JSON.parse(inspectedLog.details), null, 2);
-                      } catch {
-                        return inspectedLog.details;
-                      }
-                    })()
-                  ) : (
-                    '// No body payload recorded for this operation'
+                  <div style={{
+                    width: '42px',
+                    height: '42px',
+                    borderRadius: '50%',
+                    background: '#2563eb',
+                    color: '#ffffff',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '18px',
+                    fontWeight: 'bold',
+                    flexShrink: 0,
+                  }}>
+                    {actorInitial}
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '2px' }}>
+                      <strong style={{ fontSize: '15px', color: '#111827' }}>{actorName}</strong>
+                      <span style={{
+                        fontSize: '10.5px',
+                        fontWeight: 700,
+                        background: '#f3f4f6',
+                        color: '#374151',
+                        padding: '2px 6px',
+                        borderRadius: '4px',
+                        border: '1px solid #e5e7eb',
+                      }}>
+                        {actorRole}
+                      </span>
+                    </div>
+                    <div style={{ fontSize: '12.5px', color: '#6b7280' }}>
+                      {inspectedLog.userEmail || '—'} · {actorDept}
+                    </div>
+                  </div>
+                </div>
+
+                {/* ── DETAILS GRID ─────────────────────────────────── */}
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: '1fr 1fr',
+                  gap: '12px',
+                  marginBottom: '16px',
+                }}>
+                  <div style={{ background: '#f9fafb', padding: '12px 14px', borderRadius: '8px', border: '1px solid #f3f4f6' }}>
+                    <span style={{ color: '#9ca3af', display: 'block', fontSize: '10.5px', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.5px', marginBottom: '4px' }}>Timestamp</span>
+                    <div style={{ fontSize: '13px', fontWeight: 600, color: '#111827' }}>{ts.date} at {ts.time}</div>
+                    <div style={{ fontSize: '11px', color: '#6b7280' }}>{relTime}</div>
+                  </div>
+                  <div style={{ background: '#f9fafb', padding: '12px 14px', borderRadius: '8px', border: '1px solid #f3f4f6' }}>
+                    <span style={{ color: '#9ca3af', display: 'block', fontSize: '10.5px', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.5px', marginBottom: '4px' }}>IP Address</span>
+                    <div style={{ fontSize: '13px', fontWeight: 600, color: '#111827', fontFamily: 'monospace' }}>{inspectedLog.ipAddress || '—'}</div>
+                  </div>
+                  <div style={{ background: '#f9fafb', padding: '12px 14px', borderRadius: '8px', border: '1px solid #f3f4f6' }}>
+                    <span style={{ color: '#9ca3af', display: 'block', fontSize: '10.5px', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.5px', marginBottom: '4px' }}>Raw Route</span>
+                    <code style={{ fontSize: '12px', color: '#111827', background: '#e5e7eb', padding: '2px 6px', borderRadius: '4px' }}>{inspectedLog.action}</code>
+                  </div>
+                  {inspectedLog.entityId && (
+                    <div style={{ background: '#f9fafb', padding: '12px 14px', borderRadius: '8px', border: '1px solid #f3f4f6' }}>
+                      <span style={{ color: '#9ca3af', display: 'block', fontSize: '10.5px', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.5px', marginBottom: '4px' }}>Entity ID</span>
+                      <code style={{ fontSize: '12px', color: '#111827', fontFamily: 'monospace' }}>{inspectedLog.entityId}</code>
+                    </div>
                   )}
-                </pre>
+                </div>
+
+                {/* ── USER AGENT ───────────────────────────────────── */}
+                {inspectedLog.userAgent && (
+                  <div style={{ marginBottom: '16px' }}>
+                    <span style={{ color: '#9ca3af', display: 'block', fontSize: '10.5px', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.5px', marginBottom: '6px' }}>Client User-Agent</span>
+                    <div style={{ background: '#f3f4f6', padding: '8px 12px', borderRadius: '6px', fontSize: '11px', fontFamily: 'monospace', color: '#4b5563', wordBreak: 'break-all', lineHeight: '1.4' }}>
+                      {inspectedLog.userAgent}
+                    </div>
+                  </div>
+                )}
+
+                {/* ── MUTATION PAYLOAD (REQUEST + RESPONSE) ────────── */}
+                <div>
+                  <span style={{ color: '#9ca3af', display: 'block', fontSize: '10.5px', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.5px', marginBottom: '8px' }}>
+                    Sanitized Mutation Payload
+                  </span>
+                  {parsedDetails ? (
+                    <div>
+                      {requestPayload && (
+                        <div style={{ marginBottom: '10px' }}>
+                          <div style={{ fontSize: '11px', fontWeight: 700, color: '#6b7280', marginBottom: '4px' }}>📤 Request Body (What was sent)</div>
+                          <pre style={{
+                            background: '#0f172a',
+                            color: '#e2e8f0',
+                            padding: '14px',
+                            borderRadius: '8px',
+                            fontSize: '11.5px',
+                            fontFamily: 'monospace',
+                            overflowX: 'auto',
+                            maxHeight: '200px',
+                            lineHeight: '1.5',
+                            margin: 0,
+                          }}>
+                            {JSON.stringify(requestPayload, null, 2)}
+                          </pre>
+                        </div>
+                      )}
+                      {responsePayload && (
+                        <div>
+                          <div style={{ fontSize: '11px', fontWeight: 700, color: '#6b7280', marginBottom: '4px' }}>📥 Response Summary (What the server returned)</div>
+                          <pre style={{
+                            background: '#0f172a',
+                            color: '#a5f3fc',
+                            padding: '14px',
+                            borderRadius: '8px',
+                            fontSize: '11.5px',
+                            fontFamily: 'monospace',
+                            overflowX: 'auto',
+                            maxHeight: '120px',
+                            lineHeight: '1.5',
+                            margin: 0,
+                          }}>
+                            {JSON.stringify(responsePayload, null, 2)}
+                          </pre>
+                        </div>
+                      )}
+                      {!requestPayload && !responsePayload && (
+                        <pre style={{
+                          background: '#0f172a',
+                          color: '#e2e8f0',
+                          padding: '14px',
+                          borderRadius: '8px',
+                          fontSize: '11.5px',
+                          fontFamily: 'monospace',
+                          overflowX: 'auto',
+                          maxHeight: '220px',
+                          lineHeight: '1.5',
+                          margin: 0,
+                        }}>
+                          {typeof parsedDetails === 'string' ? parsedDetails : JSON.stringify(parsedDetails, null, 2)}
+                        </pre>
+                      )}
+                    </div>
+                  ) : (
+                    <div style={{
+                      background: '#f9fafb',
+                      border: '1px solid #e5e7eb',
+                      borderRadius: '8px',
+                      padding: '16px',
+                      textAlign: 'center',
+                      color: '#6b7280',
+                      fontSize: '13px',
+                    }}>
+                      No mutation payload was captured for this operation.
+                      {inspectedLog.actionType === 'LOGIN' && (
+                        <div style={{ fontSize: '11.5px', color: '#9ca3af', marginTop: '4px' }}>
+                          Login events do not carry a mutation payload.
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* ── MODAL FOOTER ───────────────────────────────────── */}
+              <div style={{
+                display: 'flex',
+                justifyContent: 'flex-end',
+                padding: '14px 24px',
+                borderTop: '1px solid #e5e7eb',
+                background: '#f9fafb',
+                borderBottomLeftRadius: '16px',
+                borderBottomRightRadius: '16px',
+              }}>
+                <button onClick={() => setInspectedLog(null)} className="btn btn-secondary" style={{ fontSize: '13px' }}>
+                  Close
+                </button>
               </div>
             </div>
-
-            {/* Modal Footer */}
-            <div style={{
-              display: 'flex',
-              justifyContent: 'flex-end',
-              padding: '16px 24px',
-              borderTop: '1px solid #e5e7eb',
-              background: '#f9fafb',
-              borderBottomLeftRadius: '16px',
-              borderBottomRightRadius: '16px',
-            }}>
-              <button onClick={() => setInspectedLog(null)} className="btn btn-secondary" style={{ fontSize: '13px' }}>
-                Close
-              </button>
-            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
     </div>
   );
 }
