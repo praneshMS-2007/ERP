@@ -1,6 +1,8 @@
 'use client';
 
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
 import {
   ShieldAlert,
@@ -33,6 +35,11 @@ import {
   BarChart2,
   TrendingUp,
   SlidersHorizontal,
+  ArrowRight,
+  ChevronDown,
+  ChevronUp,
+  CornerDownRight,
+  Sparkles,
 } from 'lucide-react';
 import { analyticsApi, AuditLogFilterParams } from '@/services/api';
 import { BarChart, DoughnutChart } from '@/components/dashboard/Charts';
@@ -50,6 +57,9 @@ interface AuditLogItem {
   entityType: string | null;
   entityId: string | null;
   description: string;
+  targetUrl?: string;
+  targetUrlLabel?: string;
+  targetCategory?: string;
   ipAddress: string | null;
   userAgent: string | null;
   details: string | null;
@@ -90,13 +100,14 @@ interface AuditStats {
   topActiveManagers: { userId: string; count: number; name: string; role: string; department: string }[];
 }
 
-const ACTION_COLORS: Record<string, { bg: string; text: string; border: string; icon: any }> = {
-  CREATE: { bg: '#ecfdf5', text: '#065f46', border: '#a7f3d0', icon: PlusCircle },
-  UPDATE: { bg: '#eff6ff', text: '#1e40af', border: '#bfdbfe', icon: Edit3 },
-  DELETE: { bg: '#fef2f2', text: '#991b1b', border: '#fecaca', icon: Trash2 },
-  STATUS_CHANGE: { bg: '#faf5ff', text: '#6b21a8', border: '#e9d5ff', icon: CheckCircle2 },
-  LOGIN: { bg: '#fffbeb', text: '#92400e', border: '#fde68a', icon: LogIn },
-  OTHER: { bg: '#f3f4f6', text: '#374151', border: '#e5e7eb', icon: Activity },
+const ACTION_CONFIG: Record<string, { bg: string; text: string; border: string; label: string; icon: any }> = {
+  CREATE: { bg: '#ecfdf5', text: '#065f46', border: '#a7f3d0', label: 'Added New Record', icon: PlusCircle },
+  UPDATE: { bg: '#eff6ff', text: '#1e40af', border: '#bfdbfe', label: 'Updated Details', icon: Edit3 },
+  DELETE: { bg: '#fef2f2', text: '#991b1b', border: '#fecaca', label: 'Removed Record', icon: Trash2 },
+  STATUS_CHANGE: { bg: '#faf5ff', text: '#6b21a8', border: '#e9d5ff', label: 'Status Changed', icon: CheckCircle2 },
+  LOGIN: { bg: '#fffbeb', text: '#92400e', border: '#fde68a', label: 'Signed In', icon: LogIn },
+  EXPORT: { bg: '#f0fdfa', text: '#0f766e', border: '#99f6e4', label: 'Exported Data', icon: Download },
+  OTHER: { bg: '#f3f4f6', text: '#374151', border: '#e5e7eb', label: 'System Action', icon: Activity },
 };
 
 const MODULE_COLORS: Record<string, string> = {
@@ -106,11 +117,74 @@ const MODULE_COLORS: Record<string, string> = {
   CRM: '#7c3aed',
   PROJECTS: '#0284c7',
   ADMIN: '#dc2626',
+  AUTH: '#4b5563',
   SETTINGS: '#4b5563',
+  ANNOUNCEMENTS: '#ea580c',
   OTHER: '#6b7280',
 };
 
+function formatFriendlyRole(role?: string | null): string {
+  if (!role) return 'Team Member';
+  const map: Record<string, string> = {
+    SUPER_ADMIN: 'Super Admin',
+    HR_MANAGER: 'HR Manager',
+    FINANCE_MANAGER: 'Finance Manager',
+    INVENTORY_MANAGER: 'Inventory Manager',
+    CRM_MANAGER: 'CRM Manager',
+    PROJECT_MANAGER: 'Project Manager',
+    TEAM_LEAD: 'Team Lead',
+    EMPLOYEE: 'Employee',
+  };
+  return map[role] || role.replace('_', ' ');
+}
+
+function resolveClientRoute(log: AuditLogItem): { url: string; label: string } {
+  if (log.targetUrl && log.targetUrlLabel) {
+    return { url: log.targetUrl, label: log.targetUrlLabel };
+  }
+  const mod = (log.module || '').toUpperCase();
+  const ent = (log.entityType || '').toLowerCase();
+  const act = (log.action || '').toLowerCase();
+
+  if (mod === 'HR' || act.includes('/hrm')) {
+    if (ent.includes('payroll') || act.includes('payroll')) return { url: '/hrm/payroll', label: 'View in Payroll' };
+    if (ent.includes('leave') || ent.includes('attendance')) return { url: '/hrm/attendance', label: 'View Attendance & Leaves' };
+    if (ent.includes('user')) return { url: '/hrm/user-management', label: 'View User Management' };
+    return { url: '/hrm/employees', label: 'View in Employee Management' };
+  }
+  if (mod === 'FINANCE' || act.includes('/finance')) {
+    if (ent.includes('budget')) return { url: '/finance/budgets', label: 'View Budgets' };
+    if (ent.includes('ledger')) return { url: '/finance/ledger', label: 'View General Ledger' };
+    if (ent.includes('payroll')) return { url: '/finance/payroll', label: 'View Finance Payroll' };
+    return { url: '/finance', label: 'View Invoices & Expenses' };
+  }
+  if (mod === 'INVENTORY' || act.includes('/inventory')) {
+    if (ent.includes('warehouse')) return { url: '/inventory/warehouse', label: 'View Warehouses' };
+    if (ent.includes('raw')) return { url: '/inventory/raw-materials', label: 'View Raw Materials' };
+    if (ent.includes('order')) return { url: '/inventory/sales-orders', label: 'View Sales Orders' };
+    if (ent.includes('alert')) return { url: '/inventory/stock-alerts', label: 'View Stock Alerts' };
+    return { url: '/inventory/products', label: 'View Products in Inventory' };
+  }
+  if (mod === 'CRM' || act.includes('/crm')) {
+    if (ent.includes('customer')) return { url: '/crm/customers', label: 'View Customers in CRM' };
+    if (ent.includes('support')) return { url: '/crm/support', label: 'View Support Tickets' };
+    if (ent.includes('contact')) return { url: '/crm/contacts', label: 'View Contacts in CRM' };
+    return { url: '/crm/leads', label: 'View Leads in CRM' };
+  }
+  if (mod === 'PROJECTS' || act.includes('/projects')) {
+    return { url: '/projects', label: 'View Projects' };
+  }
+  if (mod === 'ANNOUNCEMENTS' || act.includes('/announcements')) {
+    return { url: '/announcements', label: 'View Announcements' };
+  }
+  if (mod === 'ADMIN' || mod === 'AUTH') {
+    return { url: '/hrm/user-management', label: 'View User Accounts' };
+  }
+  return { url: '/', label: 'Go to Dashboard' };
+}
+
 export default function AnalyticsPage() {
+  const router = useRouter();
   const { user } = useAuth();
   const isSuperAdmin = user?.role === 'SUPER_ADMIN';
 
@@ -138,8 +212,9 @@ export default function AnalyticsPage() {
   const [loading, setLoading] = useState<boolean>(true);
   const [refreshing, setRefreshing] = useState<boolean>(false);
 
-  // Modal inspection
+  // Modal inspection & collapsible tech details
   const [inspectedLog, setInspectedLog] = useState<AuditLogItem | null>(null);
+  const [showTechDetails, setShowTechDetails] = useState<boolean>(false);
 
   // Set date ranges on preset change
   useEffect(() => {
@@ -413,11 +488,11 @@ export default function AnalyticsPage() {
               borderRadius: '9999px',
             }}>
               <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#22c55e' }} />
-              Live Telemetry
+              Live Operations Tracker
             </span>
           </div>
           <p style={{ fontSize: '13.5px', color: '#6b7280', margin: 0 }}>
-            Comprehensive audit logs and operational timeline of all department managers with zero mocking.
+            Every action performed by department managers is recorded in clear, human-understandable words with 1-click links to the actual pages.
           </p>
         </div>
 
@@ -493,7 +568,7 @@ export default function AnalyticsPage() {
             {stats?.activeManagersCount || 0}
           </div>
           <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '6px' }}>
-            Distinct managers executing actions
+            Managers executing operations
           </div>
         </div>
 
@@ -515,17 +590,17 @@ export default function AnalyticsPage() {
           </div>
           <div style={{ display: 'flex', gap: '8px', marginTop: '4px', flexWrap: 'wrap' }}>
             <span style={{ fontSize: '12px', fontWeight: 600, color: '#065f46', background: '#d1fae5', padding: '2px 8px', borderRadius: '6px' }}>
-              +{stats?.actionBreakdown?.CREATE || 0} Creates
+              +{stats?.actionBreakdown?.CREATE || 0} Added
             </span>
             <span style={{ fontSize: '12px', fontWeight: 600, color: '#1e40af', background: '#dbeafe', padding: '2px 8px', borderRadius: '6px' }}>
-              ~{stats?.actionBreakdown?.UPDATE || 0} Updates
+              ~{stats?.actionBreakdown?.UPDATE || 0} Modified
             </span>
             <span style={{ fontSize: '12px', fontWeight: 600, color: '#991b1b', background: '#fee2e2', padding: '2px 8px', borderRadius: '6px' }}>
-              -{stats?.actionBreakdown?.DELETE || 0} Deletes
+              -{stats?.actionBreakdown?.DELETE || 0} Removed
             </span>
           </div>
           <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '8px' }}>
-            Real mutation distribution
+            Live operation distribution
           </div>
         </div>
 
@@ -575,7 +650,7 @@ export default function AnalyticsPage() {
                 <h3 style={{ fontSize: '15px', fontWeight: 700, color: '#111827', margin: '0 0 2px 0' }}>
                   Daily Activity Trend
                 </h3>
-                <span style={{ fontSize: '12px', color: '#6b7280' }}>Total management mutations over time</span>
+                <span style={{ fontSize: '12px', color: '#6b7280' }}>Total management operations over time</span>
               </div>
               <BarChart2 size={18} color="#6b7280" />
             </div>
@@ -733,7 +808,7 @@ export default function AnalyticsPage() {
               <option value="ALL">All Managers &amp; Users</option>
               {managers.map((m) => (
                 <option key={m.id} value={m.id}>
-                  {m.displayName} ({m.role}) — {m.department}
+                  {m.displayName} ({formatFriendlyRole(m.role)}) — {m.department}
                 </option>
               ))}
             </select>
@@ -823,11 +898,11 @@ export default function AnalyticsPage() {
               }}
             >
               <option value="ALL">All Action Types</option>
-              <option value="CREATE">CREATE (+)</option>
-              <option value="UPDATE">UPDATE (~)</option>
-              <option value="DELETE">DELETE (-)</option>
-              <option value="STATUS_CHANGE">STATUS_CHANGE (✓)</option>
-              <option value="LOGIN">LOGIN (→)</option>
+              <option value="CREATE">New Records Added (+)</option>
+              <option value="UPDATE">Details Modified (~)</option>
+              <option value="DELETE">Records Removed (-)</option>
+              <option value="STATUS_CHANGE">Status Changes (✓)</option>
+              <option value="LOGIN">User Logins (→)</option>
             </select>
           </div>
         </div>
@@ -845,7 +920,7 @@ export default function AnalyticsPage() {
             <Search size={16} color="#9ca3af" style={{ position: 'absolute', left: '12px', top: '10px' }} />
             <input
               type="text"
-              placeholder="Search by description, target record, entity ID, actor name..."
+              placeholder="Search by what happened, employee name, invoice, product, lead, or manager..."
               value={searchQuery}
               onChange={(e) => {
                 setSearchQuery(e.target.value);
@@ -959,17 +1034,19 @@ export default function AnalyticsPage() {
             <Activity size={24} />
           </div>
           <h3 style={{ fontSize: '16px', fontWeight: 600, color: '#111827', margin: '0 0 6px 0' }}>
-            No Audit Logs Found
+            No Operations Found
           </h3>
           <p style={{ fontSize: '13.5px', color: '#6b7280', margin: '0 0 16px 0' }}>
-            No management operations match the selected date range and filter criteria.
+            No management actions match the selected date range and filter criteria.
           </p>
           <button onClick={handleResetFilters} className="btn btn-secondary" style={{ fontSize: '13px' }}>
             Clear Filters
           </button>
         </div>
       ) : viewMode === 'timeline' ? (
-        /* TIMELINE VIEW */
+        /* =================================================================== */
+        /* TIMELINE VIEW (CONVERSATIONAL PLAIN-ENGLISH WITH 1-CLICK REDIRECT)  */
+        /* =================================================================== */
         <div style={{
           background: '#ffffff',
           borderRadius: '12px',
@@ -979,7 +1056,7 @@ export default function AnalyticsPage() {
         }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
             <div style={{ fontSize: '14px', fontWeight: 600, color: '#374151' }}>
-              Showing {logs.length} of {pagination.total} audit events
+              Showing <strong>{logs.length}</strong> of <strong>{pagination.total}</strong> operations
             </div>
             <div style={{ fontSize: '12.5px', color: '#6b7280' }}>
               Page {pagination.page} of {pagination.totalPages}
@@ -987,7 +1064,7 @@ export default function AnalyticsPage() {
           </div>
 
           <div style={{ position: 'relative', paddingLeft: '32px' }}>
-            {/* Timeline Vertical Bar */}
+            {/* Vertical Connector Line */}
             <div style={{
               position: 'absolute',
               left: '11px',
@@ -999,35 +1076,44 @@ export default function AnalyticsPage() {
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
               {logs.map((log) => {
-                const actionMeta = ACTION_COLORS[log.actionType] || ACTION_COLORS.OTHER;
+                const actionMeta = ACTION_CONFIG[log.actionType] || ACTION_CONFIG.OTHER;
                 const ActionIcon = actionMeta.icon;
                 const moduleColor = MODULE_COLORS[log.module] || MODULE_COLORS.OTHER;
                 const ts = formatTimestamp(log.timestamp);
                 const relTime = getRelativeTime(log.timestamp);
+                const routeInfo = resolveClientRoute(log);
 
-                const actorName = log.userName || (log.user?.employee ? `${log.user.employee.firstName} ${log.user.employee.lastName}`.trim() : log.user?.username || log.userEmail || 'System');
-                const actorRole = log.role || log.user?.role?.name || 'USER';
-                const actorDept = log.department || log.user?.employee?.department?.name || 'General';
+                const actorName = log.userName || (log.user?.employee ? `${log.user.employee.firstName} ${log.user.employee.lastName}`.trim() : log.user?.username || log.userEmail || 'Team Member');
+                const actorRole = formatFriendlyRole(log.role || log.user?.role?.name);
+                const actorDept = log.department || log.user?.employee?.department?.name || 'Management';
+                const actorInitial = actorName.charAt(0).toUpperCase();
 
                 return (
                   <div
                     key={log.id}
                     style={{
                       position: 'relative',
-                      background: '#f9fafb',
-                      borderRadius: '10px',
-                      padding: '16px 20px',
+                      background: '#ffffff',
+                      borderRadius: '12px',
+                      padding: '18px 22px',
                       border: '1px solid #e5e7eb',
-                      transition: 'box-shadow 0.15s ease',
+                      boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.04)',
+                      transition: 'all 0.15s ease',
                     }}
-                    onMouseEnter={(e) => (e.currentTarget.style.boxShadow = '0 4px 6px -1px rgba(0, 0, 0, 0.05)')}
-                    onMouseLeave={(e) => (e.currentTarget.style.boxShadow = 'none')}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.borderColor = '#93c5fd';
+                      e.currentTarget.style.boxShadow = '0 4px 12px -2px rgba(37, 99, 235, 0.08)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.borderColor = '#e5e7eb';
+                      e.currentTarget.style.boxShadow = '0 1px 3px 0 rgba(0, 0, 0, 0.04)';
+                    }}
                   >
                     {/* Node Dot on vertical line */}
                     <div style={{
                       position: 'absolute',
                       left: '-28px',
-                      top: '20px',
+                      top: '22px',
                       width: '18px',
                       height: '18px',
                       borderRadius: '50%',
@@ -1040,35 +1126,33 @@ export default function AnalyticsPage() {
                       <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: actionMeta.text }} />
                     </div>
 
-                    {/* Event Content Header */}
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '8px', marginBottom: '8px' }}>
+                    {/* Top Row: Action Badges & Timestamp */}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px', marginBottom: '10px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                        {/* Action Badge */}
                         <span style={{
                           display: 'inline-flex',
                           alignItems: 'center',
-                          gap: '4px',
+                          gap: '5px',
                           background: actionMeta.bg,
                           color: actionMeta.text,
                           border: `1px solid ${actionMeta.border}`,
                           fontSize: '11px',
                           fontWeight: 700,
-                          padding: '2px 8px',
+                          padding: '3px 9px',
                           borderRadius: '6px',
                         }}>
                           <ActionIcon size={12} />
-                          {log.actionType}
+                          {actionMeta.label}
                         </span>
 
-                        {/* Module Badge */}
                         <span style={{
                           display: 'inline-block',
                           background: '#ffffff',
                           color: moduleColor,
-                          border: `1px solid ${moduleColor}30`,
+                          border: `1px solid ${moduleColor}40`,
                           fontSize: '11px',
                           fontWeight: 700,
-                          padding: '2px 8px',
+                          padding: '3px 9px',
                           borderRadius: '6px',
                         }}>
                           {log.module}
@@ -1076,81 +1160,124 @@ export default function AnalyticsPage() {
 
                         {log.entityType && (
                           <span style={{ fontSize: '12px', fontWeight: 600, color: '#4b5563' }}>
-                            {log.entityType} {log.entityId ? `#${log.entityId.slice(0, 8)}` : ''}
+                            {log.entityType}
                           </span>
                         )}
                       </div>
 
-                      {/* Timestamp */}
                       <div style={{ fontSize: '12px', color: '#6b7280', display: 'flex', alignItems: 'center', gap: '6px' }}>
                         <Clock size={13} />
                         <span>{ts.date} at {ts.time}</span>
-                        <span style={{ fontWeight: 600, color: '#9ca3af' }}>({relTime})</span>
+                        <span style={{ fontWeight: 600, color: '#2563eb', background: '#eff6ff', padding: '1px 6px', borderRadius: '4px' }}>{relTime}</span>
                       </div>
                     </div>
 
-                    {/* Description */}
-                    <div style={{ fontSize: '14px', fontWeight: 600, color: '#111827', marginBottom: '10px' }}>
+                    {/* Plain English Story (What happened) */}
+                    <div style={{
+                      fontSize: '15px',
+                      fontWeight: 600,
+                      color: '#111827',
+                      lineHeight: '1.5',
+                      marginBottom: '14px',
+                    }}>
                       {log.description}
                     </div>
 
-                    {/* Actor Details Footer */}
+                    {/* Bottom Row: Actor Snapshot & Direct Redirect Button */}
                     <div style={{
                       display: 'flex',
                       justifyContent: 'space-between',
                       alignItems: 'center',
                       flexWrap: 'wrap',
-                      gap: '8px',
-                      paddingTop: '10px',
-                      borderTop: '1px solid #e5e7eb',
-                      fontSize: '12px',
-                      color: '#4b5563',
+                      gap: '12px',
+                      paddingTop: '12px',
+                      borderTop: '1px solid #f3f4f6',
                     }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      {/* Actor Information */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                         <div style={{
-                          width: '24px',
-                          height: '24px',
+                          width: '28px',
+                          height: '28px',
                           borderRadius: '50%',
                           background: '#2563eb',
                           color: '#ffffff',
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
-                          fontSize: '11px',
+                          fontSize: '12px',
                           fontWeight: 'bold',
                         }}>
-                          {actorName.charAt(0).toUpperCase()}
+                          {actorInitial}
                         </div>
-                        <span style={{ fontWeight: 600, color: '#111827' }}>{actorName}</span>
-                        <span style={{ color: '#9ca3af' }}>•</span>
-                        <span style={{ color: '#6b7280' }}>{actorRole}</span>
-                        <span style={{ color: '#9ca3af' }}>•</span>
-                        <span style={{ color: '#6b7280' }}>{actorDept}</span>
+                        <div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <span style={{ fontWeight: 600, fontSize: '13px', color: '#111827' }}>{actorName}</span>
+                            <span style={{ fontSize: '11px', color: '#4b5563', background: '#f3f4f6', padding: '1px 6px', borderRadius: '4px', fontWeight: 600 }}>
+                              {actorRole}
+                            </span>
+                          </div>
+                          <div style={{ fontSize: '11.5px', color: '#6b7280' }}>
+                            {actorDept}
+                          </div>
+                        </div>
                       </div>
 
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                        {log.ipAddress && (
-                          <span style={{ color: '#9ca3af', fontFamily: 'monospace', fontSize: '11px' }}>
-                            IP: {log.ipAddress}
-                          </span>
+                      {/* Action Links */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        {/* Direct Navigation Button to Module */}
+                        {routeInfo.url && (
+                          <Link
+                            href={routeInfo.url}
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '6px',
+                              background: '#eff6ff',
+                              border: '1px solid #bfdbfe',
+                              borderRadius: '7px',
+                              padding: '5px 12px',
+                              fontSize: '12px',
+                              fontWeight: 600,
+                              color: '#1d4ed8',
+                              textDecoration: 'none',
+                              transition: 'all 0.15s ease',
+                            }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.background = '#2563eb';
+                              e.currentTarget.style.color = '#ffffff';
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.background = '#eff6ff';
+                              e.currentTarget.style.color = '#1d4ed8';
+                            }}
+                          >
+                            <span>{routeInfo.label}</span>
+                            <ExternalLink size={12} />
+                          </Link>
                         )}
+
+                        {/* Detail Inspector Button */}
                         <button
-                          onClick={() => setInspectedLog(log)}
+                          onClick={() => {
+                            setInspectedLog(log);
+                            setShowTechDetails(false);
+                          }}
                           style={{
                             display: 'inline-flex',
                             alignItems: 'center',
-                            gap: '4px',
+                            gap: '5px',
                             background: '#ffffff',
                             border: '1px solid #d1d5db',
-                            borderRadius: '6px',
-                            padding: '3px 8px',
-                            fontSize: '11.5px',
+                            borderRadius: '7px',
+                            padding: '5px 11px',
+                            fontSize: '12px',
                             fontWeight: 600,
                             color: '#374151',
                             cursor: 'pointer',
                           }}
                         >
-                          <Eye size={12} /> Inspect
+                          <Eye size={13} />
+                          <span>Inspect</span>
                         </button>
                       </div>
                     </div>
@@ -1161,7 +1288,9 @@ export default function AnalyticsPage() {
           </div>
         </div>
       ) : (
-        /* DATA TABLE VIEW */
+        /* =================================================================== */
+        /* DATA TABLE VIEW (TABULAR WITH DIRECT ERP REDIRECT BUTTONS)          */
+        /* =================================================================== */
         <div style={{
           background: '#ffffff',
           borderRadius: '12px',
@@ -1173,39 +1302,41 @@ export default function AnalyticsPage() {
             <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
               <thead>
                 <tr style={{ background: '#f9fafb', borderBottom: '1px solid #e5e7eb', color: '#4b5563', fontSize: '12px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                  <th style={{ padding: '12px 16px' }}>Timestamp</th>
-                  <th style={{ padding: '12px 16px' }}>Manager / Actor</th>
-                  <th style={{ padding: '12px 16px' }}>Role &amp; Dept</th>
-                  <th style={{ padding: '12px 16px' }}>Action</th>
-                  <th style={{ padding: '12px 16px' }}>Module</th>
-                  <th style={{ padding: '12px 16px' }}>Description</th>
-                  <th style={{ padding: '12px 16px', textAlign: 'right' }}>Inspect</th>
+                  <th style={{ padding: '12px 16px' }}>When</th>
+                  <th style={{ padding: '12px 16px' }}>Who (Manager)</th>
+                  <th style={{ padding: '12px 16px' }}>Action Type</th>
+                  <th style={{ padding: '12px 16px', minWidth: '320px' }}>What Happened</th>
+                  <th style={{ padding: '12px 16px', textAlign: 'right', minWidth: '220px' }}>Quick Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {logs.map((log) => {
-                  const actionMeta = ACTION_COLORS[log.actionType] || ACTION_COLORS.OTHER;
+                  const actionMeta = ACTION_CONFIG[log.actionType] || ACTION_CONFIG.OTHER;
                   const ActionIcon = actionMeta.icon;
                   const ts = formatTimestamp(log.timestamp);
-                  const actorName = log.userName || (log.user?.employee ? `${log.user.employee.firstName} ${log.user.employee.lastName}`.trim() : log.user?.username || log.userEmail || 'System');
-                  const actorRole = log.role || log.user?.role?.name || 'USER';
-                  const actorDept = log.department || log.user?.employee?.department?.name || 'General';
+                  const relTime = getRelativeTime(log.timestamp);
+                  const routeInfo = resolveClientRoute(log);
+
+                  const actorName = log.userName || (log.user?.employee ? `${log.user.employee.firstName} ${log.user.employee.lastName}`.trim() : log.user?.username || log.userEmail || 'Team Member');
+                  const actorRole = formatFriendlyRole(log.role || log.user?.role?.name);
+                  const actorDept = log.department || log.user?.employee?.department?.name || 'Management';
 
                   return (
-                    <tr key={log.id} style={{ borderBottom: '1px solid #f3f4f6', transition: 'background 0.15s ease' }}>
+                    <tr
+                      key={log.id}
+                      style={{ borderBottom: '1px solid #f3f4f6', transition: 'background 0.15s ease' }}
+                      onMouseEnter={(e) => (e.currentTarget.style.background = '#f9fafb')}
+                      onMouseLeave={(e) => (e.currentTarget.style.background = '#ffffff')}
+                    >
                       <td style={{ padding: '12px 16px', whiteSpace: 'nowrap', color: '#6b7280' }}>
                         <div style={{ fontWeight: 600, color: '#111827' }}>{ts.date}</div>
-                        <div style={{ fontSize: '11.5px', color: '#9ca3af' }}>{ts.time}</div>
+                        <div style={{ fontSize: '11.5px', color: '#2563eb', fontWeight: 500 }}>{relTime}</div>
                       </td>
                       <td style={{ padding: '12px 16px', whiteSpace: 'nowrap' }}>
                         <div style={{ fontWeight: 600, color: '#111827' }}>{actorName}</div>
-                        <div style={{ fontSize: '11.5px', color: '#6b7280' }}>{log.userEmail || ''}</div>
-                      </td>
-                      <td style={{ padding: '12px 16px', whiteSpace: 'nowrap' }}>
-                        <span style={{ display: 'inline-block', fontSize: '11px', fontWeight: 600, color: '#374151', background: '#f3f4f6', padding: '2px 6px', borderRadius: '4px', marginRight: '4px' }}>
-                          {actorRole}
-                        </span>
-                        <div style={{ fontSize: '11.5px', color: '#6b7280', marginTop: '2px' }}>{actorDept}</div>
+                        <div style={{ fontSize: '11.5px', color: '#6b7280' }}>
+                          {actorRole} · {actorDept}
+                        </div>
                       </td>
                       <td style={{ padding: '12px 16px', whiteSpace: 'nowrap' }}>
                         <span style={{
@@ -1221,49 +1352,57 @@ export default function AnalyticsPage() {
                           borderRadius: '6px',
                         }}>
                           <ActionIcon size={12} />
-                          {log.actionType}
+                          {actionMeta.label}
                         </span>
-                      </td>
-                      <td style={{ padding: '12px 16px', whiteSpace: 'nowrap' }}>
-                        <span style={{
-                          display: 'inline-block',
-                          background: '#ffffff',
-                          color: MODULE_COLORS[log.module] || '#4b5563',
-                          border: `1px solid ${(MODULE_COLORS[log.module] || '#4b5563')}30`,
-                          fontSize: '11px',
-                          fontWeight: 700,
-                          padding: '2px 8px',
-                          borderRadius: '6px',
-                        }}>
+                        <div style={{ fontSize: '11px', color: '#6b7280', marginTop: '2px', fontWeight: 600 }}>
                           {log.module}
-                        </span>
-                      </td>
-                      <td style={{ padding: '12px 16px', maxWidth: '300px' }}>
-                        <div style={{ fontWeight: 500, color: '#111827', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {log.description}
                         </div>
-                        {log.entityId && (
-                          <div style={{ fontSize: '11px', color: '#9ca3af', fontFamily: 'monospace' }}>
-                            ID: {log.entityId}
-                          </div>
-                        )}
+                      </td>
+                      <td style={{ padding: '12px 16px', color: '#111827', fontWeight: 500, fontSize: '13.5px', lineHeight: '1.4' }}>
+                        {log.description}
                       </td>
                       <td style={{ padding: '12px 16px', textAlign: 'right', whiteSpace: 'nowrap' }}>
-                        <button
-                          onClick={() => setInspectedLog(log)}
-                          style={{
-                            background: '#ffffff',
-                            border: '1px solid #d1d5db',
-                            borderRadius: '6px',
-                            padding: '4px 10px',
-                            fontSize: '12px',
-                            fontWeight: 600,
-                            color: '#374151',
-                            cursor: 'pointer',
-                          }}
-                        >
-                          Details
-                        </button>
+                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+                          {routeInfo.url && (
+                            <Link
+                              href={routeInfo.url}
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '4px',
+                                background: '#eff6ff',
+                                border: '1px solid #bfdbfe',
+                                borderRadius: '6px',
+                                padding: '4px 10px',
+                                fontSize: '12px',
+                                fontWeight: 600,
+                                color: '#1d4ed8',
+                                textDecoration: 'none',
+                              }}
+                            >
+                              <span>Open in App</span>
+                              <ExternalLink size={11} />
+                            </Link>
+                          )}
+                          <button
+                            onClick={() => {
+                              setInspectedLog(log);
+                              setShowTechDetails(false);
+                            }}
+                            style={{
+                              background: '#ffffff',
+                              border: '1px solid #d1d5db',
+                              borderRadius: '6px',
+                              padding: '4px 10px',
+                              fontSize: '12px',
+                              fontWeight: 600,
+                              color: '#374151',
+                              cursor: 'pointer',
+                            }}
+                          >
+                            Details
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -1332,15 +1471,20 @@ export default function AnalyticsPage() {
         </div>
       )}
 
+      {/* =================================================================== */}
+      {/* DETAIL INSPECTION MODAL (PLAIN ENGLISH + 1-CLICK REDIRECT ACTION)   */}
+      {/* =================================================================== */}
       {inspectedLog && (() => {
-        const actionMeta = ACTION_COLORS[inspectedLog.actionType] || ACTION_COLORS.OTHER;
+        const actionMeta = ACTION_CONFIG[inspectedLog.actionType] || ACTION_CONFIG.OTHER;
         const ActionIcon = actionMeta.icon;
         const moduleColor = MODULE_COLORS[inspectedLog.module] || MODULE_COLORS.OTHER;
         const ts = formatTimestamp(inspectedLog.timestamp);
         const relTime = getRelativeTime(inspectedLog.timestamp);
-        const actorName = inspectedLog.userName || (inspectedLog.user?.employee ? `${inspectedLog.user.employee.firstName} ${inspectedLog.user.employee.lastName}`.trim() : inspectedLog.user?.username || inspectedLog.userEmail || 'System');
-        const actorRole = inspectedLog.role || inspectedLog.user?.role?.name || 'USER';
-        const actorDept = inspectedLog.department || inspectedLog.user?.employee?.department?.name || 'General';
+        const routeInfo = resolveClientRoute(inspectedLog);
+
+        const actorName = inspectedLog.userName || (inspectedLog.user?.employee ? `${inspectedLog.user.employee.firstName} ${inspectedLog.user.employee.lastName}`.trim() : inspectedLog.user?.username || inspectedLog.userEmail || 'Team Member');
+        const actorRole = formatFriendlyRole(inspectedLog.role || inspectedLog.user?.role?.name);
+        const actorDept = inspectedLog.department || inspectedLog.user?.employee?.department?.name || 'Management';
         const actorInitial = actorName.charAt(0).toUpperCase();
 
         // Parse payload
@@ -1380,7 +1524,7 @@ export default function AnalyticsPage() {
               boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
               border: '1px solid #e5e7eb',
             }}>
-              {/* ── MODAL HEADER ──────────────────────────────────── */}
+              {/* Modal Header */}
               <div style={{
                 display: 'flex',
                 justifyContent: 'space-between',
@@ -1394,7 +1538,7 @@ export default function AnalyticsPage() {
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <Activity size={18} color="#2563eb" />
                   <h3 style={{ fontSize: '16px', fontWeight: 700, color: '#111827', margin: 0 }}>
-                    Audit Event Inspector
+                    Operation Details &amp; Activity Breakdown
                   </h3>
                 </div>
                 <button
@@ -1407,7 +1551,7 @@ export default function AnalyticsPage() {
 
               <div style={{ padding: '24px' }}>
 
-                {/* ── HERO: WHAT HAPPENED ──────────────────────────── */}
+                {/* HERO STORY BANNER (PLAIN ENGLISH) */}
                 <div style={{
                   background: 'linear-gradient(135deg, #eff6ff 0%, #f0fdf4 100%)',
                   borderRadius: '12px',
@@ -1415,12 +1559,19 @@ export default function AnalyticsPage() {
                   border: '1px solid #dbeafe',
                   marginBottom: '20px',
                 }}>
-                  <div style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px', color: '#6b7280', marginBottom: '8px' }}>
-                    What Happened
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px', marginBottom: '8px' }}>
+                    <span style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px', color: '#1e40af' }}>
+                      What Happened
+                    </span>
+                    <span style={{ fontSize: '12px', fontWeight: 600, color: '#2563eb', background: '#ffffff', padding: '2px 8px', borderRadius: '6px', border: '1px solid #bfdbfe' }}>
+                      {relTime}
+                    </span>
                   </div>
-                  <div style={{ fontSize: '17px', fontWeight: 700, color: '#111827', lineHeight: '1.5', marginBottom: '12px' }}>
-                    {inspectedLog.description || 'No description available'}
+
+                  <div style={{ fontSize: '17px', fontWeight: 700, color: '#111827', lineHeight: '1.5', marginBottom: '14px' }}>
+                    {inspectedLog.description}
                   </div>
+
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                     <span style={{
                       display: 'inline-flex',
@@ -1429,44 +1580,88 @@ export default function AnalyticsPage() {
                       background: actionMeta.bg,
                       color: actionMeta.text,
                       border: `1px solid ${actionMeta.border}`,
-                      fontSize: '11px',
+                      fontSize: '11.5px',
                       fontWeight: 700,
                       padding: '3px 10px',
                       borderRadius: '6px',
                     }}>
-                      <ActionIcon size={12} />
-                      {inspectedLog.actionType}
+                      <ActionIcon size={13} />
+                      {actionMeta.label}
                     </span>
+
                     <span style={{
                       display: 'inline-block',
                       background: '#ffffff',
                       color: moduleColor,
                       border: `1px solid ${moduleColor}40`,
-                      fontSize: '11px',
+                      fontSize: '11.5px',
                       fontWeight: 700,
                       padding: '3px 10px',
                       borderRadius: '6px',
                     }}>
                       {inspectedLog.module} Module
                     </span>
+
                     {inspectedLog.entityType && (
                       <span style={{
                         display: 'inline-block',
                         background: '#ffffff',
                         color: '#374151',
                         border: '1px solid #e5e7eb',
-                        fontSize: '11px',
+                        fontSize: '11.5px',
                         fontWeight: 600,
                         padding: '3px 10px',
                         borderRadius: '6px',
                       }}>
-                        Entity: {inspectedLog.entityType}
+                        Record Type: {inspectedLog.entityType}
                       </span>
                     )}
                   </div>
                 </div>
 
-                {/* ── WHO DID IT ───────────────────────────────────── */}
+                {/* DIRECT ACTION BUTTON (TAKE ME TO THIS RECORD) */}
+                {routeInfo.url && (
+                  <div style={{
+                    background: '#f8fafc',
+                    borderRadius: '10px',
+                    padding: '14px 18px',
+                    border: '1px solid #e2e8f0',
+                    marginBottom: '20px',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    flexWrap: 'wrap',
+                    gap: '10px',
+                  }}>
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: '13.5px', color: '#0f172a' }}>
+                        Where this work was performed:
+                      </div>
+                      <div style={{ fontSize: '12px', color: '#64748b' }}>
+                        Go directly to {routeInfo.label} in the ERP
+                      </div>
+                    </div>
+
+                    <Link
+                      href={routeInfo.url}
+                      className="btn btn-primary"
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        padding: '8px 16px',
+                        fontSize: '13px',
+                        fontWeight: 600,
+                        textDecoration: 'none',
+                      }}
+                    >
+                      <span>Take Me to this Page</span>
+                      <ArrowRight size={14} />
+                    </Link>
+                  </div>
+                )}
+
+                {/* WHO PERFORMED THIS OPERATION */}
                 <div style={{
                   background: '#ffffff',
                   borderRadius: '10px',
@@ -1478,8 +1673,8 @@ export default function AnalyticsPage() {
                   gap: '14px',
                 }}>
                   <div style={{
-                    width: '42px',
-                    height: '42px',
+                    width: '44px',
+                    height: '44px',
                     borderRadius: '50%',
                     background: '#2563eb',
                     color: '#ffffff',
@@ -1493,157 +1688,152 @@ export default function AnalyticsPage() {
                     {actorInitial}
                   </div>
                   <div style={{ flex: 1 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '2px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '3px' }}>
                       <strong style={{ fontSize: '15px', color: '#111827' }}>{actorName}</strong>
                       <span style={{
-                        fontSize: '10.5px',
+                        fontSize: '11px',
                         fontWeight: 700,
-                        background: '#f3f4f6',
-                        color: '#374151',
-                        padding: '2px 6px',
+                        background: '#eff6ff',
+                        color: '#1d4ed8',
+                        padding: '2px 8px',
                         borderRadius: '4px',
-                        border: '1px solid #e5e7eb',
+                        border: '1px solid #bfdbfe',
                       }}>
                         {actorRole}
                       </span>
                     </div>
                     <div style={{ fontSize: '12.5px', color: '#6b7280' }}>
-                      {inspectedLog.userEmail || '—'} · {actorDept}
+                      {inspectedLog.userEmail || '—'} · Department: <strong>{actorDept}</strong>
                     </div>
                   </div>
                 </div>
 
-                {/* ── DETAILS GRID ─────────────────────────────────── */}
+                {/* DETAILS OVERVIEW GRID */}
                 <div style={{
                   display: 'grid',
                   gridTemplateColumns: '1fr 1fr',
                   gap: '12px',
-                  marginBottom: '16px',
+                  marginBottom: '20px',
                 }}>
                   <div style={{ background: '#f9fafb', padding: '12px 14px', borderRadius: '8px', border: '1px solid #f3f4f6' }}>
-                    <span style={{ color: '#9ca3af', display: 'block', fontSize: '10.5px', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.5px', marginBottom: '4px' }}>Timestamp</span>
+                    <span style={{ color: '#9ca3af', display: 'block', fontSize: '10.5px', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.5px', marginBottom: '4px' }}>Date &amp; Time</span>
                     <div style={{ fontSize: '13px', fontWeight: 600, color: '#111827' }}>{ts.date} at {ts.time}</div>
                     <div style={{ fontSize: '11px', color: '#6b7280' }}>{relTime}</div>
                   </div>
+
                   <div style={{ background: '#f9fafb', padding: '12px 14px', borderRadius: '8px', border: '1px solid #f3f4f6' }}>
-                    <span style={{ color: '#9ca3af', display: 'block', fontSize: '10.5px', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.5px', marginBottom: '4px' }}>IP Address</span>
-                    <div style={{ fontSize: '13px', fontWeight: 600, color: '#111827', fontFamily: 'monospace' }}>{inspectedLog.ipAddress || '—'}</div>
+                    <span style={{ color: '#9ca3af', display: 'block', fontSize: '10.5px', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.5px', marginBottom: '4px' }}>Department &amp; Module</span>
+                    <div style={{ fontSize: '13px', fontWeight: 600, color: '#111827' }}>{inspectedLog.module} Module</div>
+                    <div style={{ fontSize: '11px', color: '#6b7280' }}>{actorDept} Department</div>
                   </div>
-                  <div style={{ background: '#f9fafb', padding: '12px 14px', borderRadius: '8px', border: '1px solid #f3f4f6' }}>
-                    <span style={{ color: '#9ca3af', display: 'block', fontSize: '10.5px', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.5px', marginBottom: '4px' }}>Raw Route</span>
-                    <code style={{ fontSize: '12px', color: '#111827', background: '#e5e7eb', padding: '2px 6px', borderRadius: '4px' }}>{inspectedLog.action}</code>
-                  </div>
-                  {inspectedLog.entityId && (
-                    <div style={{ background: '#f9fafb', padding: '12px 14px', borderRadius: '8px', border: '1px solid #f3f4f6' }}>
-                      <span style={{ color: '#9ca3af', display: 'block', fontSize: '10.5px', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.5px', marginBottom: '4px' }}>Entity ID</span>
-                      <code style={{ fontSize: '12px', color: '#111827', fontFamily: 'monospace' }}>{inspectedLog.entityId}</code>
-                    </div>
-                  )}
                 </div>
 
-                {/* ── USER AGENT ───────────────────────────────────── */}
-                {inspectedLog.userAgent && (
-                  <div style={{ marginBottom: '16px' }}>
-                    <span style={{ color: '#9ca3af', display: 'block', fontSize: '10.5px', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.5px', marginBottom: '6px' }}>Client User-Agent</span>
-                    <div style={{ background: '#f3f4f6', padding: '8px 12px', borderRadius: '6px', fontSize: '11px', fontFamily: 'monospace', color: '#4b5563', wordBreak: 'break-all', lineHeight: '1.4' }}>
-                      {inspectedLog.userAgent}
-                    </div>
-                  </div>
-                )}
+                {/* COLLAPSIBLE TECHNICAL AUDIT DETAILS (IP, RAW PAYLOAD, USER AGENT) */}
+                <div style={{
+                  border: '1px solid #e5e7eb',
+                  borderRadius: '10px',
+                  overflow: 'hidden',
+                }}>
+                  <button
+                    onClick={() => setShowTechDetails(!showTechDetails)}
+                    style={{
+                      width: '100%',
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      padding: '12px 16px',
+                      background: '#f9fafb',
+                      border: 'none',
+                      cursor: 'pointer',
+                      fontSize: '12.5px',
+                      fontWeight: 600,
+                      color: '#4b5563',
+                    }}
+                  >
+                    <span>Technical Audit Data &amp; Mutation Payload</span>
+                    {showTechDetails ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                  </button>
 
-                {/* ── MUTATION PAYLOAD (REQUEST + RESPONSE) ────────── */}
-                <div>
-                  <span style={{ color: '#9ca3af', display: 'block', fontSize: '10.5px', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.5px', marginBottom: '8px' }}>
-                    Sanitized Mutation Payload
-                  </span>
-                  {parsedDetails ? (
-                    <div>
-                      {requestPayload && (
-                        <div style={{ marginBottom: '10px' }}>
-                          <div style={{ fontSize: '11px', fontWeight: 700, color: '#6b7280', marginBottom: '4px' }}>📤 Request Body (What was sent)</div>
+                  {showTechDetails && (
+                    <div style={{ padding: '16px', borderTop: '1px solid #e5e7eb', background: '#ffffff' }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '14px' }}>
+                        <div>
+                          <span style={{ fontSize: '11px', color: '#6b7280', fontWeight: 600, display: 'block', marginBottom: '2px' }}>IP Address</span>
+                          <code style={{ fontSize: '12px', color: '#111827' }}>{inspectedLog.ipAddress || '127.0.0.1'}</code>
+                        </div>
+                        <div>
+                          <span style={{ fontSize: '11px', color: '#6b7280', fontWeight: 600, display: 'block', marginBottom: '2px' }}>Raw Endpoint</span>
+                          <code style={{ fontSize: '12px', color: '#111827', background: '#f3f4f6', padding: '2px 6px', borderRadius: '4px' }}>{inspectedLog.action}</code>
+                        </div>
+                      </div>
+
+                      {inspectedLog.userAgent && (
+                        <div style={{ marginBottom: '14px' }}>
+                          <span style={{ fontSize: '11px', color: '#6b7280', fontWeight: 600, display: 'block', marginBottom: '2px' }}>Client User-Agent</span>
+                          <div style={{ fontSize: '11px', color: '#6b7280', wordBreak: 'break-all', background: '#f9fafb', padding: '6px 10px', borderRadius: '6px' }}>
+                            {inspectedLog.userAgent}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Payload */}
+                      <div>
+                        <span style={{ fontSize: '11px', color: '#6b7280', fontWeight: 600, display: 'block', marginBottom: '6px' }}>Sanitized Mutation Payload (JSON)</span>
+                        {parsedDetails ? (
                           <pre style={{
                             background: '#0f172a',
                             color: '#e2e8f0',
-                            padding: '14px',
+                            padding: '12px',
                             borderRadius: '8px',
                             fontSize: '11.5px',
                             fontFamily: 'monospace',
                             overflowX: 'auto',
-                            maxHeight: '200px',
+                            maxHeight: '180px',
                             lineHeight: '1.5',
                             margin: 0,
                           }}>
-                            {JSON.stringify(requestPayload, null, 2)}
+                            {JSON.stringify(parsedDetails, null, 2)}
                           </pre>
-                        </div>
-                      )}
-                      {responsePayload && (
-                        <div>
-                          <div style={{ fontSize: '11px', fontWeight: 700, color: '#6b7280', marginBottom: '4px' }}>📥 Response Summary (What the server returned)</div>
-                          <pre style={{
-                            background: '#0f172a',
-                            color: '#a5f3fc',
-                            padding: '14px',
-                            borderRadius: '8px',
-                            fontSize: '11.5px',
-                            fontFamily: 'monospace',
-                            overflowX: 'auto',
-                            maxHeight: '120px',
-                            lineHeight: '1.5',
-                            margin: 0,
-                          }}>
-                            {JSON.stringify(responsePayload, null, 2)}
-                          </pre>
-                        </div>
-                      )}
-                      {!requestPayload && !responsePayload && (
-                        <pre style={{
-                          background: '#0f172a',
-                          color: '#e2e8f0',
-                          padding: '14px',
-                          borderRadius: '8px',
-                          fontSize: '11.5px',
-                          fontFamily: 'monospace',
-                          overflowX: 'auto',
-                          maxHeight: '220px',
-                          lineHeight: '1.5',
-                          margin: 0,
-                        }}>
-                          {typeof parsedDetails === 'string' ? parsedDetails : JSON.stringify(parsedDetails, null, 2)}
-                        </pre>
-                      )}
-                    </div>
-                  ) : (
-                    <div style={{
-                      background: '#f9fafb',
-                      border: '1px solid #e5e7eb',
-                      borderRadius: '8px',
-                      padding: '16px',
-                      textAlign: 'center',
-                      color: '#6b7280',
-                      fontSize: '13px',
-                    }}>
-                      No mutation payload was captured for this operation.
-                      {inspectedLog.actionType === 'LOGIN' && (
-                        <div style={{ fontSize: '11.5px', color: '#9ca3af', marginTop: '4px' }}>
-                          Login events do not carry a mutation payload.
-                        </div>
-                      )}
+                        ) : (
+                          <div style={{ fontSize: '12px', color: '#9ca3af', fontStyle: 'italic' }}>
+                            No raw body payload was captured for this action.
+                          </div>
+                        )}
+                      </div>
                     </div>
                   )}
                 </div>
               </div>
 
-              {/* ── MODAL FOOTER ───────────────────────────────────── */}
+              {/* Modal Footer */}
               <div style={{
                 display: 'flex',
-                justifyContent: 'flex-end',
+                justifyContent: 'space-between',
+                alignItems: 'center',
                 padding: '14px 24px',
                 borderTop: '1px solid #e5e7eb',
                 background: '#f9fafb',
                 borderBottomLeftRadius: '16px',
                 borderBottomRightRadius: '16px',
               }}>
+                {routeInfo.url ? (
+                  <Link
+                    href={routeInfo.url}
+                    style={{
+                      fontSize: '13px',
+                      fontWeight: 600,
+                      color: '#2563eb',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                      textDecoration: 'none',
+                    }}
+                  >
+                    <span>{routeInfo.label}</span>
+                    <ExternalLink size={13} />
+                  </Link>
+                ) : <div />}
+
                 <button onClick={() => setInspectedLog(null)} className="btn btn-secondary" style={{ fontSize: '13px' }}>
                   Close
                 </button>

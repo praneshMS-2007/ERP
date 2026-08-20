@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { resolveTargetRoute, buildPlainEnglishDescription } from '../audit/audit.service';
 
 export class AuditLogFilterDto {
   startDate?: string;
@@ -105,8 +106,42 @@ export class AnalyticsService {
       }),
     ]);
 
+    const enrichedLogs = logs.map((log) => {
+      const user = log.user;
+      const actorName = log.userName || (user?.employee ? `${user.employee.firstName} ${user.employee.lastName}`.trim() : user?.username || log.userEmail || 'System User');
+      const actorRole = log.role || user?.role?.name || 'USER';
+      const actorDept = log.department || user?.employee?.department?.name || 'General';
+
+      // Resolve direct navigation route to the actual ERP page
+      const routeInfo = resolveTargetRoute(log.module, log.entityType, log.action, log.entityId);
+
+      // Plain English description fallback if missing or generic
+      let desc = log.description;
+      if (!desc || desc === 'undefined' || desc === 'No description available' || desc.includes('updated Record in ADMIN') || desc.includes('updated record in ADMIN')) {
+        desc = buildPlainEnglishDescription({
+          actorName,
+          actorRole,
+          department: actorDept,
+          actionType: log.actionType,
+          entityType: log.entityType,
+          module: log.module,
+          entityId: log.entityId,
+          action: log.action,
+          details: log.details,
+        });
+      }
+
+      return {
+        ...log,
+        description: desc,
+        targetUrl: routeInfo.url,
+        targetUrlLabel: routeInfo.label,
+        targetCategory: routeInfo.category,
+      };
+    });
+
     return {
-      data: logs,
+      data: enrichedLogs,
       pagination: {
         total,
         page,
