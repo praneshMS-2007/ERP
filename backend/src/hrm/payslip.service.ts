@@ -7,7 +7,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { MailerService } from '../common/mailer.service';
 import { decryptField } from '../common/field-encryption';
 import { formatINR } from '../common/currency';
-import { emailShell, logoAttachment, escapeHtml, EMAIL_BRAND } from '../common/email-template';
+import { coverNoteHtml, escapeHtml } from '../common/email-template';
 
 const COMPANY = {
   name: 'Shuroq',
@@ -173,13 +173,9 @@ export class PayslipService {
     const result = await this.mailer.send({
       to: employee.personalEmail,
       subject: `Your payslip for ${data.payPeriod} \u2014 ${COMPANY.name}`,
-      html: emailShell({
-        previewText: `Your payslip for ${data.payPeriod} \u2014 Net Pay ${formatINR(data.netPay)}`,
-        bodyHtml: this.buildEmailHtml(employee.firstName, data),
-      }),
+      html: this.buildEmailHtml(employee.firstName, data),
       attachments: [
         { filename: `Payslip - ${data.employeeName} - ${data.payPeriod}.pdf`, path: fullPath },
-        logoAttachment(),
       ],
     });
 
@@ -204,100 +200,19 @@ export class PayslipService {
   }
 
   // =====================================================================
-  // EMAIL BODY — same content and sequence as the PDF's build(), just as
-  // HTML table markup instead of pdfkit draw calls. Table-based (not
-  // div/flex) because that's what actually survives Outlook's HTML
-  // stripping.
+  // EMAIL BODY — covering note only. The payslip itself is the attached PDF
+  // and is deliberately not restated here: an earlier version rendered the
+  // whole payslip table inline, which duplicated the attachment and put the
+  // PAN and bank-account number into the mail body, where they don't belong.
   // =====================================================================
 
   private buildEmailHtml(firstName: string, d: PayslipData): string {
-    const gross = d.baseSalary + d.hra + d.specialAllowance + d.bonus;
-    const totalDed = d.tds + d.providentFund + d.professionalTax + d.lossOfPay;
-    const f = (n: number) => `Rs. ${(n || 0).toLocaleString('en-IN')}`;
-    const font = "font-family: Arial, Helvetica, sans-serif;";
-    const cell = `padding: 7px 8px; border: 1px solid ${EMAIL_BRAND.border}; ${font} font-size: 12.5px; color: ${EMAIL_BRAND.text};`;
-    const cellRight = `${cell} text-align: right;`;
-    const cellLabel = `${cell} font-weight: bold; background-color: ${EMAIL_BRAND.lightBlue}; width: 40%;`;
-
-    function detailRow(label1: string, val1: string, label2: string, val2: string): string {
-      return `
-        <tr>
-          <td style="${cellLabel}">${escapeHtml(label1)}</td>
-          <td style="${cell}">${escapeHtml(val1)}</td>
-          <td style="${cellLabel}">${escapeHtml(label2)}</td>
-          <td style="${cell}">${escapeHtml(val2)}</td>
-        </tr>`;
-    }
-
-    function moneyRow(left: string, leftAmt: string, right: string, rightAmt: string, bold = false): string {
-      const w = bold ? 'font-weight: bold;' : '';
-      return `
-        <tr>
-          <td style="${cell} ${w}">${escapeHtml(left)}</td>
-          <td style="${cellRight} ${w}">${leftAmt}</td>
-          <td style="${cell} ${w}">${escapeHtml(right)}</td>
-          <td style="${cellRight} ${w}">${rightAmt}</td>
-        </tr>`;
-    }
-
-    return `
-      <p style="${font} font-size: 14px; color: ${EMAIL_BRAND.text}; margin: 0 0 4px 0;">Hi ${escapeHtml(firstName)},</p>
-      <p style="${font} font-size: 14px; color: ${EMAIL_BRAND.text}; margin: 0 0 20px 0;">Your payslip for <strong>${escapeHtml(d.payPeriod)}</strong> has been processed and paid. The full breakdown is below, and a copy is attached as a PDF for your records.</p>
-
-      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom: 4px;">
-        <tr><td style="background-color: ${EMAIL_BRAND.headerBg}; padding: 8px 10px;">
-          <span style="${font} font-size: 13px; font-weight: bold; color: #ffffff; letter-spacing: 0.5px;">PAYSLIP &mdash; ${escapeHtml(d.payPeriod.toUpperCase())}</span>
-        </td></tr>
-      </table>
-
-      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom: 14px;">
-        <tr><td style="${cellLabel}" colspan="4">EMPLOYEE DETAILS</td></tr>
-      </table>
-      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom: 18px; border-collapse: collapse;">
-        ${detailRow('EMPLOYEE NAME', d.employeeName, 'DATE OF JOINING', d.joinDate)}
-        ${detailRow('ROLE', d.designation, 'EMPLOYEE ID', d.empCode)}
-        <tr>
-          <td style="${cellLabel}">PAN NUMBER</td>
-          <td style="${cell}" colspan="3">${escapeHtml(d.pan)}</td>
-        </tr>
-        <tr>
-          <td style="${cellLabel}">BANK ACCOUNT NO</td>
-          <td style="${cell}" colspan="3">${escapeHtml(d.bankAccountNo)}</td>
-        </tr>
-      </table>
-
-      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse: collapse; margin-bottom: 0;">
-        <tr>
-          <td style="${cellLabel}" colspan="2">EARNINGS</td>
-          <td style="${cellLabel}" colspan="2">DEDUCTIONS</td>
-        </tr>
-        ${moneyRow('Basic Salary', f(d.baseSalary), 'Income Tax (TDS)', f(d.tds))}
-        ${moneyRow('HRA', f(d.hra), 'Provident Fund', f(d.providentFund))}
-        ${moneyRow('Special Allowance', f(d.specialAllowance), 'Professional Tax', f(d.professionalTax))}
-        ${moneyRow('Bonus/Incentives', f(d.bonus), 'Loss of Pay (LOP)', f(d.lossOfPay))}
-        ${moneyRow('Gross Total (A)', f(gross), 'Total Deductions (B)', f(totalDed), true)}
-      </table>
-
-      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse: collapse; margin-top: 14px;">
-        <tr>
-          <td style="${cell} font-weight: bold; background-color: ${EMAIL_BRAND.lightBlue};">NET SALARY PAYABLE (A - B)</td>
-          <td style="${cellRight} font-weight: bold; background-color: ${EMAIL_BRAND.lightBlue};">${f(d.netPay)}</td>
-        </tr>
-        <tr>
-          <td style="${cell}" colspan="2"><strong>AMOUNT IN WORDS:</strong> ${escapeHtml(numberToWords(d.netPay))} Rupees only</td>
-        </tr>
-      </table>
-
-      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top: 18px; border-collapse: collapse;">
-        <tr><td style="background-color: ${EMAIL_BRAND.lightBlue}; ${cell} font-weight: bold;">ATTENDENCE RECORD</td></tr>
-        <tr><td style="${cell}">TOTAL DAYS IN MONTH: ${d.totalDaysInMonth}<br />EFFECTIVE WORK DAYS: ${d.effectiveWorkDays}<br />TOTAL LEAVES TAKEN: ${d.leavesTaken}</td></tr>
-      </table>
-
-      <p style="${font} font-size: 11px; font-style: italic; color: ${EMAIL_BRAND.muted}; margin: 18px 0 0 0; background-color: ${EMAIL_BRAND.lightBlue}; padding: 8px 10px;">This is a computer-generated document and does not require a signature.</p>
-
-      <p style="${font} font-size: 13px; color: ${EMAIL_BRAND.text}; margin: 22px 0 0 0;">If anything here looks off, reach out to ${COMPANY.email}.</p>
-      <p style="${font} font-size: 13px; color: ${EMAIL_BRAND.text}; margin: 4px 0 0 0;">Warm regards,<br />HR &amp; Finance, Shuroq</p>
-    `;
+    return coverNoteHtml([
+      `Hi ${escapeHtml(firstName)},`,
+      `Your payslip for <strong>${escapeHtml(d.payPeriod)}</strong> is attached to this email as a PDF.`,
+      `If anything looks incorrect, reach out to ${escapeHtml(COMPANY.email)}.`,
+      'Warm regards,<br />HR &amp; Finance, Shuroq',
+    ]);
   }
 
   // =====================================================================

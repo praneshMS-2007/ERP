@@ -34,8 +34,8 @@ export interface PayrollManualInput {
  * Roles createEmployee() is allowed to hand out. EMPLOYEE is the default
  * (every ordinary hire); the rest are the "management" tier a Super Admin
  * can grant from the Add New Employee modal's Management Account section.
- * PROJECT_MANAGER and TEAM_LEAD are deliberately excluded — see the
- * comment on createEmployee.
+ * PROJECT_MANAGER is deliberately excluded — see the comment on
+ * createEmployee. There is no TEAM_LEAD role at all (removed entirely).
  */
 const MANAGEABLE_ROLES = new Set(['EMPLOYEE', 'SUPER_ADMIN', 'HR_MANAGER', 'FINANCE_MANAGER', 'SALES_MANAGER', 'INVENTORY_MANAGER']);
 
@@ -651,9 +651,9 @@ export class HrmService {
    * other MANAGEABLE_ROLES instead (the "Management Account" section) —
    * gated to Super Admin only, since granting HR_MANAGER/FINANCE_MANAGER/etc
    * is a privilege HR itself shouldn't be able to hand out. PROJECT_MANAGER
-   * and TEAM_LEAD are deliberately not in this list: PM status stays
-   * project-scoped (assigned via project staffing, see projects.service.ts),
-   * never a system-wide role granted at hiring time.
+   * is deliberately not in this list: PM status stays project-scoped
+   * (assigned via project staffing, see projects.service.ts), never a
+   * system-wide role granted at hiring time. There is no TEAM_LEAD role.
    */
   async createEmployee(data: Record<string, any>, viewer?: RequestUser) {
     const clean = sanitiseEmployeeInput(data);
@@ -1075,6 +1075,17 @@ export class HrmService {
   }
 
   async markAttendance(data: Prisma.AttendanceUncheckedCreateInput) {
+    const employee = await this.prisma.employee.findUnique({
+      where: { id: data.employeeId as string },
+      select: { joinDate: true },
+    });
+    if (!employee) throw new NotFoundException('Employee not found');
+    const attDate = new Date(data.date as any);
+    const attDay = new Date(attDate.getFullYear(), attDate.getMonth(), attDate.getDate());
+    const joinDay = new Date(employee.joinDate.getFullYear(), employee.joinDate.getMonth(), employee.joinDate.getDate());
+    if (attDay < joinDay) {
+      throw new BadRequestException("This person hadn't joined yet on that date — attendance can only be marked from their join date onward.");
+    }
     return this.prisma.attendance.create({ data });
   }
 

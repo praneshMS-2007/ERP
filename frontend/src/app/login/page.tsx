@@ -111,7 +111,7 @@ export default function LoginPage() {
     <div style={{ display: 'flex', minHeight: '100vh', width: '100vw', background: '#ffffff', margin: 0, fontFamily: "'Inter', -apple-system, sans-serif" }}>
       
       {/* LEFT SIDE — Form & Branding */}
-      <div style={{ flex: '1', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', padding: '56px 80px', background: '#ffffff' }}>
+      <div style={{ width: '50%', minWidth: 0, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', padding: '56px 64px', background: '#ffffff' }}>
         
         {/* Top Logo Header */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
@@ -123,7 +123,7 @@ export default function LoginPage() {
         </div>
 
         {/* Center Login Form */}
-        <div style={{ maxWidth: '380px', width: '100%', margin: 'auto 0' }}>
+        <div style={{ maxWidth: '380px', width: '100%', margin: 'auto' }}>
           <h1 style={{ fontSize: '32px', fontWeight: 700, color: '#111827', letterSpacing: '-0.02em', marginBottom: '8px' }}>Welcome back</h1>
           <p style={{ fontSize: '14px', color: '#6b7280', marginBottom: '32px', lineHeight: 1.4 }}>
             Enter your credentials to access the operational dashboard.
@@ -273,47 +273,179 @@ export default function LoginPage() {
 
           {/* Assistance Link */}
           <div style={{ borderTop: '1px solid #e5e7eb', marginTop: '28px', paddingTop: '20px', textAlign: 'center', fontSize: '13px', color: '#6b7280' }}>
-            Need assistance? <a href="mailto:support@enterprise-erp.com" style={{ color: '#2563eb', fontWeight: 600, textDecoration: 'none' }}>Contact IT Support</a>
+            Need assistance? <a href="mailto:support@shuroq.com" style={{ color: '#2563eb', fontWeight: 600, textDecoration: 'none' }}>Contact IT Support</a>
           </div>
         </div>
 
         {/* Bottom Copyright */}
         <div style={{ fontSize: '12px', color: '#6b7280' }}>
-          &copy; 2026 Enterprise ERP Systems. All rights reserved.
+          &copy; 2026 Shuroq Technology Services. All rights reserved.
         </div>
       </div>
 
-      {/* RIGHT SIDE — Dark Hero & High-Tech Visual */}
+      {/* RIGHT SIDE — Expanded Breadth & Structured Brand Showcase */}
       <div style={{
-        flex: '1', background: 'linear-gradient(135deg, #090e1a 0%, #0d172e 50%, #070c17 100%)',
-        display: 'flex', flexDirection: 'column', justifyContent: 'space-between', padding: '64px',
-        position: 'relative', overflow: 'hidden'
+        width: '50%', minWidth: 0,
+        background: '#171f39',
+        display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
+        padding: '28px 32px',
+        position: 'relative', overflow: 'hidden', borderLeft: '1px solid #232d4d'
       }}>
-        
-        {/* Center Glass Graphic Container — Exact Figma Asset */}
-        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%' }}>
-          <img
-            src="/server-hero.png"
-            alt="System Security & Live Feed"
-            style={{
-              maxWidth: '100%',
-              maxHeight: '440px',
-              borderRadius: '16px',
-              objectFit: 'contain',
-              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.6)',
-              border: '1px solid rgba(255, 255, 255, 0.1)'
-            }}
-          />
+        {/* Ambient Subtle Glows */}
+        <div style={{
+          position: 'absolute', top: '-15%', right: '-15%', width: '500px', height: '500px',
+          background: 'radial-gradient(circle, rgba(37, 99, 235, 0.2) 0%, rgba(23,31,57,0) 70%)',
+          pointerEvents: 'none', borderRadius: '50%'
+        }} />
+        <div style={{
+          position: 'absolute', bottom: '-15%', left: '-15%', width: '450px', height: '450px',
+          background: 'radial-gradient(circle, rgba(245, 158, 11, 0.12) 0%, rgba(23,31,57,0) 70%)',
+          pointerEvents: 'none', borderRadius: '50%'
+        }} />
+
+        {/* 1st Half (Top): Main Shuroq Panoramic Banner with Expanded Breadth */}
+        <div style={{
+          flex: '1.4', display: 'flex', alignItems: 'flex-start', justifyContent: 'center',
+          width: '100%', zIndex: 1, padding: '12px 0 0'
+        }}>
+          <div style={{
+            width: '100%', maxWidth: '780px', minHeight: '340px',
+            position: 'relative',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            borderRadius: '18px',
+            boxShadow: '0 25px 50px -10px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.12)',
+            overflow: 'hidden'
+          }}>
+            {/* Blurred, scaled-up copy of the same banner fills the card behind
+                the sharp image — extends the banner's own background colors
+                into the extra height instead of leaving empty frosted space. */}
+            <img
+              src="/shuroq-banner-exact.png"
+              alt=""
+              aria-hidden="true"
+              style={{
+                position: 'absolute', inset: 0,
+                width: '100%', height: '100%',
+                objectFit: 'cover',
+                filter: 'blur(40px) saturate(1.15) brightness(0.9)',
+                transform: 'scale(1.25)',
+                zIndex: 0
+              }}
+            />
+            <img
+              src="/shuroq-banner-exact.png"
+              alt="Shuroq Tech Redefined - Enterprise Solutions, IT Services, Consulting, Business Solutions, Cloud Services"
+              style={{
+                position: 'relative', zIndex: 1,
+                width: '100%',
+                height: 'auto',
+                display: 'block',
+                borderRadius: '12px',
+                boxShadow: '0 12px 34px rgba(0, 0, 0, 0.4)'
+              }}
+            />
+          </div>
         </div>
 
-        {/* Bottom Text Header */}
-        <div style={{ maxWidth: '500px' }}>
-          <h2 style={{ fontSize: '24px', fontWeight: 700, color: '#ffffff', marginBottom: '8px', letterSpacing: '-0.01em' }}>
-            Integrated Productivity
-          </h2>
-          <p style={{ fontSize: '14px', color: '#94a3b8', lineHeight: '1.6', margin: 0 }}>
-            Connect your global supply chain, workforce, and financial operations in a single, unified source of truth.
+        {/* 2nd Half (Bottom): Structured Company Brand Section */}
+        <div style={{
+          flex: '1', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+          width: '100%', maxWidth: '680px', margin: '0 auto', zIndex: 1,
+          textAlign: 'center', padding: '8px 0'
+        }}>
+          {/* Company Title */}
+          <h3 style={{
+            fontSize: '19px', fontWeight: 800, color: '#ffffff',
+            margin: '0 0 10px 0', letterSpacing: '-0.01em', lineHeight: 1.3
+          }}>
+            Technology Services & Digital Engineering Company
+          </h3>
+
+          {/* Mission Statement */}
+          <p style={{
+            fontSize: '14px', color: '#94a3b8', lineHeight: '1.6',
+            maxWidth: '580px', margin: '0 0 10px 0'
+          }}>
+            Empowering businesses with cutting-edge technology solutions, cloud infrastructure, and digital transformation services.
           </p>
+
+          {/* Tagline */}
+          <div style={{
+            fontSize: '14.5px', fontWeight: 800, color: '#f8fafc',
+            letterSpacing: '0.04em', marginBottom: '14px'
+          }}>
+            Tech Redefined
+          </div>
+
+          {/* Social Icons */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '14px', marginBottom: '14px' }}>
+            {/* Instagram */}
+            <a
+              href="https://instagram.com" target="_blank" rel="noreferrer"
+              style={{
+                width: '38px', height: '38px', borderRadius: '50%', background: '#ffffff',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#171f39',
+                textDecoration: 'none', boxShadow: '0 2px 8px rgba(0,0,0,0.25)', transition: 'transform 0.15s'
+              }}
+            >
+              <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect width="20" height="20" x="2" y="2" rx="5" ry="5"/>
+                <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/>
+                <line x1="17.5" x2="17.51" y1="6.5" y2="6.5"/>
+              </svg>
+            </a>
+
+            {/* LinkedIn */}
+            <a
+              href="https://linkedin.com" target="_blank" rel="noreferrer"
+              style={{
+                width: '38px', height: '38px', borderRadius: '50%', background: '#ffffff',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#171f39',
+                textDecoration: 'none', boxShadow: '0 2px 8px rgba(0,0,0,0.25)', transition: 'transform 0.15s'
+              }}
+            >
+              <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z"/>
+                <rect width="4" height="12" x="2" y="9"/>
+                <circle cx="4" cy="4" r="2"/>
+              </svg>
+            </a>
+
+            {/* GitHub */}
+            <a
+              href="https://github.com" target="_blank" rel="noreferrer"
+              style={{
+                width: '38px', height: '38px', borderRadius: '50%', background: '#ffffff',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#171f39',
+                textDecoration: 'none', boxShadow: '0 2px 8px rgba(0,0,0,0.25)', transition: 'transform 0.15s'
+              }}
+            >
+              <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.403 5.403 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65-.17.6-.22 1.23-.15 1.85v4"/>
+                <path d="M9 18c-4.51 2-5-2-7-2"/>
+              </svg>
+            </a>
+
+            {/* Email */}
+            <a
+              href="mailto:support@shuroq.com"
+              style={{
+                width: '38px', height: '38px', borderRadius: '50%', background: '#ffffff',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#171f39',
+                textDecoration: 'none', boxShadow: '0 2px 8px rgba(0,0,0,0.25)', transition: 'transform 0.15s'
+              }}
+            >
+              <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect width="20" height="16" x="2" y="4" rx="2"/>
+                <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>
+              </svg>
+            </a>
+          </div>
+
+          {/* Copyright Subtext */}
+          <div style={{ fontSize: '12px', color: '#64748b', letterSpacing: '0.02em' }}>
+            &copy; 2026 Shuroq Technology Services. All rights reserved.
+          </div>
         </div>
 
       </div>

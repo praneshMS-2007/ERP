@@ -249,6 +249,14 @@ model Employee {
   offerLetterSentAt     DateTime? @map("offer_letter_sent_at")
   offerLetterSendError  String?   @map("offer_letter_send_error")
 
+  // Internship completion certificate — generated when HR approves an
+  // intern whose engagementEndDate has passed. Same pattern as the offer
+  // letter document link above.
+  internshipCertDocumentId String?   @unique @map("internship_cert_document_id")
+  internshipCertDocument   Document? @relation(name: "EmployeeInternshipCert", fields: [internshipCertDocumentId], references: [id])
+  internshipCertSentAt     DateTime? @map("internship_cert_sent_at")
+  internshipCertStatus     String?   @map("internship_cert_status") // "APPROVED" | "REJECTED" | null (pending)
+
   departmentId  String       @map("department_id")
   department    Department   @relation(fields: [departmentId], references: [id])
   
@@ -892,7 +900,8 @@ model Document {
   employee   Employee? @relation(name: "EmployeeIdentityDocuments", fields: [employeeId], references: [id])
 
   payroll         Payroll?
-  offerLetterFor  Employee? @relation(name: "EmployeeOfferLetter")
+  offerLetterFor       Employee? @relation(name: "EmployeeOfferLetter")
+  internshipCertFor    Employee? @relation(name: "EmployeeInternshipCert")
 
   @@index([ownerUserId, kind])
   @@map("documents")

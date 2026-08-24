@@ -1,0 +1,36 @@
+<!--
+  Reference template — not executed at runtime. The live version is compiled
+  in code at backend/src/hrm/internship-certificate.service.ts
+  (buildCertificateEmailHtml). See README.md in this folder for the variable
+  list and trigger notes.
+
+  This mail is deliberately minimal: it is a covering note for the attached
+  PDF and nothing more. It does NOT use the shared branded shell
+  (backend/src/common/email-template.ts) that the payslip and offer-letter
+  mails use, and it carries no inline images — no cid: attachments, no logo.
+
+  An earlier version reproduced the entire certificate inline in HTML next to
+  the attachment, so recipients got the same document twice: once as a picture
+  they could not use, and once as the real file. Do not reintroduce that. The
+  certificate lives in the PDF only; if the design changes, update the PDF
+  generator (renderCompletionCertificate), not this file.
+
+  Attachments sent: exactly one —
+    "{{CANDIDATE_NAME}} - Internship Completion Certificate.pdf"
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+</head>
+<body style="margin:0; padding:16px; background:#ffffff;">
+  <p style="font-family: Arial, Helvetica, sans-serif; font-size: 14px; color: #1f2530; margin: 0 0 12px 0;">Hi {{CANDIDATE_FIRST_NAME}},</p>
+  <p style="font-family: Arial, Helvetica, sans-serif; font-size: 14px; color: #1f2530; margin: 0 0 12px 0;">
+    Congratulations on completing your internship at Shuroq. Your Internship
+    Completion Certificate is attached to this email as a PDF.
+  </p>
+  <p style="font-family: Arial, Helvetica, sans-serif; font-size: 14px; color: #1f2530; margin: 0 0 12px 0;">{{SUPPORT_CONTACT_LINE}}</p>
+  <p style="font-family: Arial, Helvetica, sans-serif; font-size: 14px; color: #1f2530; margin: 0;">Warm regards,<br />HR Team, Shuroq</p>
+</body>
+</html>

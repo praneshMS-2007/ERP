@@ -83,6 +83,7 @@ const allNavItems: NavItem[] = [
     // the mirror image of this. User Management stays WRITE-only.
     { name: 'Payroll', path: '/hrm/payroll', requiredRoles: ['SUPER_ADMIN', 'HR_MANAGER'] },
     { name: 'User Management', path: '/hrm/user-management', requiredAction: 'WRITE' },
+    { name: 'Internship Certificates', path: '/hrm/internship-certificates', requiredAction: 'WRITE' },
   ]},
   // The next three are an Employee's own dedicated sections — deliberately
   // NOT nested under HR Management (which Employees no longer see at all),
@@ -188,15 +189,15 @@ export default function Sidebar({ isOpen, toggleSidebar }: SidebarProps) {
     <aside className={`sidebar ${!isOpen ? 'collapsed' : ''}`}>
       {/* Header */}
       <div className="sidebar-header" onClick={toggleSidebar} style={{ cursor: 'pointer', padding: '16px 18px', display: 'flex', alignItems: 'center', gap: '12px' }}>
-        <div style={{ background: '#ffffff', borderRadius: '8px', padding: '4px 6px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, boxShadow: '0 2px 6px rgba(0,0,0,0.1)' }}>
-          <img src="/shuroq-logo.png" alt="Shuroq" style={{ height: '24px', maxWidth: isOpen ? '110px' : '28px', objectFit: 'contain' }} />
+        <div style={{ background: '#ffffff', borderRadius: '8px', padding: '5px 10px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, boxShadow: '0 2px 6px rgba(0,0,0,0.1)', gap: '10px' }}>
+          <img src="/shuroq-logo.png" alt="Shuroq" style={{ height: '28px', maxWidth: isOpen ? '110px' : '28px', objectFit: 'contain' }} />
+          {isOpen && (
+            <>
+              <div style={{ width: '1.5px', height: '22px', background: '#cbd5e1', flexShrink: 0 }} />
+              <span style={{ fontSize: '22px', fontWeight: 800, color: '#1a2744', letterSpacing: '0.06em', whiteSpace: 'nowrap', fontFamily: "'Inter', sans-serif" }}>ERP</span>
+            </>
+          )}
         </div>
-        {isOpen && (
-          <div className="sidebar-logo-text" style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-            <span className="logo-title" style={{ fontSize: '13px', fontWeight: 800, color: '#f8fafc', letterSpacing: '0.02em', whiteSpace: 'nowrap' }}>ERP PLATFORM</span>
-            <span className="logo-sub" style={{ fontSize: '9.5px', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.06em', whiteSpace: 'nowrap' }}>Tech Redefined</span>
-          </div>
-        )}
       </div>
 
       {/* Navigation */}

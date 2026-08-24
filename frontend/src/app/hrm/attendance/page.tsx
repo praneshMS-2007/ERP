@@ -112,12 +112,23 @@ export default function AttendancePage() {
   const dateStr = selectedDate.toLocaleDateString('en-IN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
   const isToday = selectedDate.toDateString() === new Date().toDateString();
 
+  // An employee who joins in the future doesn't belong on a roster for a
+  // date before they existed — they used to show up here as "Not Marked"
+  // with mark-attendance buttons enabled even for days before their join
+  // date, which is meaningless (there's nothing to mark) and confusing.
+  const dayStart = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate());
+  const rosterEmployees = employees.filter((e) => {
+    const j = new Date(e.joinDate);
+    const joinStart = new Date(j.getFullYear(), j.getMonth(), j.getDate());
+    return joinStart <= dayStart;
+  });
+
   // Stats
-  const presentCount = employees.filter(e => {
+  const presentCount = rosterEmployees.filter(e => {
     const att = getAttendanceForEmployee(e.id);
     return att && ['PRESENT', 'HALF_DAY', 'LATE'].includes(att.status);
   }).length;
-  const absentCount = employees.length - presentCount;
+  const absentCount = rosterEmployees.length - presentCount;
 
   // Status badge colors
   function statusBadge(status: string | undefined) {
@@ -221,7 +232,7 @@ export default function AttendancePage() {
             <div style={{ fontSize: '11px', fontWeight: 700, color: '#dc2626', textTransform: 'uppercase' }}>Absent</div>
           </div>
           <div className="card" style={{ textAlign: 'center', padding: '16px 32px' }}>
-            <div style={{ fontSize: '28px', fontWeight: 800, color: 'var(--color-text)' }}>{employees.length}</div>
+            <div style={{ fontSize: '28px', fontWeight: 800, color: 'var(--color-text)' }}>{rosterEmployees.length}</div>
             <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--color-text-muted)', textTransform: 'uppercase' }}>Total</div>
           </div>
         </div>
@@ -244,7 +255,9 @@ export default function AttendancePage() {
           <tbody>
             {loading ? (
               <tr><td colSpan={7} style={{ textAlign: 'center', padding: '40px', color: 'var(--color-text-muted)' }}>Loading...</td></tr>
-            ) : employees.map((emp, idx) => {
+            ) : rosterEmployees.length === 0 ? (
+              <tr><td colSpan={7} style={{ textAlign: 'center', padding: '40px', color: 'var(--color-text-muted)' }}>No one had joined yet as of this date.</td></tr>
+            ) : rosterEmployees.map((emp, idx) => {
               const att = getAttendanceForEmployee(emp.id);
               const badge = statusBadge(att?.status);
               const StatusIcon = badge.icon;

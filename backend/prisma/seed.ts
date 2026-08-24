@@ -7,14 +7,17 @@ async function main() {
   console.log('🌱 Starting comprehensive multi-module database seed...');
 
   // ========== 1. ROLES & PERMISSIONS ==========
+  // PROJECT_MANAGER and TEAM_LEAD are deliberately not system-wide roles:
+  // project-management authority is project-scoped (Project.projectManagerId,
+  // set only by HR/Admin via updateProjectStaffing — see projects.service.ts's
+  // canManageProject/isProjectManagerOf), not something granted at account
+  // level. There is no "Team Lead" tier at all.
   const roles = [
     { name: 'SUPER_ADMIN', description: 'Full system access across all enterprise modules' },
     { name: 'HR_MANAGER', description: 'Human Resources, Payroll, and Employee Portal' },
     { name: 'FINANCE_MANAGER', description: 'General Ledger, Invoices, Expenses, and Tax records' },
     { name: 'SALES_MANAGER', description: 'CRM Pipeline, Customer Directory, and Support Tickets' },
     { name: 'INVENTORY_MANAGER', description: 'Product Catalog, Warehouses, Sales & Purchase Orders' },
-    { name: 'PROJECT_MANAGER', description: 'Projects, Tasks, Timesheets, and Team Capacity' },
-    { name: 'TEAM_LEAD', description: 'Project task management and team leadership' },
     { name: 'EMPLOYEE', description: 'Standard employee self-service portal access' },
   ];
 
@@ -28,7 +31,7 @@ async function main() {
     });
     createdRoles[r.name] = r.id;
   }
-  console.log('  ✓ 8 Enterprise Roles created');
+  console.log('  ✓ 6 Enterprise Roles created');
 
   const permissionMap: Record<string, { module: string; action: string }[]> = {
     SUPER_ADMIN: [
@@ -53,15 +56,6 @@ async function main() {
     ],
     INVENTORY_MANAGER: [
       { module: 'INVENTORY', action: 'ALL' }, { module: 'CRM', action: 'READ' }, { module: 'ANALYTICS', action: 'READ' },
-    ],
-    PROJECT_MANAGER: [
-      { module: 'PROJECTS', action: 'ALL' }, { module: 'HR', action: 'READ' }, { module: 'ANALYTICS', action: 'READ' },
-    ],
-    // Same as PROJECT_MANAGER but without DELETE: explicit READ + WRITE
-    // instead of ALL, since ALL would also satisfy a DELETE check.
-    TEAM_LEAD: [
-      { module: 'PROJECTS', action: 'READ' }, { module: 'PROJECTS', action: 'WRITE' },
-      { module: 'HR', action: 'READ' }, { module: 'ANALYTICS', action: 'READ' },
     ],
     EMPLOYEE: [
       { module: 'HR', action: 'READ' }, { module: 'PROJECTS', action: 'READ' },
@@ -98,8 +92,6 @@ async function main() {
     { email: 'finance@shuroq.com', role: 'FINANCE_MANAGER' },
     { email: 'crm@shuroq.com', role: 'SALES_MANAGER' },
     { email: 'inventory@shuroq.com', role: 'INVENTORY_MANAGER' },
-    { email: 'project@shuroq.com', role: 'PROJECT_MANAGER' },
-    { email: 'teamlead@shuroq.com', role: 'TEAM_LEAD' },
     { email: 'employee@shuroq.com', role: 'EMPLOYEE' },
   ];
 

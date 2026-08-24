@@ -5,7 +5,7 @@ import * as path from 'path';
 const PDFDocument = require('pdfkit');
 import { PrismaService } from '../prisma/prisma.service';
 import { MailerService } from '../common/mailer.service';
-import { emailShell, logoAttachment, escapeHtml, EMAIL_BRAND } from '../common/email-template';
+import { coverNoteHtml, escapeHtml } from '../common/email-template';
 
 const COMPANY = {
   name: 'Shuroq',
@@ -161,13 +161,9 @@ export class OfferLetterService {
     const result = await this.mailer.send({
       to: employee.personalEmail,
       subject: `Your ${letterWord} from Shuroq — ${data.roleTitle}`,
-      html: emailShell({
-        previewText: `Your ${letterWord} from Shuroq — ${data.roleTitle}`,
-        bodyHtml,
-      }),
+      html: bodyHtml,
       attachments: [
         { filename: `${data.candidateName} - ${letterWord}.pdf`, path: fullPath },
-        logoAttachment(),
       ],
     });
 
@@ -191,112 +187,26 @@ export class OfferLetterService {
     };
   }
 
-  // =====================================================================
-  // EMAIL BODY — clean offer letter style, rendered as HTML table markup
-  // instead of pdfkit draw calls. Clause wording is copied verbatim from
-  // the matching render*OfferLetter PDF method above (not re-derived) so
-  // the email and the attached PDF never say different things. Internship
-  // uses its own clause set below — see the note at the call site about
-  // why it isn't wired to interns yet (they currently get the branded
-  // confirmation letter, a different document).
-  // =====================================================================
-
+  /**
+   * Covering note only — the offer letter itself is the attached PDF.
+   *
+   * This used to reproduce every numbered clause of the letter inline in
+   * HTML alongside the attachment, so the candidate received the same terms
+   * twice, in two formats that could drift apart. The signable document is
+   * the PDF; the mail just points at it.
+   */
   private buildOfferLetterEmailHtml(empType: string, d: LetterData, firstName: string, contact: string): string {
-    const font = 'font-family: Arial, Helvetica, sans-serif;';
-    const heading = (text: string) =>
-      `<p style="${font} font-size: 13.5px; font-weight: bold; color: ${EMAIL_BRAND.darkBlue}; margin: 18px 0 4px 0;">${escapeHtml(text)}</p>`;
-    const body = (text: string) =>
-      `<p style="${font} font-size: 13px; line-height: 1.55; color: ${EMAIL_BRAND.text}; margin: 0; text-align: justify;">${text}</p>`;
-    const clause = (h: string, b: string) => heading(h) + body(b);
-
-    let title: string;
-    let intro: string;
-    let clauses: string;
-
-    if (empType === 'PART_TIME') {
-      title = `${d.roleTitle.toUpperCase()} (PART TIME) – OFFER LETTER`;
-      intro = `We are pleased to offer you the position of <strong>${escapeHtml(d.roleTitle)} (Part Time)</strong> at ${COMPANY.name} under the following terms and conditions:`;
-      clauses =
-        clause('1. Employment Start Date', `Start Date: ${escapeHtml(fmtDateFull(d.startDate))}`) +
-        clause('2. Nature of Engagement', 'This engagement is a part-time role focused on supporting technical tasks, system operations, and project-related activities as assigned by the company.') +
-        clause('3. Role Scope', 'You will perform assigned system engineering tasks and provide technical support under guidance from the team.') +
-        clause('4. Compensation', d.grossMonthly
-          ? `You will receive a monthly salary of Rs. ${d.grossMonthly.toLocaleString('en-IN')}.`
-          : 'Your compensation will be communicated separately.') +
-        clause('5. Statutory Benefits', 'Provident Fund (PF), ESI, leave, bonus, gratuity, insurance, or any other employee benefits are not applicable for this part-time engagement.') +
-        clause('6. Notice Period / Termination', 'Either party may terminate this engagement by providing 1 month prior written notice.') +
-        clause('7. Confidentiality & Non-Disclosure (NDA)', `You may have access to confidential, proprietary, technical, business, or client information of ${COMPANY.name}. You agree to maintain strict confidentiality and not disclose or misuse such information.`) +
-        body(`<strong>This offer letter and employment terms are strictly confidential.</strong>`) +
-        clause('8. Intellectual Property Ownership', `All work products, source code, designs, documents, inventions, discoveries, improvements, processes, or materials created or contributed to by you during your engagement shall be the sole intellectual property of ${COMPANY.name}.`) +
-        clause('9. Governing Law', 'This offer letter shall be governed by and construed in accordance with the laws of India.');
-    } else if (empType === 'INTERN') {
-      // Matches the real reference PDF (Pala lova kishore's): role stays
-      // Title Case (not upper-cased) with no dash, and the intro doesn't
-      // bold the role — both differ from full-time/part-time on purpose.
-      title = `${d.roleTitle} Intern OFFER LETTER`;
-      intro = `We are pleased to offer you the position of ${escapeHtml(d.roleTitle)} Intern (Internship) at ${COMPANY.name} under the following terms and conditions:`;
-      const months = d.engagementEndDate ? monthsBetween(d.startDate, d.engagementEndDate) : null;
-      const duration =
-        `Start Date: ${escapeHtml(fmtDateFull(d.startDate))}` +
-        (d.engagementEndDate ? `<br />End Date: ${escapeHtml(fmtDateFull(d.engagementEndDate))}` : '') +
-        (months !== null ? `<br />Duration: ${months} month${months === 1 ? '' : 's'}` : '');
-      clauses =
-        clause('1. Internship Duration', duration) +
-        clause('2. Nature of Engagement', 'This engagement is purely for training and skill development purposes and does not constitute regular employment or create an employer–employee relationship.') +
-        clause('3. Training Scope', 'You will undergo structured training and may perform supervised technical tasks strictly incidental to training and learning objectives.') +
-        clause('4. Training Allowance (Stipend)', d.grossMonthly
-          ? `You will receive a training allowance of Rs. ${d.grossMonthly.toLocaleString('en-IN')} per month.`
-          : 'This internship is unpaid. No stipend, salary, or wages shall be provided during the training period.') +
-        clause('5. Statutory Benefits', 'Provident Fund (PF), ESI, leave, bonus, gratuity, insurance, or any other employee benefits are not applicable during the training period.') +
-        clause('6. Termination / Early Exit', 'While this internship is intended to run for the full duration specified, it may be discontinued by either party at any time via written notice. In the event of an early exit, the Intern agrees to ensure a professional handover of all ongoing tasks and return any company property.') +
-        clause('7. Confidentiality & Non-Disclosure (NDA)', `You may have access to confidential, proprietary, technical, business, or client information of ${COMPANY.name}. You agree to maintain strict confidentiality and not disclose or misuse such information. This obligation shall survive the completion or termination of the internship.`) +
-        clause('8. Intellectual Property Ownership', `All work products, source code, designs, documents, inventions, discoveries, improvements, processes, or materials created or contributed to by you during the internship shall be the sole intellectual property of ${COMPANY.name}. You irrevocably assign all rights, title, and interest in such work to ${COMPANY.name}.`) +
-        clause('9. Completion & Absorption', 'Upon successful completion, a Training / Internship Completion Certificate will be issued. Completion does not guarantee employment.') +
-        clause('10. Governing Law', 'This offer letter shall be governed by and construed in accordance with the laws of India.');
-    } else {
-      title = `${d.roleTitle.toUpperCase()} (FULL TIME) – OFFER LETTER`;
-      intro = `We are pleased to offer you the position of <strong>${escapeHtml(d.roleTitle)}</strong> at ${COMPANY.name} under the following terms and conditions:`;
-      clauses =
-        clause('1. Employment Start Date', `Start Date: ${escapeHtml(fmtDateFull(d.startDate))}<br />Mode: ${escapeHtml(d.mode)}`) +
-        clause('2. Nature of Engagement', 'This is a full-time, permanent role. You are expected to devote your full working time and attention to the company during working hours.') +
-        clause('3. Role & Reporting', `You will join the ${escapeHtml(d.department)} department as ${escapeHtml(d.roleTitle)}, reporting to your assigned manager.`) +
-        clause('4. Compensation', d.grossMonthly
-          ? `Your gross monthly salary will be Rs. ${d.grossMonthly.toLocaleString('en-IN')}, payable monthly and subject to statutory deductions set out below. Compensation is reviewed annually at the company's discretion and is strictly confidential.`
-          : 'Your compensation will be communicated separately and is strictly confidential.') +
-        clause('5. Statutory Benefits & Deductions', 'As a full-time employee you are covered by Provident Fund (PF) and, where eligible, Employees’ State Insurance (ESI) and gratuity, in accordance with applicable Indian law. Income Tax (TDS) and Professional Tax will be deducted at source as required.') +
-        clause('6. Leave Entitlement', 'You will accrue one sick leave and one casual leave for each completed month of service. Unused leave carries forward within the same calendar year and lapses on 31 December.') +
-        clause('7. Notice Period / Termination', 'Either party may terminate this engagement by providing one month’s prior written notice. The company may terminate without notice in cases of misconduct or breach of company policy.') +
-        clause('8. Confidentiality & Non-Disclosure (NDA)', `You may have access to confidential, proprietary, technical, business, or client information of ${COMPANY.name}. You agree to maintain strict confidentiality and not disclose or misuse such information. This obligation survives the termination of your employment.`) +
-        clause('9. Intellectual Property Ownership', `All work products, source code, designs, documents, inventions, discoveries, improvements, processes, or materials created or contributed to by you during your employment shall be the sole intellectual property of ${COMPANY.name}.`) +
-        clause('10. Governing Law', 'This offer letter shall be governed by and construed in accordance with the laws of India.');
-    }
-
-    return `
-      <p style="${font} font-size: 14px; color: ${EMAIL_BRAND.text}; margin: 0 0 4px 0;">Hi ${escapeHtml(firstName)},</p>
-      <p style="${font} font-size: 14px; color: ${EMAIL_BRAND.text}; margin: 0 0 18px 0;">Congratulations, and welcome to Shuroq! Here are the terms of your offer — a signed copy is also attached as a PDF.</p>
-
-      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom: 14px;">
-        <tr><td style="background-color: ${EMAIL_BRAND.headerBg}; padding: 8px 10px;">
-          <span style="${font} font-size: 12.5px; font-weight: bold; color: #ffffff; letter-spacing: 0.4px;">${escapeHtml(title)}</span>
-        </td></tr>
-      </table>
-
-      <p style="${font} font-size: 13px; color: ${EMAIL_BRAND.text}; margin: 0 0 2px 0;"><strong>Date:</strong> ${escapeHtml(fmtDateFull(new Date()))}</p>
-      <p style="${font} font-size: 13px; color: ${EMAIL_BRAND.text}; margin: 0 0 14px 0;"><strong>Candidate Name:</strong> ${escapeHtml(d.candidateName)}</p>
-
-      ${body(intro)}
-
-      ${clauses}
-
-      <p style="${font} font-size: 13.5px; font-weight: bold; color: ${EMAIL_BRAND.darkBlue}; margin: 20px 0 4px 0;">Acceptance</p>
-      ${body('I confirm that I have read, understood, and agree to all terms including the Confidentiality and Intellectual Property obligations stated above.')}
-      <p style="${font} font-size: 13px; color: ${EMAIL_BRAND.text}; margin: 14px 0 4px 0;"><strong>Name:</strong> ${escapeHtml(d.candidateName)}</p>
-      <p style="${font} font-size: 13px; color: ${EMAIL_BRAND.text}; margin: 0 0 4px 0;"><strong>Signature:</strong> ________________________</p>
-      <p style="${font} font-size: 13px; color: ${EMAIL_BRAND.text}; margin: 0 0 20px 0;"><strong>Date:</strong> ____________________________</p>
-
-      <p style="${font} font-size: 13px; color: ${EMAIL_BRAND.text}; margin: 0;">${contact}</p>
-      <p style="${font} font-size: 13px; color: ${EMAIL_BRAND.text}; margin: 4px 0 0 0;">Warm regards,<br />HR Team, Shuroq</p>
-    `;
+    const kind =
+      empType === 'INTERN' ? 'internship offer letter'
+      : empType === 'PART_TIME' ? 'part-time offer letter'
+      : 'offer letter';
+    return coverNoteHtml([
+      `Hi ${escapeHtml(firstName)},`,
+      `We are pleased to offer you the position of <strong>${escapeHtml(d.roleTitle)}</strong> at ${escapeHtml(COMPANY.name)}. Your ${kind} is attached to this email as a PDF.`,
+      'Please review it, and return a signed copy to confirm your acceptance.',
+      escapeHtml(contact),
+      'Warm regards,<br />HR Team, Shuroq',
+    ]);
   }
 
   private async getSupportContactLine(): Promise<string> {
@@ -488,18 +398,30 @@ export class OfferLetterService {
       // candidate's actual name/role/department length.
       doc.addPage();
 
+      // Clauses 7-9 reuse the SAME gap as clauses 1-6 (`fillGap`) — see the
+      // comment on renderFullTimeOfferLetter's page 2 for why a gap
+      // independently stretched to fill page 2 gave the two pages a visibly
+      // different rhythm even though both looked "full".
+      //
+      // The extra bold confidentiality line (per the Aarif reference) is a
+      // continuation sentence *of* clause 7, not a clause of its own — so it
+      // must sit close under clause 7's body, not floating with a full
+      // fillGap on both sides. Passing 0 here suppresses clauseClean's own
+      // trailing gap so a small fixed gap can attach the line to the clause
+      // instead; the real fillGap is only added once, after the line, before
+      // clause 8 — the same rhythm as every other clause boundary.
       this.clauseClean(doc, M, textW, '7. Confidentiality & Non-Disclosure (NDA)',
-        `You may have access to confidential, proprietary, technical, business, or client information of ${COMPANY.name}. You agree to maintain strict confidentiality and not disclose or misuse such information.`);
-      // Extra bold line per Aarif template
+        `You may have access to confidential, proprietary, technical, business, or client information of ${COMPANY.name}. You agree to maintain strict confidentiality and not disclose or misuse such information.`, [], 0);
+      doc.moveDown(0.6);
       doc.fontSize(10.5).font('Helvetica-Bold').fillColor(BRAND.black)
         .text('This offer letter and employment terms are strictly confidential.', M, doc.y, { width: textW, align: 'left', lineGap: 1.5 });
-      doc.moveDown(0.9);
+      doc.y += fillGap;
 
       this.clauseClean(doc, M, textW, '8. Intellectual Property Ownership',
-        `All work products, source code, designs, documents, inventions, discoveries, improvements, processes, or materials created or contributed to by you during your engagement shall be the sole intellectual property of ${COMPANY.name}.`);
+        `All work products, source code, designs, documents, inventions, discoveries, improvements, processes, or materials created or contributed to by you during your engagement shall be the sole intellectual property of ${COMPANY.name}.`, [], fillGap);
 
       this.clauseClean(doc, M, textW, '9. Governing Law',
-        'This offer letter shall be governed by and construed in accordance with the laws of India.');
+        'This offer letter shall be governed by and construed in accordance with the laws of India.', [], fillGap);
 
       // --- Acceptance ---
       this.acceptanceBlock(doc, M, textW, d.candidateName);
@@ -587,17 +509,27 @@ export class OfferLetterService {
       // the same clause-body length family as the two verified templates.
       doc.addPage();
 
+      // --- Clauses 7-10 use the SAME gap as clauses 1-6 (`fillGap`), not a
+      // gap independently stretched to fill page 2. Filling each page to its
+      // own bottom margin produced a *different* gap per page \u2014 page 1 had
+      // 6 long clauses needing only ~56pt of extra gap each to reach the
+      // margin, page 2 has 4 shorter clauses needing ~85pt each to reach the
+      // same margin, so the rhythm between clauses visibly changed page to
+      // page even though both pages looked "full". Reusing one gap value
+      // keeps the spacing between every clause identical throughout the
+      // letter; page 2 simply ends with blank space below the acceptance
+      // block instead of being stretched to meet the margin exactly. ---
       this.clauseClean(doc, M, textW, '7. Notice Period / Termination',
-        'Either party may terminate this engagement by providing one month\u2019s prior written notice. The company may terminate without notice in cases of misconduct or breach of company policy.');
+        'Either party may terminate this engagement by providing one month\u2019s prior written notice. The company may terminate without notice in cases of misconduct or breach of company policy.', [], fillGap);
 
       this.clauseClean(doc, M, textW, '8. Confidentiality & Non-Disclosure (NDA)',
-        `You may have access to confidential, proprietary, technical, business, or client information of ${COMPANY.name}. You agree to maintain strict confidentiality and not disclose or misuse such information. This obligation survives the termination of your employment.`);
+        `You may have access to confidential, proprietary, technical, business, or client information of ${COMPANY.name}. You agree to maintain strict confidentiality and not disclose or misuse such information. This obligation survives the termination of your employment.`, [], fillGap);
 
       this.clauseClean(doc, M, textW, '9. Intellectual Property Ownership',
-        `All work products, source code, designs, documents, inventions, discoveries, improvements, processes, or materials created or contributed to by you during your employment shall be the sole intellectual property of ${COMPANY.name}.`);
+        `All work products, source code, designs, documents, inventions, discoveries, improvements, processes, or materials created or contributed to by you during your employment shall be the sole intellectual property of ${COMPANY.name}.`, [], fillGap);
 
       this.clauseClean(doc, M, textW, '10. Governing Law',
-        'This offer letter shall be governed by and construed in accordance with the laws of India.');
+        'This offer letter shall be governed by and construed in accordance with the laws of India.', [], fillGap);
 
       this.acceptanceBlock(doc, M, textW, d.candidateName);
     }, { size: 'LETTER', margin: 72 });
@@ -680,17 +612,21 @@ export class OfferLetterService {
       // see the comment on renderPartTimeOfferLetter's page break.
       doc.addPage();
 
+      // Clauses 7-10 reuse the SAME gap as clauses 1-6 (`fillGap`) — see the
+      // comment on renderFullTimeOfferLetter's page 2 for why a gap
+      // independently stretched to fill page 2 gave the two pages a visibly
+      // different rhythm even though both looked "full".
       this.clauseClean(doc, M, textW, '7. Confidentiality & Non-Disclosure (NDA)',
-        `You may have access to confidential, proprietary, technical, business, or client information of ${COMPANY.name}. You agree to maintain strict confidentiality and not disclose or misuse such information. This obligation shall survive the completion or termination of the internship.`);
+        `You may have access to confidential, proprietary, technical, business, or client information of ${COMPANY.name}. You agree to maintain strict confidentiality and not disclose or misuse such information. This obligation shall survive the completion or termination of the internship.`, [], fillGap);
 
       this.clauseClean(doc, M, textW, '8. Intellectual Property Ownership',
-        `All work products, source code, designs, documents, inventions, discoveries, improvements, processes, or materials created or contributed to by you during the internship shall be the sole intellectual property of ${COMPANY.name}. You irrevocably assign all rights, title, and interest in such work to ${COMPANY.name}.`);
+        `All work products, source code, designs, documents, inventions, discoveries, improvements, processes, or materials created or contributed to by you during the internship shall be the sole intellectual property of ${COMPANY.name}. You irrevocably assign all rights, title, and interest in such work to ${COMPANY.name}.`, [], fillGap);
 
       this.clauseClean(doc, M, textW, '9. Completion & Absorption',
-        'Upon successful completion, a Training / Internship Completion Certificate will be issued. Completion does not guarantee employment.');
+        'Upon successful completion, a Training / Internship Completion Certificate will be issued. Completion does not guarantee employment.', [], fillGap);
 
       this.clauseClean(doc, M, textW, '10. Governing Law',
-        'This offer letter shall be governed by and construed in accordance with the laws of India.');
+        'This offer letter shall be governed by and construed in accordance with the laws of India.', [], fillGap);
 
       this.acceptanceBlock(doc, M, textW, d.candidateName);
     }, { size: 'LETTER', margin: 72 });

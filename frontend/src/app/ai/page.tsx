@@ -16,7 +16,7 @@ export default function AIPage() {
     {
       id: '1',
       role: 'assistant',
-      content: 'Hello! I am your Enterprise AI Assistant. How can I help you with your operations today? You can ask me about sales insights, HR metrics, or inventory alerts.',
+      content: 'Hello! I am your Shuroq AI Assistant. How can I help you with your operations today? You can ask me about sales insights, HR metrics, or inventory alerts.',
       timestamp: new Date()
     }
   ]);

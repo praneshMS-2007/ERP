@@ -215,6 +215,10 @@ export const hrmApi = {
   deleteHoliday: (id: string) => mutateApi(`/hrm/holidays/${id}`, { method: 'DELETE' }),
   getPasswordResetRequests: () => mutateApi('/hrm/password-reset-requests'),
   resolvePasswordResetRequest: (id: string) => mutateApi(`/hrm/password-reset-requests/${id}/resolve`, { method: 'PUT' }),
+  // Internship completion certificates
+  getInternshipCertificates: () => fetchApi('/hrm/internship-certificates'),
+  approveInternshipCertificate: (id: string) => mutateApi(`/hrm/internship-certificates/${id}/approve`, { method: 'POST' }),
+  rejectInternshipCertificate: (id: string) => mutateApi(`/hrm/internship-certificates/${id}/reject`, { method: 'POST' }),
 };
 
 export const announcementApi = {

@@ -3,12 +3,16 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
 import { HrmService } from './hrm.service';
 import type { RequestUser, PayrollManualInput } from './hrm.service';
+import { InternshipCertificateService } from './internship-certificate.service';
 import { Prisma } from '@prisma/client';
 import { RequirePermission, CurrentUser } from '../auth/decorators';
 
 @Controller('hrm')
 export class HrmController {
-  constructor(private readonly hrmService: HrmService) {}
+  constructor(
+    private readonly hrmService: HrmService,
+    private readonly internshipCertService: InternshipCertificateService,
+  ) {}
 
   @Get('employees')
   @RequirePermission('HR', 'READ')
@@ -310,4 +314,28 @@ export class HrmController {
     }
     return this.hrmService.setAgreementStatus(id, field, !!value);
   }
+
+  // ========== INTERNSHIP COMPLETION CERTIFICATES ==========
+  // HR_MANAGER or SUPER_ADMIN only — gated via HR:WRITE.
+  // Lists interns whose engagementEndDate has passed, and lets HR
+  // approve (generate PDF + send email) or reject the certificate.
+
+  @Get('internship-certificates')
+  @RequirePermission('HR', 'WRITE')
+  getInternshipCertificates() {
+    return this.internshipCertService.getCompletedInterns();
+  }
+
+  @Post('internship-certificates/:id/approve')
+  @RequirePermission('HR', 'WRITE')
+  approveInternshipCertificate(@Param('id') id: string, @CurrentUser() user?: RequestUser) {
+    return this.internshipCertService.approveAndSend(id, user);
+  }
+
+  @Post('internship-certificates/:id/reject')
+  @RequirePermission('HR', 'WRITE')
+  rejectInternshipCertificate(@Param('id') id: string, @Body('reason') reason?: string, @CurrentUser() user?: RequestUser) {
+    return this.internshipCertService.reject(id, reason, user);
+  }
 }
+

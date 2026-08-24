@@ -416,7 +416,7 @@ export default function SettingsPage() {
                 <div style={{ marginBottom: '20px' }}>
                   <h3 style={{ fontSize: '17px', fontWeight: 800, margin: 0, color: 'var(--color-text-primary)' }}>Interface Theme</h3>
                   <p style={{ fontSize: '13px', color: 'var(--color-text-muted)', marginTop: '2px', margin: 0 }}>
-                    Choose your visual mode for the entire Enterprise ERP portal.
+                    Choose your visual mode for the entire Shuroq ERP portal.
                   </p>
                 </div>
 

@@ -7,7 +7,11 @@ const inter = Inter({ subsets: ['latin'], variable: '--font-sans' });
 
 export const metadata: Metadata = {
   title: 'Shuroq ERP Platform',
-  description: 'Enterprise Resource Planning Platform',
+  description: 'Shuroq Enterprise Resource Planning Platform — Tech Redefined',
+  icons: {
+    icon: '/shuroq-icon.png',
+    apple: '/shuroq-icon.png',
+  },
 };
 
 export default function RootLayout({

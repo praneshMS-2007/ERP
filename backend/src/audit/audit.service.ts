@@ -77,7 +77,6 @@ export function formatRoleLabel(role?: string | null): string {
     INVENTORY_MANAGER: 'Inventory Manager',
     CRM_MANAGER:       'CRM Manager',
     PROJECT_MANAGER:   'Project Manager',
-    TEAM_LEAD:         'Team Lead',
     EMPLOYEE:          'Employee',
   };
   return map[role] || role.replace('_', ' ');

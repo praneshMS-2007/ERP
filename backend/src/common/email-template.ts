@@ -38,6 +38,34 @@ export function logoAttachment(): { filename: string; path: string; cid: string 
 }
 
 /**
+ * A plain covering note for a mail whose real payload is its PDF attachment.
+ *
+ * Every document auto-mail in this app (payslip, offer letters, internship
+ * completion certificate) uses this instead of `emailShell`. Deliberately:
+ *   - no inline images, no `cid:` attachments, no logo, no branded frame;
+ *   - the document is NOT restated in the body.
+ *
+ * Earlier versions re-rendered each document inline in HTML beside the
+ * attachment, so recipients got the same thing twice — once as a picture they
+ * could not use, once as the real file. The payslip version also spilled PAN
+ * and bank-account numbers into the mail body, where the PDF alone was the
+ * right place for them. Keep these notes short and image-free; if a document's
+ * design changes, only its PDF generator should need touching.
+ */
+export function coverNoteHtml(paragraphs: string[]): string {
+  const font = 'font-family: Arial, Helvetica, sans-serif; font-size: 14px; color: #1f2530;';
+  const body = paragraphs
+    .map((p, i) => `  <p style="${font} margin: 0 0 ${i === paragraphs.length - 1 ? '0' : '12px'} 0;">${p}</p>`)
+    .join('\n');
+  return `<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" /></head>
+<body style="margin:0; padding:16px; background:#ffffff;">
+${body}
+</body></html>`;
+}
+
+/**
  * Wraps `bodyHtml` in the branded header/footer shell. `bodyHtml` is
  * expected to already be a sequence of <table>/<tr> rows (email HTML
  * doesn't reliably support block-level divs with margins), not a div.
