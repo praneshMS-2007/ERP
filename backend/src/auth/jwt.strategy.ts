@@ -5,6 +5,9 @@ import { PrismaService } from '../prisma/prisma.service';
 
 export interface JwtPayload {
   sub: string;      // user ID
+  sid: string;      // this token's own Authentication row id — lets a specific
+                     // session be revoked without touching any of the user's
+                     // other sessions or waiting out the token's expiry
   email: string | null; // null for ERP-generated accounts with no mailbox yet
   role: string;      // role name
   permissions: { module: string; action: string }[];
@@ -32,17 +35,29 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
    * only blocked their *next login*: any session they already had open kept
    * working for the rest of the token's 24-hour life.
    *
+   * The same reasoning applies one level down: a valid, active account can
+   * still have had this ONE session revoked (Settings > Sessions > Revoke,
+   * or an admin force-logging someone out). `payload.sid` is that session's
+   * own Authentication row id, set once at login — checking it here is what
+   * makes "Revoke" actually end the session immediately, rather than just
+   * hiding it from the list while the token quietly keeps working.
+   *
    * This adds one query per request. At this scale that costs nothing
-   * measurable, and it's what makes "removed employees have no access"
-   * actually true rather than "true within 24 hours."
+   * measurable.
    */
   async validate(payload: JwtPayload) {
-    const user = await this.prisma.user.findUnique({
-      where: { id: payload.sub },
-      select: { id: true, isActive: true },
-    });
+    const [user, session] = await Promise.all([
+      this.prisma.user.findUnique({
+        where: { id: payload.sub },
+        select: { id: true, isActive: true },
+      }),
+      this.prisma.authentication.findUnique({
+        where: { id: payload.sid },
+        select: { isActive: true, userId: true },
+      }),
+    ]);
 
-    if (!user || !user.isActive) {
+    if (!user || !user.isActive || !session || !session.isActive || session.userId !== payload.sub) {
       throw new UnauthorizedException('This session is no longer valid. Please sign in again.');
     }
 

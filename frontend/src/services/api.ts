@@ -332,6 +332,12 @@ export const projectApi = {
   getAnnouncements: (projectId: string) => mutateApi(`/projects/${projectId}/announcements`),
   deleteAnnouncement: (projectId: string, announcementId: string) =>
     mutateApi(`/projects/${projectId}/announcements/${announcementId}`, { method: 'DELETE' }),
+  getMilestones: (projectId: string) => mutateApi(`/projects/${projectId}/milestones`),
+  createMilestone: (data: { projectId: string; title: string; dueDate?: string | null }) =>
+    mutateApi('/projects/milestones', { method: 'POST', body: JSON.stringify(data) }),
+  updateMilestoneStatus: (id: string, status: string) =>
+    mutateApi(`/projects/milestones/${id}/status`, { method: 'PUT', body: JSON.stringify({ status }) }),
+  deleteMilestone: (id: string) => mutateApi(`/projects/milestones/${id}`, { method: 'DELETE' }),
 };
 
 // Generic authenticated file upload, reused for announcement attachments —

@@ -5,6 +5,7 @@ import { Award, CheckCircle2, XCircle, Clock, Mail, AlertCircle, FileText, Hourg
 import { hrmApi } from '../../../services/api';
 import { useAuth } from '../../../context/AuthContext';
 import Modal, { FormField } from '../../../components/Modal';
+import PageGuard from '../../../components/PageGuard';
 
 interface InternCert {
   id: string;
@@ -36,7 +37,15 @@ function monthsBetween(start: string, end: string): number {
   return (e.getFullYear() - s.getFullYear()) * 12 + (e.getMonth() - s.getMonth());
 }
 
-export default function InternshipCertificatesPage() {
+export default function InternshipCertificatesPageGuarded() {
+  return (
+    <PageGuard module="HR" action="WRITE">
+      <InternshipCertificatesPage />
+    </PageGuard>
+  );
+}
+
+function InternshipCertificatesPage() {
   const { hasPermission } = useAuth();
   const [interns, setInterns] = useState<InternCert[]>([]);
   const [loading, setLoading] = useState(true);

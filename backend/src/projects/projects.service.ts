@@ -229,19 +229,26 @@ export class ProjectsService {
       throw new BadRequestException('A Project Manager must be selected.');
     }
 
-    const { projectManagerId, teamEmployeeIds, status, ...projectFields } = data;
+    const { projectManagerId, teamEmployeeIds, status, startDate, endDate, ...projectFields } = data;
     const uniqueTeamIds = [...new Set((teamEmployeeIds || []).filter((id) => id && id !== projectManagerId))];
+
+    const parsedStartDate = startDate ? new Date(startDate) : null;
+    const parsedEndDate = endDate ? new Date(endDate) : null;
+    if ((parsedStartDate && Number.isNaN(parsedStartDate.getTime())) || (parsedEndDate && Number.isNaN(parsedEndDate.getTime()))) {
+      throw new BadRequestException('A valid start and end date are required.');
+    }
+    if (parsedStartDate && parsedEndDate && parsedEndDate < parsedStartDate) {
+      throw new BadRequestException('The end date cannot be before the start date.');
+    }
+
     // Status is never taken from the client, even at creation — it's
     // computed the same way it is everywhere else, from the dates being
     // submitted right here.
-    const initialStatus = this.computeStatusFromDates(
-      data.startDate ? new Date(data.startDate) : null,
-      data.endDate ? new Date(data.endDate) : null,
-    );
+    const initialStatus = this.computeStatusFromDates(parsedStartDate, parsedEndDate);
 
     return this.prisma.$transaction(async (tx) => {
       const project = await tx.project.create({
-        data: { ...projectFields, status: initialStatus as any, projectManagerId },
+        data: { ...projectFields, startDate: parsedStartDate, endDate: parsedEndDate, status: initialStatus as any, projectManagerId },
       });
       if (uniqueTeamIds.length) {
         await tx.assignment.createMany({
@@ -418,7 +425,7 @@ export class ProjectsService {
 
   async createTask(data: Prisma.TaskUncheckedCreateInput, viewer?: AuthenticatedUser) {
     await this.assertCanManageProject(viewer, data.projectId);
-    const task = await this.prisma.task.create({ data });
+    const task = await this.prisma.task.create({ data: { ...data, status: data.status ?? 'NOT_STARTED' } });
     await this.recalculateProjectProgress(data.projectId);
     return task;
   }
@@ -491,16 +498,41 @@ export class ProjectsService {
   }
 
   // ========== MILESTONES ==========
+  // Project-level checkpoints (title, optional due date, PENDING/REACHED) —
+  // separate from Tasks, which track day-to-day work. Visibility and write
+  // access follow the same rule as Holidays just above: staffed team
+  // members can view, only the project's own manager/HR/Admin can write.
 
-  async getMilestones(projectId: string) {
+  async getMilestones(projectId: string, viewer?: AuthenticatedUser) {
+    const allowed = (await this.canManageProject(viewer, projectId)) || (await this.isStaffedOnProject(viewer, projectId));
+    if (!allowed) {
+      throw new ForbiddenException('Only people staffed on this project can see its milestones.');
+    }
     return this.prisma.milestone.findMany({
       where: { projectId },
       orderBy: { dueDate: 'asc' },
     });
   }
 
-  async createMilestone(data: Prisma.MilestoneUncheckedCreateInput) {
-    return this.prisma.milestone.create({ data });
+  async createMilestone(data: Prisma.MilestoneUncheckedCreateInput, viewer?: AuthenticatedUser) {
+    await this.assertCanManageProject(viewer, data.projectId);
+    if (!data.title?.trim()) throw new BadRequestException('A title is required.');
+    return this.prisma.milestone.create({ data: { ...data, status: data.status ?? 'PENDING' } });
+  }
+
+  async updateMilestoneStatus(id: string, status: any, viewer?: AuthenticatedUser) {
+    const milestone = await this.prisma.milestone.findUnique({ where: { id } });
+    if (!milestone) throw new NotFoundException('Milestone not found');
+    await this.assertCanManageProject(viewer, milestone.projectId);
+    return this.prisma.milestone.update({ where: { id }, data: { status } });
+  }
+
+  async deleteMilestone(id: string, viewer?: AuthenticatedUser) {
+    const milestone = await this.prisma.milestone.findUnique({ where: { id } });
+    if (!milestone) throw new NotFoundException('Milestone not found');
+    await this.assertCanManageProject(viewer, milestone.projectId);
+    await this.prisma.milestone.delete({ where: { id } });
+    return { message: 'Milestone deleted' };
   }
 
   // ========== TIMESHEETS (TimeLog) ==========

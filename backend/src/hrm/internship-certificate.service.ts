@@ -101,7 +101,10 @@ import type { RequestUser } from './hrm.service';
 @Injectable()
 export class InternshipCertificateService {
   private readonly logger = new Logger(InternshipCertificateService.name);
-  private readonly outDir = path.join(process.cwd(), 'uploads', 'internship-certificates');
+  // Not served by the public static mount — see the matching comment on
+  // PayslipService.outDir. Access goes through
+  // hrmService.resolveGeneratedDocumentForDownload.
+  private readonly outDir = path.join(process.cwd(), 'private-uploads', 'internship-certificates');
 
   constructor(
     private prisma: PrismaService,
@@ -214,18 +217,19 @@ export class InternshipCertificateService {
     const fullPath = path.join(this.outDir, fileName);
     fs.writeFileSync(fullPath, pdfBuffer);
     const sha256 = crypto.createHash('sha256').update(pdfBuffer).digest('hex');
-    const fileUrl = `/uploads/internship-certificates/${fileName}`;
 
     // Create Document record
     const document = await this.prisma.document.create({
       data: {
         kind: 'COMPLETION_CERTIFICATE',
         ownerUserId: employee.userId,
-        storagePath: fileUrl,
+        storagePath: `internship-certificates/${fileName}`,
         fileName,
         sha256,
       },
     });
+
+    const fileUrl = `/api/hrm/documents/${document.id}/download`;
 
     // Link to employee
     await this.prisma.employee.update({

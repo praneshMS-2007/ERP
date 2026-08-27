@@ -88,7 +88,11 @@ believe this is wrong.`;
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            model: 'llama-3.3-70b-versatile',
+            // llama-3.3-70b-versatile was retired from Groq's lineup — this
+            // is their current large general-purpose chat model. Verify
+            // against GET https://api.groq.com/openai/v1/models if this
+            // ever starts 404ing again; Groq's model lineup changes.
+            model: 'openai/gpt-oss-120b',
             messages: [
               { role: 'system', content: ragSystemPrompt },
               ...(messages || []),

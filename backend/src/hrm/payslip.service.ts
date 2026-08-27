@@ -80,7 +80,11 @@ interface PayslipData {
 @Injectable()
 export class PayslipService {
   private readonly logger = new Logger(PayslipService.name);
-  private readonly outDir = path.join(process.cwd(), 'uploads', 'payslips');
+  // private-uploads is NOT mounted by the public static file server (see
+  // main.ts) — a payslip carries real salary figures, so its confidentiality
+  // can't rely on an unguessable filename the way it used to. Access now
+  // goes through hrmService.resolveGeneratedDocumentForDownload instead.
+  private readonly outDir = path.join(process.cwd(), 'private-uploads', 'payslips');
 
   constructor(
     private prisma: PrismaService,
@@ -154,17 +158,17 @@ export class PayslipService {
     const fullPath = path.join(this.outDir, fileName);
     fs.writeFileSync(fullPath, pdfBuffer);
     const sha256 = crypto.createHash('sha256').update(pdfBuffer).digest('hex');
-    const fileUrl = `/uploads/payslips/${fileName}`;
 
     const document = await this.prisma.document.create({
       data: {
         kind: 'PAYSLIP',
         ownerUserId: employee.userId,
-        storagePath: fileUrl,
+        storagePath: `payslips/${fileName}`,
         fileName,
         sha256,
       },
     });
+    const fileUrl = `/api/hrm/documents/${document.id}/download`;
     await this.prisma.payroll.update({
       where: { id: payrollId },
       data: { payslipDocumentId: document.id },

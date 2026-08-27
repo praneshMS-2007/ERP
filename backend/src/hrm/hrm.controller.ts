@@ -1,6 +1,7 @@
-import { Controller, Get, Post, Body, Param, Put, Delete, Query, BadRequestException, UploadedFile, UseInterceptors } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Put, Delete, Query, Res, BadRequestException, UploadedFile, UseInterceptors } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
+import type { Response } from 'express';
 import { HrmService } from './hrm.service';
 import type { RequestUser, PayrollManualInput } from './hrm.service';
 import { InternshipCertificateService } from './internship-certificate.service';
@@ -13,6 +14,20 @@ export class HrmController {
     private readonly hrmService: HrmService,
     private readonly internshipCertService: InternshipCertificateService,
   ) {}
+
+  // Gated at HR:READ so every role can reach it (including EMPLOYEE, who
+  // needs their own payslip/offer letter/certificate) — the real check is
+  // inside resolveGeneratedDocumentForDownload: owner, or HR/Admin only.
+  @Get('documents/:id/download')
+  @RequirePermission('HR', 'READ')
+  async downloadGeneratedDocument(
+    @Param('id') id: string,
+    @CurrentUser() user: RequestUser,
+    @Res() res: Response,
+  ) {
+    const { fullPath, fileName } = await this.hrmService.resolveGeneratedDocumentForDownload(id, user);
+    res.download(fullPath, fileName);
+  }
 
   @Get('employees')
   @RequirePermission('HR', 'READ')
@@ -209,8 +224,11 @@ export class HrmController {
   // records — see updatePayrollStatus for the other half.
   @Post('payrolls')
   @RequirePermission('HR', 'WRITE')
-  createPayroll(@Body() data: { employeeId: string; payPeriod: string; periodStart: string; periodEnd: string } & Partial<PayrollManualInput>) {
-    return this.hrmService.createPayroll(data);
+  createPayroll(
+    @Body() data: { employeeId: string; payPeriod: string; periodStart: string; periodEnd: string } & Partial<PayrollManualInput>,
+    @CurrentUser() user: RequestUser,
+  ) {
+    return this.hrmService.createPayroll(data, user);
   }
 
   // Lets the Add Payroll modal show the computed Gross/Deductions/Net Pay

@@ -5,6 +5,7 @@ import { KeyRound, ShieldOff, Lock, Users, Eye, EyeOff, Copy, Check } from 'luci
 import { hrmApi } from '../../../services/api';
 import { useAuth } from '../../../context/AuthContext';
 import Modal from '../../../components/Modal';
+import PageGuard from '../../../components/PageGuard';
 
 /**
  * Every ERP login account. Split into Active / Former the same way the
@@ -16,7 +17,15 @@ import Modal from '../../../components/Modal';
  * themselves. There is no "generate a random one" option here — that only
  * ever happens once, automatically, at new-employee creation.
  */
-export default function UserManagementPage() {
+export default function UserManagementPageGuarded() {
+  return (
+    <PageGuard module="HR" action="WRITE">
+      <UserManagementPage />
+    </PageGuard>
+  );
+}
+
+function UserManagementPage() {
   const { hasPermission } = useAuth();
   const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);

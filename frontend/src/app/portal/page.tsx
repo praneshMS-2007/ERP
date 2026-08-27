@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { CalendarDays, KeyRound, ChevronLeft, Eye, EyeOff, Check, X, RotateCcw } from 'lucide-react';
 import { hrmApi } from '../../services/api';
 import Modal from '../../components/Modal';
+import PageGuard from '../../components/PageGuard';
 
 const LEAVE_TYPE_LABELS: Record<string, string> = {
   SICK_LEAVE: 'Sick Leave',
@@ -20,7 +21,15 @@ const LEAVE_TYPE_LABELS: Record<string, string> = {
  * themselves never land on this route any more — their own self-service
  * pages are /leaves, /attendance, /payroll.
  */
-export default function EmployeePortalHrPage() {
+export default function EmployeePortalHrPageGuarded() {
+  return (
+    <PageGuard module="HR" action="WRITE">
+      <EmployeePortalHrPage />
+    </PageGuard>
+  );
+}
+
+function EmployeePortalHrPage() {
   const [activeSection, setActiveSection] = useState<'leaves' | 'resets'>('leaves');
   const [employees, setEmployees] = useState<any[]>([]);
   const [leaves, setLeaves] = useState<any[]>([]);

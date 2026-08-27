@@ -13,15 +13,15 @@ datasource db {
 // ==========================================
 
 model User {
-  id                   String           @id @default(uuid())
+  id                     String                  @id @default(uuid())
   // Nullable: ERP-generated accounts log in by username until a real company
   // mailbox exists (see username below). Postgres allows multiple NULLs under
   // a unique index, so this coexists with the seeded demo accounts' emails.
-  email                String?          @unique
+  email                  String?                 @unique
   // The credential shown once to HR at account creation. firstname.lastname,
   // deduplicated with a numeric suffix on collision.
-  username             String?          @unique
-  passwordHash         String           @map("password_hash")
+  username               String?                 @unique
+  passwordHash           String                  @map("password_hash")
   // Separate from passwordHash, which is what login actually checks — this
   // is a reversible copy (AES-256-GCM, see field-encryption.ts) that exists
   // solely so Admin/HR can look up someone's current password in User
@@ -29,46 +29,46 @@ model User {
   // manual reset; never used for authentication itself. Null for any
   // account whose password predates this field — there is no way to
   // recover what was never stored, only what gets set from here on.
-  passwordPlain        String?          @map("password_plain")
+  passwordPlain          String?                 @map("password_plain")
   // Login is refused, and every existing session is rejected on its very next
   // request (JwtStrategy re-checks this per-request), when false.
-  isActive             Boolean          @default(true) @map("is_active")
-  resetToken           String?          @map("reset_token")
-  resetTokenExpiry     DateTime?        @map("reset_token_expiry")
-  roleId               String           @map("role_id")
-  role                 Role             @relation(fields: [roleId], references: [id])
-  employee             Employee?
-  authSessions         Authentication[]
-  auditLogs            AuditLog[]
-  notifications        Notification[]
-  sentAnnouncements       Announcement[]           @relation("AnnouncementAuthor")
-  receivedAnnouncements   AnnouncementRecipient[]  @relation("AnnouncementRecipientUser")
-  passwordResetRequests   PasswordResetRequest[]   @relation("PasswordResetRequests")
-  resolvedPasswordResets  PasswordResetRequest[]   @relation("PasswordResetResolvedBy")
+  isActive               Boolean                 @default(true) @map("is_active")
+  resetToken             String?                 @map("reset_token")
+  resetTokenExpiry       DateTime?               @map("reset_token_expiry")
+  roleId                 String                  @map("role_id")
+  role                   Role                    @relation(fields: [roleId], references: [id])
+  employee               Employee?
+  authSessions           Authentication[]
+  auditLogs              AuditLog[]
+  notifications          Notification[]
+  sentAnnouncements      Announcement[]          @relation("AnnouncementAuthor")
+  receivedAnnouncements  AnnouncementRecipient[] @relation("AnnouncementRecipientUser")
+  passwordResetRequests  PasswordResetRequest[]  @relation("PasswordResetRequests")
+  resolvedPasswordResets PasswordResetRequest[]  @relation("PasswordResetResolvedBy")
 
   // User Preferences
-  theme                String           @default("light")
-  language             String           @default("English (US)")
-  twoFactorEnabled     Boolean          @default(false) @map("two_factor_enabled")
-  emailNotifications   Boolean          @default(true) @map("email_notifications")
+  theme              String  @default("light")
+  language           String  @default("English (US)")
+  twoFactorEnabled   Boolean @default(false) @map("two_factor_enabled")
+  emailNotifications Boolean @default(true) @map("email_notifications")
 
-  createdAt            DateTime         @default(now()) @map("created_at")
-  updatedAt            DateTime         @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   @@map("users")
 }
 
 model Authentication {
-  id           String   @id @default(uuid())
-  userId       String   @map("user_id")
-  user         User     @relation(fields: [userId], references: [id])
-  token        String   @unique
-  deviceInfo   String?  @map("device_info")
-  ipAddress    String?  @map("ip_address")
-  isActive     Boolean  @default(true) @map("is_active")
-  expiresAt    DateTime @map("expires_at")
-  createdAt    DateTime @default(now()) @map("created_at")
-  updatedAt    DateTime @updatedAt @map("updated_at")
+  id         String   @id @default(uuid())
+  userId     String   @map("user_id")
+  user       User     @relation(fields: [userId], references: [id])
+  token      String   @unique
+  deviceInfo String?  @map("device_info")
+  ipAddress  String?  @map("ip_address")
+  isActive   Boolean  @default(true) @map("is_active")
+  expiresAt  DateTime @map("expires_at")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
 
   @@map("authentications")
 }
@@ -125,19 +125,19 @@ enum Action {
 // ==========================================
 
 model Employee {
-  id            String       @id @default(uuid())
-  empCode       String?      @unique @map("emp_code")
-  userId        String?      @unique @map("user_id")
-  user          User?        @relation(fields: [userId], references: [id])
-  firstName     String       @map("first_name")
-  lastName      String       @map("last_name")
-  gender        String?
-  dob           DateTime?
-  contact       String?
-  address       String?      // "current address" in the onboarding form
-  city          String?
-  state         String?
-  country       String?
+  id        String    @id @default(uuid())
+  empCode   String?   @unique @map("emp_code")
+  userId    String?   @unique @map("user_id")
+  user      User?     @relation(fields: [userId], references: [id])
+  firstName String    @map("first_name")
+  lastName  String    @map("last_name")
+  gender    String?
+  dob       DateTime?
+  contact   String?
+  address   String? // "current address" in the onboarding form
+  city      String?
+  state     String?
+  country   String?
 
   // Set the moment status becomes INACTIVE (see hrm.service.ts — the
   // transition is refused without it). Real retention math depends on this
@@ -166,14 +166,14 @@ model Employee {
   // Education — certificates/mark sheets themselves are a Document
   // (EDUCATION_CERTIFICATE kind), not a field.
   highestQualification String? @map("highest_qualification")
-  institutionName       String? @map("institution_name")
-  yearOfPassing         Int?    @map("year_of_passing")
+  institutionName      String? @map("institution_name")
+  yearOfPassing        Int?    @map("year_of_passing")
 
   // Previous employment — experience/relieving letters and past payslips
   // are Documents, not fields, same reasoning as education above.
-  previousCompany       String? @map("previous_company")
-  previousDesignation   String? @map("previous_designation")
-  totalExperienceYears  Float?  @map("total_experience_years")
+  previousCompany      String? @map("previous_company")
+  previousDesignation  String? @map("previous_designation")
+  totalExperienceYears Float?  @map("total_experience_years")
 
   // Agreements & policies. The employment agreement itself is the offer
   // letter (offerLetterDocumentId below) — no separate field needed for it.
@@ -182,9 +182,9 @@ model Employee {
   policyAcknowledged   Boolean   @default(false) @map("policy_acknowledged")
   policyAcknowledgedAt DateTime? @map("policy_acknowledged_at")
 
-  joinDate      DateTime     @default(now()) @map("join_date")
-  empType       EmpType      @map("emp_type")
-  status        EmpStatus
+  joinDate DateTime  @default(now()) @map("join_date")
+  empType  EmpType   @map("emp_type")
+  status   EmpStatus
 
   // Statutory & payout identity — required to generate a payslip.
   // Kept nullable so existing rows stay valid; the payslip generator
@@ -194,12 +194,12 @@ model Employee {
   // backend/src/common/field-encryption.ts. Format validation (regex) runs
   // on the plaintext BEFORE encryption, at the service layer; the format
   // comments below describe what HR types in, not what the column contains.
-  pan             String?    @map("pan")              // format AAAAA9999A, validated then encrypted
-  aadhaarNumber   String?    @map("aadhaar_number")    // 12 digits, validated then encrypted
-  bankAccountNo   String?    @map("bank_account_no")
-  bankIfsc        String?    @map("bank_ifsc")
-  personalEmail   String?    @map("personal_email")   // the address they applied from
-  workMode        WorkMode   @default(ONSITE) @map("work_mode")
+  pan           String?  @map("pan") // format AAAAA9999A, validated then encrypted
+  aadhaarNumber String?  @map("aadhaar_number") // 12 digits, validated then encrypted
+  bankAccountNo String?  @map("bank_account_no")
+  bankIfsc      String?  @map("bank_ifsc")
+  personalEmail String?  @map("personal_email") // the address they applied from
+  workMode      WorkMode @default(ONSITE) @map("work_mode")
 
   // UAN/PF/ESIC are government-issued statutory tracking numbers — the same
   // *category* of data as PAN/Aadhaar (a persistent identifier that could
@@ -208,8 +208,8 @@ model Employee {
   // NOTE: UAN is exactly 12 digits, structurally identical to Aadhaar — there
   // is no format-based way to catch the two being swapped, unlike the
   // PAN/bank-account distinction elsewhere in this file.
-  uanNumber  String? @map("uan_number")  // EPFO Universal Account Number, 12 digits, validated then encrypted
-  pfNumber   String? @map("pf_number")   // no fixed national format — encrypted, not format-validated
+  uanNumber  String? @map("uan_number") // EPFO Universal Account Number, 12 digits, validated then encrypted
+  pfNumber   String? @map("pf_number") // no fixed national format — encrypted, not format-validated
   esicNumber String? @map("esic_number") // loosely validated then encrypted
 
   // Nominee — a third party the employee named, not the employee's own
@@ -230,8 +230,8 @@ model Employee {
   taxRegime           String? @map("tax_regime") // "OLD" or "NEW"
   taxDeclarationNotes String? @map("tax_declaration_notes")
 
-  reportingManagerId String?   @map("reporting_manager_id")
-  reportingManager   Employee? @relation(name: "ReportsTo", fields: [reportingManagerId], references: [id])
+  reportingManagerId String?    @map("reporting_manager_id")
+  reportingManager   Employee?  @relation(name: "ReportsTo", fields: [reportingManagerId], references: [id])
   directReports      Employee[] @relation(name: "ReportsTo")
 
   // Fixed-term engagements (internships, contracts) end on a known date.
@@ -245,9 +245,9 @@ model Employee {
   // employee link, not routed through userId — an employee has these files
   // whether or not they hold an ERP login, and several pre-existing seeded
   // employees have no linked User at all.
-  identityDocuments Document[] @relation(name: "EmployeeIdentityDocuments")
-  offerLetterSentAt     DateTime? @map("offer_letter_sent_at")
-  offerLetterSendError  String?   @map("offer_letter_send_error")
+  identityDocuments    Document[] @relation(name: "EmployeeIdentityDocuments")
+  offerLetterSentAt    DateTime?  @map("offer_letter_sent_at")
+  offerLetterSendError String?    @map("offer_letter_send_error")
 
   // Internship completion certificate — generated when HR approves an
   // intern whose engagementEndDate has passed. Same pattern as the offer
@@ -257,31 +257,31 @@ model Employee {
   internshipCertSentAt     DateTime? @map("internship_cert_sent_at")
   internshipCertStatus     String?   @map("internship_cert_status") // "APPROVED" | "REJECTED" | null (pending)
 
-  departmentId  String       @map("department_id")
-  department    Department   @relation(fields: [departmentId], references: [id])
-  
-  designationId String       @map("designation_id")
-  designation   Designation  @relation(fields: [designationId], references: [id])
+  departmentId String     @map("department_id")
+  department   Department @relation(fields: [departmentId], references: [id])
 
-  attendances             Attendance[]
-  leaves                  Leave[]
-  assignments             Assignment[]
-  assignedTasks           Task[]              @relation(name: "AssignedTasks")
-  performanceReviews      PerformanceReview[] @relation(name: "EmployeeReviews")
-  performanceReviewsGiven PerformanceReview[] @relation(name: "EmployeeReviewers")
-  payrolls                Payroll[]
-  timeLogs                TimeLog[]
-  salaryStructures        SalaryStructure[]
-  itAccessProfile         ItAccessProfile?
-  managedProjects         Project[]              @relation(name: "ProjectManager")
-  authoredAnnouncements   ProjectAnnouncement[]  @relation(name: "AnnouncementAuthor")
-  targetedAnnouncements   ProjectAnnouncement[]  @relation(name: "AnnouncementAudience")
+  designationId String      @map("designation_id")
+  designation   Designation @relation(fields: [designationId], references: [id])
+
+  attendances              Attendance[]
+  leaves                   Leave[]
+  assignments              Assignment[]
+  assignedTasks            Task[]                @relation(name: "AssignedTasks")
+  performanceReviews       PerformanceReview[]   @relation(name: "EmployeeReviews")
+  performanceReviewsGiven  PerformanceReview[]   @relation(name: "EmployeeReviewers")
+  payrolls                 Payroll[]
+  timeLogs                 TimeLog[]
+  salaryStructures         SalaryStructure[]
+  itAccessProfile          ItAccessProfile?
+  managedProjects          Project[]             @relation(name: "ProjectManager")
+  authoredAnnouncements    ProjectAnnouncement[] @relation(name: "AnnouncementAuthor")
+  targetedAnnouncements    ProjectAnnouncement[] @relation(name: "AnnouncementAudience")
   uploadedProjectDocuments ProjectDocument[]
-  declaredHolidays ProjectHoliday[]
-  declaredCompanyHolidays Holiday[]
+  declaredHolidays         ProjectHoliday[]
+  declaredCompanyHolidays  Holiday[]
 
-  createdAt     DateTime     @default(now()) @map("created_at")
-  updatedAt     DateTime     @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   @@map("employees")
 }
@@ -324,24 +324,25 @@ model Attendance {
   leaveId String? @map("leave_id")
   leave   Leave?  @relation(fields: [leaveId], references: [id])
 
-  createdAt   DateTime         @default(now()) @map("created_at")
-  updatedAt   DateTime         @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
+  @@unique([employeeId, date])
   @@map("attendances")
 }
 
 model Leave {
-  id         String      @id @default(uuid())
-  employeeId String      @map("employee_id")
-  employee   Employee    @relation(fields: [employeeId], references: [id])
-  leaveType  LeaveType   @map("leave_type")
-  startDate  DateTime    @map("start_date")
-  endDate    DateTime    @map("end_date")
-  status     LeaveStatus
-  reason     String
+  id              String       @id @default(uuid())
+  employeeId      String       @map("employee_id")
+  employee        Employee     @relation(fields: [employeeId], references: [id])
+  leaveType       LeaveType    @map("leave_type")
+  startDate       DateTime     @map("start_date")
+  endDate         DateTime     @map("end_date")
+  status          LeaveStatus
+  reason          String
   attendanceMarks Attendance[]
-  createdAt  DateTime    @default(now()) @map("created_at")
-  updatedAt  DateTime    @updatedAt @map("updated_at")
+  createdAt       DateTime     @default(now()) @map("created_at")
+  updatedAt       DateTime     @updatedAt @map("updated_at")
 
   @@map("leaves")
 }
@@ -351,7 +352,7 @@ model Leave {
 // ==========================================
 
 model Lead {
-  id        String      @id @default(uuid())
+  id        String     @id @default(uuid())
   name      String
   email     String?
   phone     String?
@@ -362,8 +363,8 @@ model Lead {
   source    String?
   customer  Customer?
   followUps FollowUp[]
-  createdAt DateTime    @default(now()) @map("created_at")
-  updatedAt DateTime    @updatedAt @map("updated_at")
+  createdAt DateTime   @default(now()) @map("created_at")
+  updatedAt DateTime   @updatedAt @map("updated_at")
 
   @@map("leads")
 }
@@ -441,28 +442,28 @@ model Category {
 }
 
 model Product {
-  id             String          @id @default(uuid())
+  id             String           @id @default(uuid())
   name           String
-  sku            String          @unique
+  sku            String           @unique
   category       String
-  categoryId     String?         @map("category_id")
-  categoryRel    Category?       @relation(fields: [categoryId], references: [id])
+  categoryId     String?          @map("category_id")
+  categoryRel    Category?        @relation(fields: [categoryId], references: [id])
   price          Float
-  costPrice      Float?          @map("cost_price")
-  stockLevel     Int             @default(0) @map("stock_level")
-  minStockLevel  Int             @default(0) @map("min_stock_level")
+  costPrice      Float?           @map("cost_price")
+  stockLevel     Int              @default(0) @map("stock_level")
+  minStockLevel  Int              @default(0) @map("min_stock_level")
   unit           String
   status         ProductStatus
   // A software/license product — can only ever be stocked in a VIRTUAL
   // warehouse, never a REAL one. Enforced server-side wherever a warehouse
   // is assigned, not just filtered in the dropdown.
-  isDigital      Boolean         @default(false) @map("is_digital")
+  isDigital      Boolean          @default(false) @map("is_digital")
   purchaseOrders PurchaseOrder[]
   stockMovements StockMovement[]
   warehouseStock WarehouseStock[]
   salesOrders    SalesOrder[]
-  createdAt      DateTime        @default(now()) @map("created_at")
-  updatedAt      DateTime        @updatedAt @map("updated_at")
+  createdAt      DateTime         @default(now()) @map("created_at")
+  updatedAt      DateTime         @updatedAt @map("updated_at")
 
   @@map("products")
 }
@@ -607,13 +608,13 @@ model Project {
   // (see projects.service.ts's isProjectManagerOf) checks this field fresh
   // on every request; it never grants anything outside this one project.
   projectManagerId String?               @map("project_manager_id")
-  projectManager    Employee?            @relation(name: "ProjectManager", fields: [projectManagerId], references: [id])
-  announcements     ProjectAnnouncement[]
-  documents         ProjectDocument[]
-  holidays          ProjectHoliday[]
+  projectManager   Employee?             @relation(name: "ProjectManager", fields: [projectManagerId], references: [id])
+  announcements    ProjectAnnouncement[]
+  documents        ProjectDocument[]
+  holidays         ProjectHoliday[]
 
-  createdAt   DateTime      @default(now()) @map("created_at")
-  updatedAt   DateTime      @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   @@map("projects")
 }
@@ -621,7 +622,7 @@ model Project {
 model Task {
   id                 String       @id @default(uuid())
   projectId          String       @map("project_id")
-  project            Project      @relation(fields: [projectId], references: [id])
+  project            Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
   assignedEmployeeId String?      @map("assigned_employee_id")
   assignedEmployee   Employee?    @relation(name: "AssignedTasks", fields: [assignedEmployeeId], references: [id])
   title              String
@@ -637,17 +638,17 @@ model Task {
 }
 
 model Assignment {
-  id         String    @id @default(uuid())
-  taskId     String?   @map("task_id")
-  task       Task?     @relation(fields: [taskId], references: [id])
-  projectId  String?   @map("project_id")
-  project    Project?  @relation(fields: [projectId], references: [id])
-  employeeId String    @map("employee_id")
-  employee   Employee  @relation(fields: [employeeId], references: [id])
+  id         String   @id @default(uuid())
+  taskId     String?  @map("task_id")
+  task       Task?    @relation(fields: [taskId], references: [id])
+  projectId  String?  @map("project_id")
+  project    Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  employeeId String   @map("employee_id")
+  employee   Employee @relation(fields: [employeeId], references: [id])
   role       String?
-  assignedAt DateTime  @default(now()) @map("assigned_at")
-  createdAt  DateTime  @default(now()) @map("created_at")
-  updatedAt  DateTime  @updatedAt @map("updated_at")
+  assignedAt DateTime @default(now()) @map("assigned_at")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
 
   // Stops the same person being staffed twice on one project. Only
   // enforced for project-level rows (projectId set) — task-level
@@ -664,7 +665,7 @@ model Assignment {
 model ProjectAnnouncement {
   id                 String    @id @default(uuid())
   projectId          String    @map("project_id")
-  project            Project   @relation(fields: [projectId], references: [id])
+  project            Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
   authorEmployeeId   String    @map("author_employee_id")
   author             Employee  @relation(name: "AnnouncementAuthor", fields: [authorEmployeeId], references: [id])
   title              String
@@ -686,10 +687,10 @@ model ProjectAnnouncement {
 model ProjectDocument {
   id                 String   @id @default(uuid())
   projectId          String   @map("project_id")
-  project            Project  @relation(fields: [projectId], references: [id])
+  project            Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
   uploaderEmployeeId String   @map("uploader_employee_id")
   uploader           Employee @relation(fields: [uploaderEmployeeId], references: [id])
-  kind               String   // PRD | BRD | ARCHITECTURE | WORKFLOW | OTHER
+  kind               String // PRD | BRD | ARCHITECTURE | WORKFLOW | OTHER
   fileUrl            String   @map("file_url")
   fileName           String   @map("file_name")
   createdAt          DateTime @default(now()) @map("created_at")
@@ -700,7 +701,7 @@ model ProjectDocument {
 model Milestone {
   id        String          @id @default(uuid())
   projectId String          @map("project_id")
-  project   Project         @relation(fields: [projectId], references: [id])
+  project   Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
   title     String
   dueDate   DateTime?       @map("due_date")
   status    MilestoneStatus
@@ -731,14 +732,14 @@ model PerformanceReview {
 // ==========================================
 
 model Expense {
-  id          String        @id @default(uuid())
+  id          String          @id @default(uuid())
   amount      Float
   category    ExpenseCategory
   date        DateTime
   description String?
-  status      ExpenseStatus @default(PENDING)
-  createdAt   DateTime      @default(now()) @map("created_at")
-  updatedAt   DateTime      @updatedAt @map("updated_at")
+  status      ExpenseStatus   @default(PENDING)
+  createdAt   DateTime        @default(now()) @map("created_at")
+  updatedAt   DateTime        @updatedAt @map("updated_at")
 
   @@map("expenses")
 }
@@ -776,14 +777,14 @@ model Invoice {
 }
 
 model Budget {
-  id          String   @id @default(uuid())
-  department  String
-  planned     Float
-  actual      Float    @default(0)
-  startDate   DateTime @map("start_date")
-  endDate     DateTime @map("end_date")
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  id         String   @id @default(uuid())
+  department String
+  planned    Float
+  actual     Float    @default(0)
+  startDate  DateTime @map("start_date")
+  endDate    DateTime @map("end_date")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
 
   @@map("budgets")
 }
@@ -835,10 +836,10 @@ model Payroll {
 
   // ---- Attendance record (payslip footer) ----
   // Snapshotted at generation time so a reprinted payslip never changes.
-  totalDaysInMonth   Int @default(0) @map("total_days_in_month")   // calendar days
+  totalDaysInMonth   Int @default(0) @map("total_days_in_month") // calendar days
   workingDaysInMonth Int @default(0) @map("working_days_in_month") // minus weekends & holidays
   leavesTaken        Int @default(0) @map("leaves_taken")
-  effectiveWorkDays  Int @default(0) @map("effective_work_days")   // workingDays - leavesTaken
+  effectiveWorkDays  Int @default(0) @map("effective_work_days") // workingDays - leavesTaken
 
   // ---- Approval chain: HR prepares, Finance approves ----
   preparedById   String?   @map("prepared_by_id")
@@ -851,8 +852,8 @@ model Payroll {
   payslipSentAt     DateTime? @map("payslip_sent_at")
   payslipSendError  String?   @map("payslip_send_error")
 
-  createdAt   DateTime      @default(now()) @map("created_at")
-  updatedAt   DateTime      @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   @@unique([employeeId, payPeriod])
   @@map("payrolls")
@@ -899,9 +900,9 @@ model Document {
   employeeId String?   @map("employee_id")
   employee   Employee? @relation(name: "EmployeeIdentityDocuments", fields: [employeeId], references: [id])
 
-  payroll         Payroll?
-  offerLetterFor       Employee? @relation(name: "EmployeeOfferLetter")
-  internshipCertFor    Employee? @relation(name: "EmployeeInternshipCert")
+  payroll           Payroll?
+  offerLetterFor    Employee? @relation(name: "EmployeeOfferLetter")
+  internshipCertFor Employee? @relation(name: "EmployeeInternshipCert")
 
   @@index([ownerUserId, kind])
   @@map("documents")
@@ -910,15 +911,15 @@ model Document {
 /// Company-wide policy values. These exist so nothing in the offer letter or
 /// payroll engine is hardcoded — HR edits them once and every document follows.
 model CompanyPolicy {
-  id    String @id @default(uuid())
-  key   String @unique
+  id    String  @id @default(uuid())
+  key   String  @unique
   value String
-  label String            // human-readable, shown on the HR settings screen
-  unit  String?           // "months", "days", "percent"
+  label String // human-readable, shown on the HR settings screen
+  unit  String? // "months", "days", "percent"
   notes String?
 
-  updatedById String?   @map("updated_by_id")
-  updatedAt   DateTime  @updatedAt @map("updated_at")
+  updatedById String?  @map("updated_by_id")
+  updatedAt   DateTime @updatedAt @map("updated_at")
 
   @@map("company_policies")
 }
@@ -957,11 +958,11 @@ model ItAccessProfile {
 /// Non-working days beyond weekends. Working-day maths in India is wrong
 /// without these — Republic Day, Diwali, regional Telangana holidays.
 model Holiday {
-  id       String   @id @default(uuid())
-  date     DateTime @unique
-  name     String
-  description String? @map("description")
-  isOptional Boolean @default(false) @map("is_optional")
+  id          String   @id @default(uuid())
+  date        DateTime @unique
+  name        String
+  description String?  @map("description")
+  isOptional  Boolean  @default(false) @map("is_optional")
 
   // Nullable, mirrors ProjectHoliday.createdByEmployeeId — degrades
   // gracefully if the declaring account somehow has no linked Employee.
@@ -979,16 +980,16 @@ model Holiday {
 /// do — supports true multi-recipient targeting (several specific accounts
 /// in one message), not just one person.
 model Announcement {
-  id             String                   @id @default(uuid())
-  authorUserId   String                   @map("author_user_id")
-  author         User                     @relation("AnnouncementAuthor", fields: [authorUserId], references: [id])
-  title          String
-  body           String
-  fileUrl        String?                  @map("file_url")
-  fileName       String?                  @map("file_name")
-  isBroadcast    Boolean                  @default(true) @map("is_broadcast")
-  recipients     AnnouncementRecipient[]
-  createdAt      DateTime                 @default(now()) @map("created_at")
+  id           String                  @id @default(uuid())
+  authorUserId String                  @map("author_user_id")
+  author       User                    @relation("AnnouncementAuthor", fields: [authorUserId], references: [id])
+  title        String
+  body         String
+  fileUrl      String?                 @map("file_url")
+  fileName     String?                 @map("file_name")
+  isBroadcast  Boolean                 @default(true) @map("is_broadcast")
+  recipients   AnnouncementRecipient[]
+  createdAt    DateTime                @default(now()) @map("created_at")
 
   @@map("announcements")
 }
@@ -1009,14 +1010,14 @@ model AnnouncementRecipient {
 /// to review. Never auto-resets anything — resolving one is just a marker
 /// that HR handled it (via the existing manual reset-password flow).
 model PasswordResetRequest {
-  id             String    @id @default(uuid())
-  userId         String    @map("user_id")
-  user           User      @relation("PasswordResetRequests", fields: [userId], references: [id])
-  status         String    @default("PENDING") // PENDING | RESOLVED
-  resolvedById   String?   @map("resolved_by_id")
-  resolvedBy     User?     @relation("PasswordResetResolvedBy", fields: [resolvedById], references: [id])
-  resolvedAt     DateTime? @map("resolved_at")
-  createdAt      DateTime  @default(now()) @map("created_at")
+  id           String    @id @default(uuid())
+  userId       String    @map("user_id")
+  user         User      @relation("PasswordResetRequests", fields: [userId], references: [id])
+  status       String    @default("PENDING") // PENDING | RESOLVED
+  resolvedById String?   @map("resolved_by_id")
+  resolvedBy   User?     @relation("PasswordResetResolvedBy", fields: [resolvedById], references: [id])
+  resolvedAt   DateTime? @map("resolved_at")
+  createdAt    DateTime  @default(now()) @map("created_at")
 
   @@map("password_reset_requests")
 }
@@ -1070,19 +1071,19 @@ model SupportTicket {
 }
 
 model Warehouse {
-  id               String                      @id @default(uuid())
-  name             String
-  location         String
+  id                String                      @id @default(uuid())
+  name              String
+  location          String
   // REAL warehouses get a map pin (latitude/longitude); VIRTUAL ones don't
   // have a physical location at all, so those stay null.
-  type             WarehouseType               @default(REAL)
-  latitude         Float?
-  longitude        Float?
+  type              WarehouseType               @default(REAL)
+  latitude          Float?
+  longitude         Float?
   // Tons, always — a kg input on the frontend is divided by 1000 before it
   // ever reaches here. Float (not Int) so a kg entry that isn't an exact
   // multiple of 1000 (e.g. 1500 kg = 1.5 tons) doesn't get rounded away.
-  capacity         Float
-  manager          String?
+  capacity          Float
+  manager           String?
   purchaseOrders    PurchaseOrder[]
   stockMovements    StockMovement[]
   productStock      WarehouseStock[]
@@ -1121,7 +1122,7 @@ model TimeLog {
   employeeId  String   @map("employee_id")
   employee    Employee @relation(fields: [employeeId], references: [id])
   projectId   String   @map("project_id")
-  project     Project  @relation(fields: [projectId], references: [id])
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
   hours       Float
   date        DateTime
   description String?
@@ -1144,7 +1145,7 @@ model TimeLog {
 model ProjectHoliday {
   id                  String   @id @default(uuid())
   projectId           String   @map("project_id")
-  project             Project  @relation(fields: [projectId], references: [id])
+  project             Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
   date                DateTime
   title               String
   createdByEmployeeId String   @map("created_by_employee_id")
@@ -1168,11 +1169,11 @@ model AuditLog {
   role        String?  @map("role")
   department  String?  @map("department")
   actionType  String   @default("UPDATE") @map("action_type") // CREATE, UPDATE, DELETE, STATUS_CHANGE, LOGIN, EXPORT
-  action      String   // Raw route or internal action code (e.g. "POST /api/hrm/employees")
-  module      String   // HR, INVENTORY, FINANCE, CRM, PROJECTS, ADMIN, SETTINGS
+  action      String // Raw route or internal action code (e.g. "POST /api/hrm/employees")
+  module      String // HR, INVENTORY, FINANCE, CRM, PROJECTS, ADMIN, SETTINGS
   entityType  String?  @map("entity_type") // Employee, Payroll, Product, Order, Lead, etc.
   entityId    String?  @map("entity_id")
-  description String?  // Human-readable summary of what changed
+  description String? // Human-readable summary of what changed
   ipAddress   String?  @map("ip_address")
   userAgent   String?  @map("user_agent")
   details     String?  @db.Text // Sanitized JSON string of payload / state diff

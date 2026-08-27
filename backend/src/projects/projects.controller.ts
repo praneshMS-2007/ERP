@@ -232,13 +232,25 @@ export class ProjectsController {
 
   @Get(':id/milestones')
   @RequirePermission('PROJECTS', 'READ')
-  getMilestones(@Param('id') projectId: string) {
-    return this.projectsService.getMilestones(projectId);
+  getMilestones(@Param('id') projectId: string, @CurrentUser() user: AuthenticatedUser) {
+    return this.projectsService.getMilestones(projectId, user);
   }
 
   @Post('milestones')
-  @RequirePermission('PROJECTS', 'WRITE')
-  createMilestone(@Body() data: Prisma.MilestoneUncheckedCreateInput) {
-    return this.projectsService.createMilestone(data);
+  @RequirePermission('PROJECTS', 'READ')
+  createMilestone(@Body() data: Prisma.MilestoneUncheckedCreateInput, @CurrentUser() user: AuthenticatedUser) {
+    return this.projectsService.createMilestone(data, user);
+  }
+
+  @Put('milestones/:id/status')
+  @RequirePermission('PROJECTS', 'READ')
+  updateMilestoneStatus(@Param('id') id: string, @Body('status') status: string, @CurrentUser() user: AuthenticatedUser) {
+    return this.projectsService.updateMilestoneStatus(id, status, user);
+  }
+
+  @Delete('milestones/:id')
+  @RequirePermission('PROJECTS', 'READ')
+  deleteMilestone(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser) {
+    return this.projectsService.deleteMilestone(id, user);
   }
 }

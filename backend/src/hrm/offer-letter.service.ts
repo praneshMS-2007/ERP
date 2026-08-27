@@ -69,7 +69,10 @@ interface LetterData {
 @Injectable()
 export class OfferLetterService {
   private readonly logger = new Logger(OfferLetterService.name);
-  private readonly outDir = path.join(process.cwd(), 'uploads', 'offer-letters');
+  // Not served by the public static mount — see the matching comment on
+  // PayslipService.outDir. Access goes through
+  // hrmService.resolveGeneratedDocumentForDownload.
+  private readonly outDir = path.join(process.cwd(), 'private-uploads', 'offer-letters');
 
   constructor(
     private prisma: PrismaService,
@@ -138,17 +141,17 @@ export class OfferLetterService {
     const fullPath = path.join(this.outDir, fileName);
     fs.writeFileSync(fullPath, pdfBuffer);
     const sha256 = crypto.createHash('sha256').update(pdfBuffer).digest('hex');
-    const fileUrl = `/uploads/offer-letters/${fileName}`;
 
     const document = await this.prisma.document.create({
       data: {
         kind,
         ownerUserId: employee.userId,
-        storagePath: fileUrl,
+        storagePath: `offer-letters/${fileName}`,
         fileName,
         sha256,
       },
     });
+    const fileUrl = `/api/hrm/documents/${document.id}/download`;
     await this.prisma.employee.update({
       where: { id: employeeId },
       data: { offerLetterDocumentId: document.id },

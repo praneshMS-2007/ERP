@@ -205,6 +205,39 @@ export class HrmService {
     fs.mkdirSync(this.avatarDir, { recursive: true });
   }
 
+  // ========== GENERATED DOCUMENT DOWNLOADS (payslip / offer letter / certificate) ==========
+  // These carry real salary/PII, so — unlike an avatar — they are written to
+  // private-uploads (not mounted by the public static server in main.ts) and
+  // can only be fetched through this checked resolver: the document's own
+  // owner, or HR/Admin. See the matching comment on PayslipService.outDir.
+  private static readonly DOWNLOADABLE_DOCUMENT_KINDS = new Set(['PAYSLIP', 'OFFER_LETTER', 'CONFIRMATION_LETTER', 'COMPLETION_CERTIFICATE']);
+
+  async resolveGeneratedDocumentForDownload(documentId: string, viewer?: RequestUser) {
+    const doc = await this.prisma.document.findUnique({ where: { id: documentId } });
+    if (!doc) throw new NotFoundException('Document not found');
+    if (!HrmService.DOWNLOADABLE_DOCUMENT_KINDS.has(doc.kind)) {
+      throw new ForbiddenException('This document type is not available through this endpoint.');
+    }
+
+    const isOwner = !!viewer && !!doc.ownerUserId && doc.ownerUserId === viewer.id;
+    // PAYSLIP follows the same COMPENSATION_ROLES rule salary figures use
+    // everywhere else in this file ("visible to HR, Finance and super
+    // admins — nobody else") — Finance approves and releases every payslip,
+    // so they need to be able to see the PDF they just released, not just
+    // HR. Offer letters and certificates stay HR/Admin-only: Finance has no
+    // stated business reason to see either.
+    const isPrivileged = !!viewer && (
+      doc.kind === 'PAYSLIP' ? canViewCompensation(viewer) : (viewer.role === 'SUPER_ADMIN' || viewer.role === 'HR_MANAGER')
+    );
+    if (!isOwner && !isPrivileged) {
+      throw new ForbiddenException('You do not have access to this document.');
+    }
+
+    const fullPath = path.join(process.cwd(), 'private-uploads', doc.storagePath);
+    if (!fs.existsSync(fullPath)) throw new NotFoundException('The stored file is missing on disk.');
+    return { fullPath, fileName: doc.fileName };
+  }
+
   // ========== EMPLOYEES ==========
 
   /**
@@ -455,8 +488,12 @@ export class HrmService {
       throw new BadRequestException('You are already clocked in for today.');
     }
 
+    // `date` is stored at local midnight (dayStart), not the raw clock-in
+    // instant — it's the calendar-day key the new @@unique([employeeId,
+    // date]) constraint enforces, same convention markAttendance uses. The
+    // actual clock-in time is still captured precisely in `checkIn`.
     return this.prisma.attendance.create({
-      data: { employeeId: self.id, date: now, status: 'PRESENT', checkIn: now },
+      data: { employeeId: self.id, date: dayStart, status: 'PRESENT', checkIn: now },
     });
   }
 
@@ -1086,7 +1123,17 @@ export class HrmService {
     if (attDay < joinDay) {
       throw new BadRequestException("This person hadn't joined yet on that date — attendance can only be marked from their join date onward.");
     }
-    return this.prisma.attendance.create({ data });
+    // Marking the same employee+day twice corrects the earlier entry rather
+    // than silently creating a second row for the same day (@@unique on
+    // Attendance) — re-marking a mistake is an everyday, intended action.
+    // Always stored at local midnight (attDay), not whatever time-of-day the
+    // client happened to send, so re-marks reliably hit the same row.
+    const { employeeId, date, ...rest } = data;
+    return this.prisma.attendance.upsert({
+      where: { employeeId_date: { employeeId: employeeId as string, date: attDay } },
+      update: rest,
+      create: { ...data, date: attDay },
+    });
   }
 
   /** "YYYY-MM-DD" from local date parts — never toISOString(), which
@@ -1302,7 +1349,23 @@ export class HrmService {
   }
 
   async requestLeave(data: Prisma.LeaveUncheckedCreateInput) {
-    return this.prisma.leave.create({ data });
+    const startDate = new Date(data.startDate as any);
+    const endDate = new Date(data.endDate as any);
+    if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) {
+      throw new BadRequestException('A valid start and end date are required.');
+    }
+    if (endDate < startDate) {
+      throw new BadRequestException('The end date cannot be before the start date.');
+    }
+    const employee = await this.prisma.employee.findUnique({
+      where: { id: data.employeeId as string },
+      select: { joinDate: true },
+    });
+    if (!employee) throw new NotFoundException('Employee not found');
+    if (startDate < employee.joinDate) {
+      throw new BadRequestException("This person hadn't joined yet on that date — leave can only be requested from their join date onward.");
+    }
+    return this.prisma.leave.create({ data: { ...data, startDate, endDate } });
   }
 
   /**
@@ -1489,7 +1552,7 @@ export class HrmService {
     payPeriod: string;
     periodStart: string;
     periodEnd: string;
-  } & Partial<PayrollManualInput>) {
+  } & Partial<PayrollManualInput>, viewer?: RequestUser) {
     const employee = await this.prisma.employee.findUnique({
       where: { id: data.employeeId },
       select: { status: true, joinDate: true },
@@ -1530,6 +1593,7 @@ export class HrmService {
         payPeriod: data.payPeriod,
         periodStart,
         periodEnd,
+        preparedById: viewer?.id,
         ...breakdown,
       },
     });
@@ -1570,7 +1634,7 @@ export class HrmService {
         // 1. Update payroll status and payment date
         const updated = await tx.payroll.update({
           where: { id },
-          data: { status, paymentDate: new Date(), rejectedReason: null },
+          data: { status, paymentDate: new Date(), rejectedReason: null, approvedById: viewer?.id, approvedAt: new Date() },
         });
 
         // 2. Auto-create a Finance Expense record

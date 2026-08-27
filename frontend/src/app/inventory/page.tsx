@@ -104,6 +104,29 @@ export default function InventoryPage() {
   const stockBadge = (p: any) => p.stockLevel <= p.minStockLevel ? 'badge badge-on-leave' : 'badge badge-active';
   const stockLabel = (p: any) => p.stockLevel <= p.minStockLevel ? 'LOW STOCK' : 'IN STOCK';
 
+  const PO_STATUS_BADGE: Record<string, string> = {
+    ORDERED: 'badge badge-pending', SHIPPED: 'badge badge-in-transit', DELIVERED: 'badge badge-approved', CANCELLED: 'badge badge-probation',
+  };
+  // A delivered PO can never move again (its stock has already landed);
+  // everything else can still progress toward delivery or be cancelled.
+  const NEXT_PO_STATUSES: Record<string, string[]> = {
+    ORDERED: ['SHIPPED', 'DELIVERED', 'CANCELLED'],
+    SHIPPED: ['DELIVERED', 'CANCELLED'],
+    CANCELLED: [],
+    DELIVERED: [],
+  };
+  const [poActionError, setPoActionError] = useState('');
+
+  async function handlePOStatusChange(id: string, status: string) {
+    setPoActionError('');
+    try {
+      await inventoryApi.updatePurchaseOrderStatus(id, status);
+      fetchAll();
+    } catch (e: any) {
+      setPoActionError(e.message || 'Could not update this purchase order.');
+    }
+  }
+
   return (
     <div className="fade-in">
       <div className="page-header">
@@ -230,6 +253,44 @@ export default function InventoryPage() {
                       <div style={{ fontWeight: 700, color: '#dc2626' }}>Low Stock: {p.name}</div>
                       <div style={{ color: 'var(--color-text-secondary)' }}>Current: {p.stockLevel} units (Min: {p.minStockLevel})</div>
                     </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Purchase Orders — create happens above (New Purchase Order),
+              this is where a PO actually gets progressed to Delivered so
+              its stock lands, or cancelled. */}
+          <div className="card">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <h3 style={{ fontSize: '16px', fontWeight: 700 }}>Purchase Orders</h3>
+            </div>
+            {poActionError && <div style={{ padding: '8px 12px', marginBottom: 12, background: '#fef2f2', border: '1px solid #fecaca', color: '#dc2626', borderRadius: 8, fontSize: 12, fontWeight: 600 }}>{poActionError}</div>}
+            {purchaseOrders.length === 0 ? (
+              <div style={{ fontSize: '12px', color: 'var(--color-text-muted)', textAlign: 'center', padding: '20px 0' }}>No purchase orders yet</div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', maxHeight: 320, overflowY: 'auto' }}>
+                {purchaseOrders.map((po: any) => (
+                  <div key={po.id} style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: '12px', paddingBottom: 10, borderBottom: '1px solid var(--color-border)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontWeight: 700 }}>{po.orderNumber}</span>
+                      <span className={PO_STATUS_BADGE[po.status] || 'badge'}>{po.status}</span>
+                    </div>
+                    <div style={{ color: 'var(--color-text-secondary)' }}>
+                      {po.product?.name || 'Unknown product'} · {po.quantity} units · {po.supplier?.name || 'No supplier'}
+                    </div>
+                    {NEXT_PO_STATUSES[po.status]?.length > 0 && (
+                      <select
+                        value=""
+                        onChange={(e) => { if (e.target.value) handlePOStatusChange(po.id, e.target.value); }}
+                        className="btn btn-secondary btn-sm"
+                        style={{ fontSize: 11, width: 'fit-content' }}
+                      >
+                        <option value="">Change status…</option>
+                        {NEXT_PO_STATUSES[po.status].map((s) => <option key={s} value={s}>{s === 'DELIVERED' ? 'Mark Delivered' : s === 'CANCELLED' ? 'Cancel' : s}</option>)}
+                      </select>
+                    )}
                   </div>
                 ))}
               </div>

@@ -95,6 +95,11 @@ export class InventoryService {
     if (!warehouseId) throw new BadRequestException('Choose which warehouse this product is stored in.');
     const quantity = initialQuantity ?? productData.stockLevel ?? 0;
 
+    if (productData.sku) {
+      const existing = await this.prisma.product.findUnique({ where: { sku: productData.sku } });
+      if (existing) throw new BadRequestException(`SKU "${productData.sku}" is already in use by another product.`);
+    }
+
     await this.assertWarehouseTypeMatches(warehouseId, !!productData.isDigital);
 
     return this.prisma.$transaction(async (tx) => {
@@ -239,7 +244,16 @@ export class InventoryService {
     const po = await this.prisma.purchaseOrder.findUnique({ where: { id } });
     if (!po) throw new NotFoundException('Purchase order not found');
 
-    if (status === 'DELIVERED' && po.status !== 'DELIVERED') {
+    // Once delivered, a PO is done — same as a paid Payroll or a paid
+    // Invoice can't un-happen. Without this, flipping DELIVERED -> anything
+    // -> DELIVERED again would re-run the restock below a second time for
+    // the same units, since the guard only ever checked "not currently
+    // DELIVERED," not "never delivered before."
+    if (po.status === 'DELIVERED') {
+      throw new BadRequestException('This purchase order has already been delivered and its stock received — its status can no longer be changed.');
+    }
+
+    if (status === 'DELIVERED') {
       return this.prisma.$transaction(async (tx) => {
         const updatedPO = await tx.purchaseOrder.update({
           where: { id },

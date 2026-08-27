@@ -1,5 +1,6 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
+import { randomUUID } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import * as bcrypt from 'bcryptjs';
 import { JwtPayload } from './jwt.strategy';
@@ -59,8 +60,16 @@ export class AuthService {
       action: p.action,
     }));
 
+    // The session id is minted BEFORE signing, not after, so it can be
+    // embedded in the token itself as `sid` — that's what
+    // JwtStrategy.validate checks on every request, so "Revoke Session" (or
+    // an admin deactivating someone) actually ends this exact token
+    // immediately instead of only hiding it from the list while it keeps
+    // working for the rest of its 24h life.
+    const sessionId = randomUUID();
     const payload: JwtPayload = {
       sub: user.id,
+      sid: sessionId,
       email: user.email,
       role: user.role.name,
       permissions,
@@ -68,11 +77,12 @@ export class AuthService {
 
     const token = this.jwtService.sign(payload);
 
-    // Store the session — deviceInfo/ipAddress come straight from this
-    // request (User-Agent header, req.ip), not placeholder text, so the
-    // Settings > Sessions list reflects what actually signed in.
+    // deviceInfo/ipAddress come straight from this request (User-Agent
+    // header, req.ip), not placeholder text, so the Settings > Sessions list
+    // reflects what actually signed in.
     await this.prisma.authentication.create({
       data: {
+        id: sessionId,
         userId: user.id,
         token,
         deviceInfo,
@@ -147,7 +157,16 @@ export class AuthService {
       },
     });
     if (!user) throw new UnauthorizedException('User not found');
-    return user;
+
+    // Settings > My Profile is read-only and never needs the password hash,
+    // the encrypted password/PII ciphertext, or reset tokens — none of
+    // which have any legitimate reason to reach the browser. Strip them
+    // here rather than trusting every future caller of this method to.
+    const { passwordHash, passwordPlain, resetToken, resetTokenExpiry, employee, ...safeUser } = user;
+    if (!employee) return safeUser;
+
+    const { pan, aadhaarNumber, bankAccountNo, bankIfsc, uanNumber, esicNumber, pfNumber, ...safeEmployee } = employee;
+    return { ...safeUser, employee: safeEmployee };
   }
 
 

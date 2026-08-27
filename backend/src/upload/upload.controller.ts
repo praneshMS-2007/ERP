@@ -8,6 +8,26 @@ import { extname } from 'path';
 // still broad, but it closes the unauthenticated hole. If per-module upload
 // permissions are needed later (e.g. only HR uploading onboarding documents),
 // add @RequirePermission(...) once this is wired to a specific feature.
+//
+// The result lands under the public /uploads static mount (see main.ts) —
+// fine for the attachments/avatars this endpoint actually serves (rendered
+// via plain <img>/<a> tags, which can't attach an auth header), but that
+// means anything accepted here is publicly, permanently fetchable. The MIME
+// allow-list below exists specifically to stop someone uploading an
+// HTML/SVG file that the browser would execute as script from this same
+// origin (stored XSS) — genuinely sensitive documents (payslips, offer
+// letters, certificates) never go through this endpoint; see
+// PayslipService/OfferLetterService/InternshipCertificateService, which
+// write to private-uploads and require an authenticated, ownership-checked
+// download instead.
+const ALLOWED_MIME_TYPES = new Set([
+  'application/pdf',
+  'image/jpeg',
+  'image/png',
+  'image/gif',
+  'image/webp',
+]);
+
 @Controller('upload')
 export class UploadController {
   @Post('file')
@@ -22,6 +42,12 @@ export class UploadController {
         },
       }),
       limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
+      fileFilter: (req: any, file: any, callback: any) => {
+        if (!ALLOWED_MIME_TYPES.has(file.mimetype)) {
+          return callback(new BadRequestException('Only PDF, JPG, PNG, GIF, and WEBP files are accepted.'), false);
+        }
+        callback(null, true);
+      },
     }),
   )
   uploadFile(@UploadedFile() file: any) {

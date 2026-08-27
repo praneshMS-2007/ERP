@@ -9,6 +9,16 @@ export class FinanceService {
 
   constructor(private prisma: PrismaService) {}
 
+  // None of the money fields this module writes have a real "negative"
+  // business meaning in this schema — an expense, income, budget
+  // allocation, tax bill, or payment is either a real positive amount or it
+  // shouldn't exist as a row at all.
+  private assertPositiveAmount(amount: number | undefined, label: string) {
+    if (amount === undefined || amount === null || Number.isNaN(amount) || amount <= 0) {
+      throw new BadRequestException(`${label} must be a positive amount.`);
+    }
+  }
+
   async getDashboardMetrics() {
     const revenueAgg = await this.prisma.income.aggregate({
       _sum: { amount: true },
@@ -50,6 +60,7 @@ export class FinanceService {
   }
 
   async createExpense(data: Prisma.ExpenseUncheckedCreateInput) {
+    this.assertPositiveAmount(data.amount, 'Expense amount');
     return this.prisma.expense.create({ data });
   }
 
@@ -70,6 +81,7 @@ export class FinanceService {
   }
 
   async createInvoice(data: Prisma.InvoiceUncheckedCreateInput) {
+    this.assertPositiveAmount(data.amount, 'Invoice amount');
     if (!data.invoiceNo) {
       const count = await this.prisma.invoice.count();
       data.invoiceNo = `INV-${new Date().getFullYear()}-${String(count + 1).padStart(4, '0')}`;
@@ -97,6 +109,7 @@ export class FinanceService {
   }
 
   async createIncome(data: Prisma.IncomeUncheckedCreateInput) {
+    this.assertPositiveAmount(data.amount, 'Income amount');
     return this.prisma.income.create({ data });
   }
 
@@ -116,6 +129,7 @@ export class FinanceService {
   }
 
   async createBudget(data: Prisma.BudgetUncheckedCreateInput) {
+    this.assertPositiveAmount(data.planned, 'Planned budget amount');
     return this.prisma.budget.create({ data });
   }
 
@@ -142,6 +156,12 @@ export class FinanceService {
    */
   async createLedgerEntry(data: any) {
     if (Array.isArray(data)) {
+      // Checked before the debit/credit balance check below, not instead of
+      // it: two negative amounts (e.g. DEBIT -100 / CREDIT -100) sum to
+      // equal totals and would otherwise sail through as "balanced," while
+      // actually representing the opposite real transaction in disguise.
+      data.forEach((entry) => this.assertPositiveAmount(entry.amount, 'Each ledger entry amount'));
+
       let totalDebits = 0;
       let totalCredits = 0;
 
@@ -160,6 +180,7 @@ export class FinanceService {
     }
 
     // Auto-balancing single entry pair if provided as single object
+    this.assertPositiveAmount(data.amount, 'Ledger entry amount');
     const counterType = data.type === 'DEBIT' ? 'CREDIT' : 'DEBIT';
     const counterAccount = data.type === 'DEBIT' ? '1010-CASH' : '4000-REVENUE';
 
@@ -186,6 +207,7 @@ export class FinanceService {
   }
 
   async createTaxRecord(data: Prisma.TaxRecordUncheckedCreateInput) {
+    this.assertPositiveAmount(data.amount, 'Tax amount');
     return this.prisma.taxRecord.create({ data });
   }
 
@@ -205,6 +227,7 @@ export class FinanceService {
   }
 
   async createPayment(data: Prisma.PaymentUncheckedCreateInput) {
+    this.assertPositiveAmount(data.amount, 'Payment amount');
     return this.prisma.$transaction(async (tx) => {
       const payment = await tx.payment.create({ data });
 

@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import {
   ArrowLeft, Edit2, Save, Users, ListTodo, FileText, Megaphone, Clock,
   Plus, Upload, X, Trash2, ChevronLeft, Download, CalendarOff,
-  FileImage, FileSpreadsheet, Presentation, File as FileIcon,
+  FileImage, FileSpreadsheet, Presentation, File as FileIcon, Flag, Check,
 } from 'lucide-react';
 import { projectApi, hrmApi, uploadApi } from '../../../services/api';
 import { useAuth } from '../../../context/AuthContext';
@@ -52,6 +52,7 @@ const TABS = [
   { key: 'overview', label: 'Overview', icon: Users },
   { key: 'documents', label: 'Documents', icon: FileText },
   { key: 'tasks', label: 'Tasks', icon: ListTodo },
+  { key: 'milestones', label: 'Milestones', icon: Flag },
   { key: 'timesheet', label: 'Timesheet', icon: Clock },
   { key: 'announcements', label: 'Announcements', icon: Megaphone },
 ] as const;
@@ -69,6 +70,7 @@ export default function ProjectDetailPage() {
   const [employees, setEmployees] = useState<any[]>([]);
   const [announcements, setAnnouncements] = useState<any[]>([]);
   const [documents, setDocuments] = useState<any[]>([]);
+  const [milestones, setMilestones] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
 
@@ -83,12 +85,14 @@ export default function ProjectDetailPage() {
       ]);
       setProject(proj);
       setEmployees(Array.isArray(empData) ? empData.filter((e: any) => e.status !== 'INACTIVE') : []);
-      const [ann, docs] = await Promise.all([
+      const [ann, docs, ms] = await Promise.all([
         projectApi.getAnnouncements(id).catch(() => []),
         projectApi.getDocuments(id).catch(() => []),
+        projectApi.getMilestones(id).catch(() => []),
       ]);
       setAnnouncements(Array.isArray(ann) ? ann : []);
       setDocuments(Array.isArray(docs) ? docs : []);
+      setMilestones(Array.isArray(ms) ? ms : []);
     } catch (e: any) {
       setLoadError(e.message || 'Could not load this project.');
     } finally {
@@ -193,6 +197,9 @@ export default function ProjectDetailPage() {
           projectId={id} project={project} teamRosterOptions={teamRosterOptions} isManager={isManager}
           hasRoster={hasRoster} onChanged={fetchAll}
         />
+      )}
+      {tab === 'milestones' && (
+        <MilestonesTab projectId={id} milestones={milestones} isManager={isManager} onChanged={fetchAll} />
       )}
       {tab === 'timesheet' && (
         <TimesheetTab
@@ -420,6 +427,110 @@ function OverviewTab({ project, employees, isManager, canStaffProjects, onChange
         <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
           <button className="btn btn-secondary" onClick={() => setShowStaffingModal(false)}>Cancel</button>
           <button className="btn btn-primary" onClick={handleSaveStaffing}>Save</button>
+        </div>
+      </Modal>
+    </div>
+  );
+}
+
+// ================= DOCUMENTS =================
+
+// ================= MILESTONES =================
+// Project-level checkpoints — simpler than Tasks (no assignee, no
+// priority): just a title, an optional due date, and PENDING/REACHED.
+
+function MilestonesTab({ projectId, milestones, isManager, onChanged }: any) {
+  const [showAdd, setShowAdd] = useState(false);
+  const [title, setTitle] = useState('');
+  const [dueDate, setDueDate] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  async function handleCreate() {
+    if (!title.trim()) { setError('A title is required.'); return; }
+    setSaving(true);
+    setError('');
+    try {
+      await projectApi.createMilestone({ projectId, title: title.trim(), dueDate: dueDate || undefined });
+      setShowAdd(false);
+      setTitle('');
+      setDueDate('');
+      onChanged();
+    } catch (e: any) {
+      setError(e.message || 'Could not create this milestone.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleToggleReached(m: any) {
+    try {
+      await projectApi.updateMilestoneStatus(m.id, m.status === 'REACHED' ? 'PENDING' : 'REACHED');
+      onChanged();
+    } catch (e: any) {
+      alert(e.message || 'Could not update this milestone.');
+    }
+  }
+
+  async function handleDelete(id: string) {
+    if (!confirm('Delete this milestone?')) return;
+    try {
+      await projectApi.deleteMilestone(id);
+      onChanged();
+    } catch (e: any) {
+      alert(e.message || 'Could not delete this milestone.');
+    }
+  }
+
+  const sorted = [...milestones].sort((a: any, b: any) => (a.status === b.status ? 0 : a.status === 'REACHED' ? 1 : -1));
+
+  return (
+    <div className="card">
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+        <h3 style={{ fontSize: '16px', fontWeight: 700 }}>Milestones</h3>
+        {isManager && (
+          <button className="btn btn-primary btn-sm" onClick={() => { setTitle(''); setDueDate(''); setError(''); setShowAdd(true); }}>
+            <Plus size={13} /> Add Milestone
+          </button>
+        )}
+      </div>
+      {sorted.length === 0 ? (
+        <p style={{ fontSize: '13px', color: 'var(--color-text-muted)', textAlign: 'center', padding: '20px 0' }}>No milestones set for this project yet.</p>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          {sorted.map((m: any) => (
+            <div key={m.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', borderRadius: '8px', border: '1px solid var(--color-border)', opacity: m.status === 'REACHED' ? 0.7 : 1 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div style={{ width: 30, height: 30, borderRadius: 8, background: m.status === 'REACHED' ? '#dcfce7' : '#f3f4f6', color: m.status === 'REACHED' ? '#16a34a' : '#6b7280', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  {m.status === 'REACHED' ? <Check size={15} /> : <Flag size={14} />}
+                </div>
+                <div>
+                  <div style={{ fontSize: '13.5px', fontWeight: 600, textDecoration: m.status === 'REACHED' ? 'line-through' : 'none' }}>{m.title}</div>
+                  {m.dueDate && <div style={{ fontSize: '12px', color: 'var(--color-text-muted)', marginTop: '2px' }}>Due {new Date(m.dueDate).toLocaleDateString()}</div>}
+                </div>
+              </div>
+              {isManager && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <button className="btn btn-secondary btn-sm" onClick={() => handleToggleReached(m)}>
+                    {m.status === 'REACHED' ? 'Mark Pending' : 'Mark Reached'}
+                  </button>
+                  <button onClick={() => handleDelete(m.id)} style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#dc2626' }}><Trash2 size={15} /></button>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      <Modal isOpen={showAdd} onClose={() => setShowAdd(false)} title="Add Milestone">
+        {error && (
+          <div style={{ padding: '10px 14px', marginBottom: 14, background: '#fef2f2', border: '1px solid #fecaca', color: '#dc2626', borderRadius: 8, fontSize: 13, fontWeight: 600 }}>{error}</div>
+        )}
+        <FormField label="Title" value={title} onChange={setTitle} placeholder="e.g. MVP shipped" required />
+        <FormField label="Due Date (optional)" type="date" value={dueDate} onChange={setDueDate} />
+        <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', marginTop: '8px' }}>
+          <button className="btn btn-secondary" onClick={() => setShowAdd(false)} disabled={saving}>Cancel</button>
+          <button className="btn btn-primary" onClick={handleCreate} disabled={saving || !title.trim()}>{saving ? 'Saving…' : 'Add Milestone'}</button>
         </div>
       </Modal>
     </div>
