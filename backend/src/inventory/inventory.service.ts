@@ -53,10 +53,15 @@ export class InventoryService {
   }
 
   async getStockAlerts() {
-    // Products where current stock level is less than or equal to min stock level
-    const products = await this.prisma.product.findMany({
-      orderBy: { stockLevel: 'asc' },
-    });
+    // Products where current stock level is less than or equal to min stock level —
+    // the filter describing this was missing entirely, so every product in the
+    // catalog (even ones stocked far above their minimum) was returned as an
+    // "alert." Filtered here in JS, not the query itself — Prisma's standard
+    // client can't compare one column against another (stockLevel vs
+    // minStockLevel) inside a `where` without a preview feature this project
+    // doesn't have enabled.
+    const allProducts = await this.prisma.product.findMany({ orderBy: { stockLevel: 'asc' } });
+    const products = allProducts.filter((p) => p.stockLevel <= p.minStockLevel);
 
     return products.map(p => {
       const isCritical = p.stockLevel <= Math.floor(p.minStockLevel / 2);
@@ -93,6 +98,13 @@ export class InventoryService {
   async createProduct(data: Prisma.ProductUncheckedCreateInput & { warehouseId?: string; initialQuantity?: number }) {
     const { warehouseId, initialQuantity, ...productData } = data;
     if (!warehouseId) throw new BadRequestException('Choose which warehouse this product is stored in.');
+    if (!productData.name?.trim()) throw new BadRequestException('A product name is required.');
+    if (!productData.sku?.trim()) throw new BadRequestException('A SKU is required.');
+    if (!productData.category?.trim()) throw new BadRequestException('A category is required.');
+    if (!productData.status) throw new BadRequestException('A status is required.');
+    if (productData.price === undefined || productData.price === null || Number.isNaN(Number(productData.price)) || Number(productData.price) < 0) {
+      throw new BadRequestException('A non-negative price is required.');
+    }
     const quantity = initialQuantity ?? productData.stockLevel ?? 0;
 
     if (productData.sku) {
@@ -335,6 +347,11 @@ export class InventoryService {
   }
 
   async createWarehouse(data: Prisma.WarehouseUncheckedCreateInput) {
+    if (!data.name?.trim()) throw new BadRequestException('A warehouse name is required.');
+    if (!data.location?.trim()) throw new BadRequestException('A location is required.');
+    if (data.capacity === undefined || data.capacity === null || Number.isNaN(Number(data.capacity)) || Number(data.capacity) <= 0) {
+      throw new BadRequestException('A positive storage capacity is required.');
+    }
     return this.prisma.warehouse.create({ data });
   }
 
@@ -499,7 +516,15 @@ export class InventoryService {
     const order = await this.prisma.salesOrder.findUnique({ where: { id } });
     if (!order) throw new NotFoundException('Sales order not found');
 
-    if (status === 'DELIVERED' && order.status !== 'DELIVERED') {
+    // Once delivered, an order is done — same reasoning as a Purchase
+    // Order (see updatePurchaseOrderStatus): without this, DELIVERED ->
+    // CANCELLED -> DELIVERED would re-run the stock decrement below a
+    // second time for units that already left the warehouse once.
+    if (order.status === 'DELIVERED') {
+      throw new BadRequestException('This sales order has already been delivered and its stock deducted — its status can no longer be changed.');
+    }
+
+    if (status === 'DELIVERED') {
       if (!order.productId || !order.warehouseId || !order.quantity) {
         throw new BadRequestException('This order has no product, warehouse, or quantity to fulfill.');
       }

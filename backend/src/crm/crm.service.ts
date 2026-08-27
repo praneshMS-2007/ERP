@@ -19,6 +19,8 @@ export class CrmService {
   }
 
   async createLead(data: Prisma.LeadCreateInput) {
+    if (!data.name?.trim()) throw new BadRequestException('A name is required.');
+    if (!data.status) throw new BadRequestException('A status is required.');
     return this.prisma.lead.create({ data });
   }
 
@@ -103,6 +105,11 @@ export class CrmService {
   }
 
   async createOpportunity(data: Prisma.OpportunityUncheckedCreateInput) {
+    if (!data.customerId) throw new BadRequestException('A customer is required.');
+    if (!data.stage) throw new BadRequestException('A stage is required.');
+    if (data.value === undefined || data.value === null || Number.isNaN(Number(data.value)) || Number(data.value) < 0) {
+      throw new BadRequestException('A non-negative deal value is required.');
+    }
     return this.prisma.opportunity.create({ data });
   }
 
@@ -125,6 +132,8 @@ export class CrmService {
    * auto-create a FollowUp entry for the customer with a 3-day follow-up date.
    */
   async createSupportTicket(data: Prisma.SupportTicketUncheckedCreateInput) {
+    if (!data.subject?.trim()) throw new BadRequestException('A subject is required.');
+    if (!data.description?.trim()) throw new BadRequestException('A description is required.');
     return this.prisma.$transaction(async (tx) => {
       // 1. Create the ticket
       const ticket = await tx.supportTicket.create({ data });
@@ -176,6 +185,13 @@ export class CrmService {
   }
 
   async createFollowUp(data: Prisma.FollowUpUncheckedCreateInput) {
+    if (!data.notes?.trim()) throw new BadRequestException('Notes are required.');
+    if (!data.date || Number.isNaN(new Date(data.date as any).getTime())) {
+      throw new BadRequestException('A valid date is required.');
+    }
+    if (!data.leadId && !data.customerId) {
+      throw new BadRequestException('A follow-up must be linked to a lead or a customer.');
+    }
     return this.prisma.followUp.create({ data });
   }
 

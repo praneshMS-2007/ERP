@@ -62,6 +62,12 @@ const SUB_RESOURCE_TO_ENTITY: Record<string, string> = {
   tasks:           'Task',
   milestones:      'Milestone',
   announcements:   'Announcement',
+  documents:       'Document',
+  timesheet:       'Timesheet',
+  // Deepest-segment-first means this only ever matches a bare project-level
+  // route (POST/PUT/DELETE /projects, /projects/:id) — any project
+  // sub-resource route matches its own, more specific key above first.
+  projects:        'Project',
   'salary-structures': 'Salary Structure',
   designations:    'Designation',
   departments:     'Department',

@@ -107,8 +107,13 @@ export class ExportController {
     return res.send(buffer);
   }
 
+  // HR:WRITE, not READ — same reasoning as exportLeaves above: this pulls
+  // every active employee's attendance company-wide in one download, and
+  // EMPLOYEE holds HR:READ, so a READ gate here would hand every plain
+  // employee the whole company's attendance record. Confirmed live during
+  // QA: a base EMPLOYEE account could download this before the fix.
   @Get('hrm/attendance')
-  @RequirePermission('HR', 'READ')
+  @RequirePermission('HR', 'WRITE')
   async exportAttendance(
     @Query('format') format: string,
     @Query('month') month: string,

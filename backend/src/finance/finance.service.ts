@@ -19,6 +19,18 @@ export class FinanceService {
     }
   }
 
+  // Prisma's DateTime columns reject a plain "YYYY-MM-DD" string outright
+  // (it wants full ISO-8601 with a time component) and surface that as a
+  // raw 500 — this parses explicitly so a date-only string (exactly what an
+  // HTML <input type="date"> produces) becomes a clean 400 instead.
+  private parseRequiredDate(value: unknown, label: string): Date {
+    const date = new Date(value as any);
+    if (!value || Number.isNaN(date.getTime())) {
+      throw new BadRequestException(`A valid ${label} is required.`);
+    }
+    return date;
+  }
+
   async getDashboardMetrics() {
     const revenueAgg = await this.prisma.income.aggregate({
       _sum: { amount: true },
@@ -61,7 +73,8 @@ export class FinanceService {
 
   async createExpense(data: Prisma.ExpenseUncheckedCreateInput) {
     this.assertPositiveAmount(data.amount, 'Expense amount');
-    return this.prisma.expense.create({ data });
+    const date = this.parseRequiredDate(data.date, 'date');
+    return this.prisma.expense.create({ data: { ...data, date } });
   }
 
   async updateExpense(id: string, data: Prisma.ExpenseUncheckedUpdateInput) {
@@ -82,11 +95,12 @@ export class FinanceService {
 
   async createInvoice(data: Prisma.InvoiceUncheckedCreateInput) {
     this.assertPositiveAmount(data.amount, 'Invoice amount');
+    const dueDate = this.parseRequiredDate(data.dueDate, 'due date');
     if (!data.invoiceNo) {
       const count = await this.prisma.invoice.count();
       data.invoiceNo = `INV-${new Date().getFullYear()}-${String(count + 1).padStart(4, '0')}`;
     }
-    return this.prisma.invoice.create({ data });
+    return this.prisma.invoice.create({ data: { ...data, dueDate } });
   }
 
   // Deliberately excludes `status` — that's only ever meant to move via
@@ -110,7 +124,8 @@ export class FinanceService {
 
   async createIncome(data: Prisma.IncomeUncheckedCreateInput) {
     this.assertPositiveAmount(data.amount, 'Income amount');
-    return this.prisma.income.create({ data });
+    const date = this.parseRequiredDate(data.date, 'date');
+    return this.prisma.income.create({ data: { ...data, date } });
   }
 
   async updateIncome(id: string, data: Prisma.IncomeUncheckedUpdateInput) {
@@ -130,7 +145,10 @@ export class FinanceService {
 
   async createBudget(data: Prisma.BudgetUncheckedCreateInput) {
     this.assertPositiveAmount(data.planned, 'Planned budget amount');
-    return this.prisma.budget.create({ data });
+    const startDate = this.parseRequiredDate(data.startDate, 'start date');
+    const endDate = this.parseRequiredDate(data.endDate, 'end date');
+    if (endDate < startDate) throw new BadRequestException('The end date cannot be before the start date.');
+    return this.prisma.budget.create({ data: { ...data, startDate, endDate } });
   }
 
   async updateBudget(id: string, data: Prisma.BudgetUncheckedUpdateInput) {
@@ -161,6 +179,10 @@ export class FinanceService {
       // equal totals and would otherwise sail through as "balanced," while
       // actually representing the opposite real transaction in disguise.
       data.forEach((entry) => this.assertPositiveAmount(entry.amount, 'Each ledger entry amount'));
+      // `date` defaults to now() at the DB level only when the field is
+      // absent entirely — a present-but-date-only string ("YYYY-MM-DD")
+      // still needs parsing, or Prisma rejects it with a raw 500.
+      data.forEach((entry) => { if (entry.date) entry.date = this.parseRequiredDate(entry.date, 'date'); });
 
       let totalDebits = 0;
       let totalCredits = 0;
@@ -181,6 +203,7 @@ export class FinanceService {
 
     // Auto-balancing single entry pair if provided as single object
     this.assertPositiveAmount(data.amount, 'Ledger entry amount');
+    if (data.date) data.date = this.parseRequiredDate(data.date, 'date');
     const counterType = data.type === 'DEBIT' ? 'CREDIT' : 'DEBIT';
     const counterAccount = data.type === 'DEBIT' ? '1010-CASH' : '4000-REVENUE';
 
@@ -208,7 +231,10 @@ export class FinanceService {
 
   async createTaxRecord(data: Prisma.TaxRecordUncheckedCreateInput) {
     this.assertPositiveAmount(data.amount, 'Tax amount');
-    return this.prisma.taxRecord.create({ data });
+    if (!data.period?.trim()) throw new BadRequestException('A period is required.');
+    if (!data.taxType?.trim()) throw new BadRequestException('A tax type is required.');
+    const dueDate = this.parseRequiredDate(data.dueDate, 'due date');
+    return this.prisma.taxRecord.create({ data: { ...data, dueDate } });
   }
 
   async updateTaxStatus(id: string, status: any) {
@@ -228,6 +254,8 @@ export class FinanceService {
 
   async createPayment(data: Prisma.PaymentUncheckedCreateInput) {
     this.assertPositiveAmount(data.amount, 'Payment amount');
+    const date = this.parseRequiredDate(data.date, 'date');
+    data = { ...data, date };
     return this.prisma.$transaction(async (tx) => {
       const payment = await tx.payment.create({ data });
 

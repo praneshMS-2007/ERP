@@ -400,8 +400,15 @@ export function buildPlainEnglishDescription(d: {
     return `${actor} ${actType === 'CREATE' ? 'created' : 'updated'} sales opportunity '${target || 'Deal'}'.`;
   }
 
-  // 11. PROJECTS & TASKS
-  if (route.includes('/projects') || d.entityType === 'Project') {
+  // 11. PROJECTS (the project record itself only — matched on entityType,
+  // not the route: every project sub-resource — tasks, milestones,
+  // holidays, announcements, documents, timesheets, staffing — is also
+  // served under /projects/*, so a route-substring check here used to
+  // swallow all of them and mislabel a task creation as "created a new
+  // project". Anything that isn't specifically entityType 'Project' now
+  // falls through to the honest default fallback below, which already
+  // names the real entity type correctly.)
+  if (d.entityType === 'Project') {
     if (actType === 'CREATE') {
       return `${actor} created a new project: '${target || 'Project'}'.`;
     }
