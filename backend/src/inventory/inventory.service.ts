@@ -267,10 +267,24 @@ export class InventoryService {
 
     if (status === 'DELIVERED') {
       return this.prisma.$transaction(async (tx) => {
-        const updatedPO = await tx.purchaseOrder.update({
-          where: { id },
+        // Conditional update, not a plain one: this is the actual guard
+        // against two simultaneous "mark delivered" requests, which the
+        // findUnique check above cannot catch on its own — both requests
+        // read status !== 'DELIVERED' before either has committed, so a
+        // genuine race there would restock twice. updateMany's WHERE runs
+        // atomically against the current row inside this transaction; only
+        // the request that actually flips 0->1 matching rows gets to
+        // proceed with the stock mutations below. Confirmed live during QA:
+        // two truly concurrent requests against the earlier plain-update
+        // version both succeeded and double-restocked.
+        const claimed = await tx.purchaseOrder.updateMany({
+          where: { id, status: { not: 'DELIVERED' } },
           data: { status },
         });
+        if (claimed.count === 0) {
+          throw new BadRequestException('This purchase order has already been delivered and its stock received — its status can no longer be changed.');
+        }
+        const updatedPO = await tx.purchaseOrder.findUniqueOrThrow({ where: { id } });
 
         await tx.product.update({
           where: { id: po.productId },
@@ -529,6 +543,11 @@ export class InventoryService {
         throw new BadRequestException('This order has no product, warehouse, or quantity to fulfill.');
       }
 
+      // A cheap up-front check for the common case (clear, fast feedback on
+      // an obviously-oversold order) — NOT the real guard. The real guard
+      // is the conditional decrement inside the transaction below, since
+      // this read-then-later-write gap is exactly where two simultaneous
+      // deliveries could both pass this check before either commits.
       const stock = await this.prisma.warehouseStock.findUnique({
         where: { warehouseId_productId: { warehouseId: order.warehouseId, productId: order.productId } },
       });
@@ -539,17 +558,38 @@ export class InventoryService {
       }
 
       return this.prisma.$transaction(async (tx) => {
-        const updated = await tx.salesOrder.update({ where: { id }, data: { status } });
+        // Conditional claim on the order itself, same reasoning as
+        // updatePurchaseOrderStatus: findUnique above can't stop two
+        // simultaneous "mark delivered" requests from both proceeding, so
+        // the actual guard is this atomic WHERE, not the earlier read.
+        const claimed = await tx.salesOrder.updateMany({
+          where: { id, status: { not: 'DELIVERED' } },
+          data: { status },
+        });
+        if (claimed.count === 0) {
+          throw new BadRequestException('This sales order has already been delivered and its stock deducted — its status can no longer be changed.');
+        }
+        const updated = await tx.salesOrder.findUniqueOrThrow({ where: { id } });
 
         await tx.product.update({
           where: { id: order.productId! },
           data: { stockLevel: { decrement: order.quantity! } },
         });
 
-        await tx.warehouseStock.update({
-          where: { warehouseId_productId: { warehouseId: order.warehouseId!, productId: order.productId! } },
+        // Same atomicity concern as the order claim above, for the same
+        // reason: two concurrent deliveries could both pass the earlier
+        // sufficiency check before either decrements. Conditioning the
+        // decrement itself on quantity >= order.quantity means only
+        // requests that can actually be fulfilled from what's left at this
+        // exact moment succeed — a second concurrent request sees 0 rows
+        // matched and fails cleanly instead of driving stock negative.
+        const decremented = await tx.warehouseStock.updateMany({
+          where: { warehouseId: order.warehouseId!, productId: order.productId!, quantity: { gte: order.quantity! } },
           data: { quantity: { decrement: order.quantity! } },
         });
+        if (decremented.count === 0) {
+          throw new BadRequestException(`Not enough stock left to fulfill ${order.quantity} units — another order may have just used it.`);
+        }
 
         await tx.stockMovement.create({
           data: {

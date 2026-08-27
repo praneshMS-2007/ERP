@@ -1631,11 +1631,24 @@ export class HrmService {
     if (status === 'PAID') {
       // Use a transaction for atomicity
       const updatedPayroll = await this.prisma.$transaction(async (tx) => {
-        // 1. Update payroll status and payment date
-        const updated = await tx.payroll.update({
-          where: { id },
+        // 1. Update payroll status and payment date — conditional, not a
+        // plain update: the findUnique check above can't stop two
+        // near-simultaneous "mark paid" requests (an accidental double-
+        // click on the release button is a realistic way to trigger
+        // exactly this) from both reading status !== 'PAID' before either
+        // commits, which would double-create the expense below for the
+        // same payroll. This atomic WHERE is the real guard — confirmed
+        // this exact shape of race in the sibling PO/SO delivery code
+        // during QA, and closing it here defensively even though it didn't
+        // reproduce empirically in several attempts against this endpoint.
+        const claimed = await tx.payroll.updateMany({
+          where: { id, status: { not: 'PAID' } },
           data: { status, paymentDate: new Date(), rejectedReason: null, approvedById: viewer?.id, approvedAt: new Date() },
         });
+        if (claimed.count === 0) {
+          throw new BadRequestException('This payroll record has already been paid.');
+        }
+        const updated = await tx.payroll.findUniqueOrThrow({ where: { id } });
 
         // 2. Auto-create a Finance Expense record
         await tx.expense.create({
