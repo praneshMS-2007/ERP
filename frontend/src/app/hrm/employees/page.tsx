@@ -48,7 +48,7 @@ export default function EmployeeDirectory() {
   const [accountKind, setAccountKind] = useState<'EMPLOYEE' | 'MANAGEMENT'>('EMPLOYEE');
   const [form, setForm] = useState({
     firstName: '', lastName: '', personalEmail: '', contact: '',
-    department: '', designation: '', empType: 'FULL_TIME', joinDate: '', engagementEndDate: '', roleName: '',
+    department: '', designation: '', empType: 'FULL_TIME', workMode: 'ONSITE', joinDate: '', engagementEndDate: '', roleName: '',
     username: '', password: '',
   });
   const [showPassword, setShowPassword] = useState(false);
@@ -181,7 +181,7 @@ export default function EmployeeDirectory() {
       });
       setShowAddModal(false);
       setAccountKind('EMPLOYEE');
-      setForm({ firstName: '', lastName: '', personalEmail: '', contact: '', department: '', designation: '', empType: 'FULL_TIME', joinDate: '', engagementEndDate: '', roleName: '', username: '', password: '' });
+      setForm({ firstName: '', lastName: '', personalEmail: '', contact: '', department: '', designation: '', empType: 'FULL_TIME', workMode: 'ONSITE', joinDate: '', engagementEndDate: '', roleName: '', username: '', password: '' });
       fetchAll();
     } catch (e: any) {
       setAddError(e.message || 'Could not add this employee.');
@@ -461,6 +461,8 @@ export default function EmployeeDirectory() {
         <FormField label="Designation" value={form.designation} onChange={(v) => setForm({ ...form, designation: v })} required placeholder="e.g. Full Stack Developer" />
         <FormField label="Employment Type" type="select" value={form.empType} onChange={(v) => setForm({ ...form, empType: v })}
           options={[{ label: 'Full Time', value: 'FULL_TIME' }, { label: 'Part Time', value: 'PART_TIME' }, { label: 'Contract', value: 'CONTRACT' }, { label: 'Intern', value: 'INTERN' }]} />
+        <FormField label="Work Mode" type="select" value={form.workMode} onChange={(v) => setForm({ ...form, workMode: v })}
+          options={[{ label: 'Onsite', value: 'ONSITE' }, { label: 'Remote', value: 'REMOTE' }, { label: 'Hybrid', value: 'HYBRID' }]} />
         {form.empType === 'INTERN' && (
           <FormField label="Internship End Date" type="date" value={form.engagementEndDate} onChange={(v) => setForm({ ...form, engagementEndDate: v })} required />
         )}
