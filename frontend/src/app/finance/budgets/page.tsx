@@ -5,6 +5,7 @@ import { PiggyBank, TrendingUp, AlertTriangle, Plus, Pencil, Trash2 } from 'luci
 import { financeApi } from '../../../services/api';
 import Modal, { FormField } from '../../../components/Modal';
 import { formatINR } from '../../../lib/currency';
+import { formatDate } from '../../../lib/date';
 
 const emptyForm = { department: '', planned: '', actual: '', startDate: '', endDate: '' };
 
@@ -162,7 +163,7 @@ export default function BudgetsPage() {
               return (
                 <tr key={b.id}>
                   <td style={{ fontWeight: 600 }}>{b.department}</td>
-                  <td>{new Date(b.startDate).toLocaleDateString()} – {new Date(b.endDate).toLocaleDateString()}</td>
+                  <td>{formatDate(b.startDate)} – {formatDate(b.endDate)}</td>
                   <td>{formatINR(b.planned)}</td>
                   <td>{formatINR(b.actual || 0)}</td>
                   <td>

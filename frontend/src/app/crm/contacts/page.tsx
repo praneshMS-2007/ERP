@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { Calendar, Mail, Phone, Pencil, Plus, Check } from 'lucide-react';
 import { crmApi } from '../../../services/api';
 import Modal, { FormField } from '../../../components/Modal';
+import { formatDate } from '../../../lib/date';
 
 export default function ContactsPage() {
   const [contacts, setContacts] = useState<any[]>([]);
@@ -184,7 +185,7 @@ export default function ContactsPage() {
                     <div style={{ fontSize: '12px', color: 'var(--color-text-muted)' }}>{f.customer?.company || f.notes || 'No details'}</div>
                   </div>
                   <span className={'badge badge-warning'} style={{ fontSize: '10px' }}>
-                    <Calendar size={10} style={{ marginRight: '4px' }}/> {new Date(f.date).toLocaleDateString()}
+                    <Calendar size={10} style={{ marginRight: '4px' }}/> {formatDate(f.date)}
                   </span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>

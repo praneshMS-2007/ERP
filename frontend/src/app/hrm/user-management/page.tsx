@@ -6,6 +6,7 @@ import { hrmApi } from '../../../services/api';
 import { useAuth } from '../../../context/AuthContext';
 import Modal from '../../../components/Modal';
 import PageGuard from '../../../components/PageGuard';
+import { formatDate } from '../../../lib/date';
 
 /**
  * Every ERP login account. Split into Active / Former the same way the
@@ -183,7 +184,7 @@ function UserManagementPage() {
                     </span>
                   </td>
                   <td style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>
-                    {new Date(u.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                    {formatDate(u.createdAt)}
                   </td>
                   <td>
                     <button

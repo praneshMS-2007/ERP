@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { Pencil, Trash2, UserCheck, UserX } from 'lucide-react';
 import { crmApi } from '../../../services/api';
 import Modal, { FormField } from '../../../components/Modal';
+import { formatDate } from '../../../lib/date';
 
 export default function CustomersPage() {
   const [customers, setCustomers] = useState<any[]>([]);
@@ -121,7 +122,7 @@ export default function CustomersPage() {
                 <td>
                   <span className={`badge ${c.status === 'INACTIVE' ? 'badge-critical' : 'badge-healthy'}`}>{c.status || 'ACTIVE'}</span>
                 </td>
-                <td style={{ color: 'var(--color-text-secondary)' }}>{new Date(c.createdAt).toLocaleDateString()}</td>
+                <td style={{ color: 'var(--color-text-secondary)' }}>{formatDate(c.createdAt)}</td>
                 <td>
                   <div style={{ display: 'flex', gap: '6px' }}>
                     <button className="btn btn-secondary btn-sm" onClick={() => openEdit(c)}><Pencil size={13} /></button>

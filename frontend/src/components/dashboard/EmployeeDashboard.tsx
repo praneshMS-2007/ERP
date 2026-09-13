@@ -5,6 +5,7 @@ import { CheckCircle2, XCircle, Clock, CalendarOff, FolderKanban, AlertTriangle,
 import Link from 'next/link';
 import { selfApi } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
+import { formatDate } from '../../lib/date';
 
 const STATUS_LABEL: Record<string, string> = {
   PRESENT: 'Present', ABSENT: 'Absent', HALF_DAY: 'Half Day', LATE: 'Present',
@@ -129,7 +130,7 @@ export default function EmployeeDashboard() {
               <div>
                 <div style={{ fontSize: '13.5px', fontWeight: 700 }}>{t.title}</div>
                 <div style={{ fontSize: '12px', color: 'var(--color-text-muted)', marginTop: '2px' }}>
-                  {t.project?.name}{t.dueDate ? ` · Due ${new Date(t.dueDate).toLocaleDateString()}` : ''}
+                  {t.project?.name}{t.dueDate ? ` · Due ${formatDate(t.dueDate)}` : ''}
                 </div>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>

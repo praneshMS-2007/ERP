@@ -23,6 +23,7 @@ import Link from 'next/link';
 import { analyticsApi, hrmApi, projectApi, inventoryApi, financeApi, exportApi } from '../services/api';
 import ExportButton from '../components/ExportButton';
 import { useAuth } from '../context/AuthContext';
+import { formatDate } from '../lib/date';
 import EmployeeDashboard from '../components/dashboard/EmployeeDashboard';
 import { formatINRCompact } from '../lib/currency';
 
@@ -130,7 +131,7 @@ function ExecutiveDashboard() {
             icon: CheckSquare, iconBg: '#f0fdf4', iconColor: '#16a34a',
             title: `Project: ${latest.name}`,
             desc: `Status: ${latest.status}. ${latest.tasks?.length || 0} tasks.`,
-            time: latest.createdAt ? new Date(latest.createdAt).toLocaleDateString() : 'Recently',
+            time: latest.createdAt ? formatDate(latest.createdAt) : 'Recently',
           });
         }
         if (empList.length > 0) {
@@ -139,7 +140,7 @@ function ExecutiveDashboard() {
             icon: Users, iconBg: '#eff6ff', iconColor: '#2563eb',
             title: `Employee: ${latest.firstName} ${latest.lastName}`,
             desc: `Department: ${latest.department?.name || 'N/A'}`,
-            time: latest.joinDate ? new Date(latest.joinDate).toLocaleDateString() : 'Recently',
+            time: latest.joinDate ? formatDate(latest.joinDate) : 'Recently',
           });
         }
         if (prodList.length > 0 && lowStock > 0) {

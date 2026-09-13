@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { settingsApi, API_ORIGIN } from '../../services/api';
+import { formatDate } from '../../lib/date';
 
 const EMP_TYPE_LABEL: Record<string, string> = {
   FULL_TIME: 'Full Time', PART_TIME: 'Part Time', CONTRACT: 'Contract', INTERN: 'Intern',
@@ -323,7 +324,7 @@ export default function SettingsPage() {
                   <InfoTile icon={Mail} label="Work Email / Username" value={displayEmail} />
                   <InfoTile icon={Phone} label="Contact Phone" value={emp?.contact} />
                   <InfoTile icon={User} label="Gender" value={emp?.gender} />
-                  <InfoTile icon={Calendar} label="Date of Birth" value={emp?.dob ? new Date(emp.dob).toLocaleDateString() : undefined} />
+                  <InfoTile icon={Calendar} label="Date of Birth" value={emp?.dob ? formatDate(emp.dob) : undefined} />
                 </div>
               </div>
 
@@ -358,7 +359,7 @@ export default function SettingsPage() {
                   <InfoTile icon={GraduationCap} label="Designation" value={emp?.designation?.title} />
                   <InfoTile icon={User} label="Employee ID" value={emp?.empCode} />
                   <InfoTile icon={CheckCircle2} label="Employment Status" value={emp?.empType ? (EMP_TYPE_LABEL[emp.empType] || emp.empType) : undefined} />
-                  <InfoTile icon={Calendar} label="Date of Joining" value={emp?.joinDate ? new Date(emp.joinDate).toLocaleDateString() : undefined} />
+                  <InfoTile icon={Calendar} label="Date of Joining" value={emp?.joinDate ? formatDate(emp.joinDate) : undefined} />
                 </div>
               </div>
             </>
@@ -388,7 +389,7 @@ export default function SettingsPage() {
                             {session.deviceInfo || 'Unknown device'}
                           </div>
                           <div style={{ fontSize: '12px', color: 'var(--color-text-muted)', marginTop: '2px' }}>
-                            Expires: {new Date(session.expiresAt).toLocaleDateString()} • IP: {session.ipAddress || 'Unknown'}
+                            Expires: {formatDate(session.expiresAt)} • IP: {session.ipAddress || 'Unknown'}
                           </div>
                         </div>
                       </div>

@@ -46,11 +46,13 @@ export default function EmployeeDirectory() {
   // server-side too). Project Manager is deliberately not selectable here —
   // that stays project-scoped, assigned only via project staffing.
   const [accountKind, setAccountKind] = useState<'EMPLOYEE' | 'MANAGEMENT'>('EMPLOYEE');
-  const [form, setForm] = useState({
+  const initialForm = {
     firstName: '', lastName: '', personalEmail: '', contact: '',
     department: '', designation: '', empType: 'FULL_TIME', workMode: 'ONSITE', joinDate: '', engagementEndDate: '', roleName: '',
+    hasStipend: true, stipendAmount: '',
     username: '', password: '',
-  });
+  };
+  const [form, setForm] = useState(initialForm);
   const [showPassword, setShowPassword] = useState(false);
   const MANAGEMENT_ROLES = [
     { label: 'Super Admin', value: 'SUPER_ADMIN' },
@@ -150,7 +152,10 @@ export default function EmployeeDirectory() {
   // specific message (e.g. "email is required") rather than failing silently,
   // so surface whatever it says instead of just giving up.
   async function handleAddEmployee() {
-    if (!form.firstName || !form.lastName) return;
+    if (!form.firstName) {
+      setAddError('First name is required.');
+      return;
+    }
     if (!form.department.trim() || !form.designation.trim()) {
       setAddError('Department and designation are both required.');
       return;
@@ -161,6 +166,14 @@ export default function EmployeeDirectory() {
     }
     if (form.empType === 'INTERN' && !form.engagementEndDate) {
       setAddError('Internship end date is required for interns — it drives the Duration line on their offer letter.');
+      return;
+    }
+    if (form.hasStipend && form.stipendAmount && (isNaN(Number(form.stipendAmount)) || Number(form.stipendAmount) < 0)) {
+      setAddError('Please enter a valid monthly stipend amount.');
+      return;
+    }
+    if (form.hasStipend && !form.stipendAmount) {
+      setAddError('Please enter a monthly stipend amount, or select "No Stipend (Unpaid)".');
       return;
     }
     if (!form.username.trim()) {
@@ -176,12 +189,14 @@ export default function EmployeeDirectory() {
     try {
       await hrmApi.createEmployee({
         ...form,
+        hasStipend: form.hasStipend,
+        stipendAmount: form.hasStipend ? Number(form.stipendAmount) : null,
         username: form.username.trim(),
         roleName: accountKind === 'MANAGEMENT' ? form.roleName : undefined,
       });
       setShowAddModal(false);
       setAccountKind('EMPLOYEE');
-      setForm({ firstName: '', lastName: '', personalEmail: '', contact: '', department: '', designation: '', empType: 'FULL_TIME', workMode: 'ONSITE', joinDate: '', engagementEndDate: '', roleName: '', username: '', password: '' });
+      setForm(initialForm);
       fetchAll();
     } catch (e: any) {
       setAddError(e.message || 'Could not add this employee.');
@@ -453,7 +468,7 @@ export default function EmployeeDirectory() {
         )}
 
         <FormField label="First Name" value={form.firstName} onChange={(v) => setForm({ ...form, firstName: v })} required placeholder="e.g. John" />
-        <FormField label="Last Name" value={form.lastName} onChange={(v) => setForm({ ...form, lastName: v })} required placeholder="e.g. Smith" />
+        <FormField label="Last Name" value={form.lastName} onChange={(v) => setForm({ ...form, lastName: v })} placeholder="e.g. Smith (Optional)" />
         <FormField label="Email" type="email" value={form.personalEmail} onChange={(v) => setForm({ ...form, personalEmail: v })} required placeholder="the address they applied from" />
         <FormField label="Contact" value={form.contact} onChange={(v) => setForm({ ...form, contact: v })} placeholder="+91 98765 43210" />
         <FormField label="Date of Joining" type="date" value={form.joinDate} onChange={(v) => setForm({ ...form, joinDate: v })} />
@@ -466,6 +481,55 @@ export default function EmployeeDirectory() {
         {form.empType === 'INTERN' && (
           <FormField label="Internship End Date" type="date" value={form.engagementEndDate} onChange={(v) => setForm({ ...form, engagementEndDate: v })} required />
         )}
+
+        {/* Stipend Configuration */}
+        <div style={{ marginBottom: '16px' }}>
+          <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px', color: 'var(--color-text-secondary)' }}>
+            Stipend / Monthly Compensation <span style={{ color: '#dc2626' }}>*</span>
+          </label>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '10px' }}>
+            <button
+              type="button"
+              onClick={() => setForm({ ...form, hasStipend: true })}
+              style={{
+                padding: '9px 12px', borderRadius: '8px', cursor: 'pointer', fontSize: '13px', fontWeight: 600,
+                border: form.hasStipend ? '2px solid #2563eb' : '1px solid var(--color-border)',
+                background: form.hasStipend ? '#eff6ff' : 'var(--color-background)',
+                color: form.hasStipend ? '#2563eb' : 'var(--color-text)',
+                textAlign: 'center', transition: 'all 0.15s ease',
+              }}
+            >
+              With Stipend (Paid)
+            </button>
+            <button
+              type="button"
+              onClick={() => setForm({ ...form, hasStipend: false, stipendAmount: '' })}
+              style={{
+                padding: '9px 12px', borderRadius: '8px', cursor: 'pointer', fontSize: '13px', fontWeight: 600,
+                border: !form.hasStipend ? '2px solid #2563eb' : '1px solid var(--color-border)',
+                background: !form.hasStipend ? '#eff6ff' : 'var(--color-background)',
+                color: !form.hasStipend ? '#2563eb' : 'var(--color-text)',
+                textAlign: 'center', transition: 'all 0.15s ease',
+              }}
+            >
+              No Stipend (Unpaid)
+            </button>
+          </div>
+          {form.hasStipend ? (
+            <FormField
+              label="Monthly Stipend Amount (₹/month)"
+              type="number"
+              value={form.stipendAmount}
+              onChange={(v) => setForm({ ...form, stipendAmount: v })}
+              required
+              placeholder="e.g. 15000"
+            />
+          ) : (
+            <div style={{ fontSize: '12px', color: 'var(--color-text-muted)', background: 'var(--color-bg-secondary)', padding: '8px 12px', borderRadius: '8px', border: '1px solid var(--color-border)' }}>
+              Offer letter will reflect <strong>Stipend: Unpaid</strong> and Clause 4 will specify statutory non-applicability without salary deductions.
+            </div>
+          )}
+        </div>
 
         <div style={{ borderTop: '1px solid var(--color-border)', margin: '16px 0', paddingTop: '16px' }}>
           <p style={{ fontSize: 12.5, color: 'var(--color-text-muted)', margin: '0 0 12px' }}>

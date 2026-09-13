@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { CalendarDays, Plus } from 'lucide-react';
 import { selfApi } from '../../services/api';
 import Modal, { FormField } from '../../components/Modal';
+import { formatDate } from '../../lib/date';
 
 const LEAVE_TYPE_LABELS: Record<string, string> = {
   SICK_LEAVE: 'Sick Leave',
@@ -133,7 +134,7 @@ export default function LeavesPage() {
             ) : leaves.map((l) => (
               <tr key={l.id}>
                 <td style={{ fontWeight: 600 }}>{LEAVE_TYPE_LABELS[l.leaveType] || l.leaveType}</td>
-                <td style={{ fontSize: '13px' }}>{new Date(l.startDate).toLocaleDateString()} – {new Date(l.endDate).toLocaleDateString()}</td>
+                <td style={{ fontSize: '13px' }}>{formatDate(l.startDate)} – {formatDate(l.endDate)}</td>
                 <td style={{ fontSize: '13px', color: 'var(--color-text-secondary)' }}>{l.reason}</td>
                 <td><span className={`badge ${STATUS_BADGE[l.status] || ''}`}>{l.status}</span></td>
               </tr>

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { ChevronLeft, ChevronRight, CheckCircle2, XCircle, Clock, CalendarOff } from 'lucide-react';
+import { formatDate } from '../lib/date';
 
 export interface AttendanceDay {
   date: string; // "YYYY-MM-DD"
@@ -236,7 +237,11 @@ export default function AttendanceCalendar({ fetchMonth }: { fetchMonth: (year: 
                     {selected.date === todayKey ? 'Today' : 'Selected Date'}
                   </div>
                   <div style={{ fontSize: '17px', fontWeight: 700, marginBottom: '16px' }}>
-                    {new Date(selected.date + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+                    {(() => {
+                      const d = new Date(selected.date + 'T00:00:00');
+                      const weekday = d.toLocaleDateString('en-IN', { weekday: 'long' });
+                      return `${weekday}, ${formatDate(d)}`;
+                    })()}
                   </div>
                   <div style={{
                     display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '8px 16px', borderRadius: '10px',

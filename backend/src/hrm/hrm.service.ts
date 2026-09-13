@@ -10,6 +10,7 @@ import { encryptField, decryptField } from '../common/field-encryption';
 import { OfferLetterService } from './offer-letter.service';
 import { PayslipService } from './payslip.service';
 import { AnnouncementsService } from '../announcements/announcements.service';
+import { formatDateDMY } from '../common/date-format';
 
 export interface RequestUser {
   id: string;
@@ -98,6 +99,7 @@ const EDITABLE_EMPLOYEE_FIELDS = [
   'uanNumber', 'pfNumber', 'esicNumber',
   'nomineeName', 'nomineeRelation', 'nomineeDob', 'nomineePhone',
   'taxRegime', 'taxDeclarationNotes',
+  'hasStipend', 'stipendAmount',
 ] as const;
 
 // dob and engagementEndDate are DateTime? — nullable, so an empty form field
@@ -123,6 +125,10 @@ function sanitiseEmployeeInput(input: Record<string, any>): Record<string, any> 
 
     if (raw === null || raw === undefined || raw === '') {
       if (REQUIRED_DATE_FIELDS.has(field)) continue; // omit, don't null
+      if (field === 'lastName') {
+        out.lastName = '';
+        continue;
+      }
       out[field] = null;
       continue;
     }
@@ -175,15 +181,29 @@ function sanitiseEmployeeInput(input: Record<string, any>): Record<string, any> 
         out.totalExperienceYears = years;
         break;
       }
+      case 'hasStipend': {
+        out.hasStipend = raw === true || raw === 'true' || raw === 1 || raw === '1';
+        break;
+      }
+      case 'stipendAmount': {
+        if (raw === null || raw === undefined || raw === '') {
+          out.stipendAmount = null;
+        } else {
+          const amt = Number(raw);
+          if (!Number.isFinite(amt) || amt < 0) {
+            throw new BadRequestException('Stipend amount must be a valid non-negative number.');
+          }
+          out.stipendAmount = amt;
+        }
+        break;
+      }
       default:              out[field] = typeof raw === 'string' ? raw.trim() : raw;
     }
   }
 
-  // firstName and lastName are required by the schema — never null them out.
-  for (const required of ['firstName', 'lastName'] as const) {
-    if (required in out && !out[required]) {
-      throw new BadRequestException(`${required === 'firstName' ? 'First' : 'Last'} name cannot be empty.`);
-    }
+  // firstName is required — never null it out.
+  if ('firstName' in out && !out.firstName) {
+    throw new BadRequestException('First name cannot be empty.');
   }
 
   return out;
@@ -320,7 +340,7 @@ export class HrmService {
         previousCompany: true, previousDesignation: true, totalExperienceYears: true,
         nomineeName: true, nomineeRelation: true, nomineeDob: true, nomineePhone: true,
         joinDate: true, empType: true, status: true, workMode: true, lastWorkingDay: true,
-        engagementEndDate: true, departmentId: true, designationId: true,
+        engagementEndDate: true, hasStipend: true, stipendAmount: true, departmentId: true, designationId: true,
         reportingManagerId: true, userId: true,
         createdAt: true, updatedAt: true,
         department: true,
@@ -696,7 +716,7 @@ export class HrmService {
     const clean = sanitiseEmployeeInput(data);
 
     if (!clean.firstName) throw new BadRequestException('First name is required.');
-    if (!clean.lastName) throw new BadRequestException('Last name is required.');
+    const lastName = typeof clean.lastName === 'string' ? clean.lastName.trim() : '';
     if (!clean.personalEmail) {
       throw new BadRequestException(
         'An email address is required — it is how the offer letter and any future ' +
@@ -768,19 +788,38 @@ export class HrmService {
         data: { username, passwordHash, passwordPlain: encryptField(password), roleId: role.id, isActive: true },
       });
 
-      return tx.employee.create({
+      const hasStipend = clean.hasStipend ?? (data.hasStipend !== undefined ? (data.hasStipend === true || data.hasStipend === 'true' || data.hasStipend === 1 || data.hasStipend === '1') : true);
+      const stipendAmount = hasStipend ? (clean.stipendAmount ?? (data.stipendAmount ? Number(data.stipendAmount) : null)) : null;
+
+      const emp = await tx.employee.create({
         data: {
           ...clean,
+          hasStipend,
+          stipendAmount,
           empType: data.empType ?? 'FULL_TIME',
           status: data.status ?? 'ACTIVE',
           departmentId: department.id,
           designationId: designation.id,
           firstName: clean.firstName,
-          lastName: clean.lastName,
+          lastName,
           empCode,
           userId: user.id,
         } as Prisma.EmployeeUncheckedCreateInput,
       });
+
+      if (hasStipend && stipendAmount && stipendAmount > 0) {
+        await tx.salaryStructure.create({
+          data: {
+            employeeId: emp.id,
+            basic: stipendAmount,
+            hra: 0,
+            specialAllowance: 0,
+            effectiveFrom: clean.joinDate instanceof Date ? clean.joinDate : new Date(),
+          },
+        });
+      }
+
+      return emp;
     });
 
     this.logger.log(`Provisioned ERP account "${username}" for new employee ${empCode}`);
@@ -1264,14 +1303,14 @@ export class HrmService {
     const afterToday = toDay > todayDay;
     if (beforeJoin && afterToday) {
       throw new BadRequestException(
-        `The duration is before joining and after the current date — this employee joined ${joinDay.toLocaleDateString()}, and today is ${todayDay.toLocaleDateString()}.`,
+        `The duration is before joining and after the current date — this employee joined ${formatDateDMY(joinDay)}, and today is ${formatDateDMY(todayDay)}.`,
       );
     }
     if (beforeJoin) {
-      throw new BadRequestException(`The duration is before joining — this employee joined ${joinDay.toLocaleDateString()}.`);
+      throw new BadRequestException(`The duration is before joining — this employee joined ${formatDateDMY(joinDay)}.`);
     }
     if (afterToday) {
-      throw new BadRequestException(`The duration is after the current date — today is ${todayDay.toLocaleDateString()}.`);
+      throw new BadRequestException(`The duration is after the current date — today is ${formatDateDMY(todayDay)}.`);
     }
 
     const days: { date: string; status: string; holidayTitle?: string }[] = [];
@@ -1323,7 +1362,7 @@ export class HrmService {
       await this.announcementsService.createSystemBroadcast(
         viewer.id,
         `Company Holiday: ${holiday.name}`,
-        holiday.description || `${holiday.name} has been declared a company holiday on ${dayStart.toLocaleDateString()}.`,
+        holiday.description || `${holiday.name} has been declared a company holiday on ${formatDateDMY(dayStart)}.`,
       );
     }
 

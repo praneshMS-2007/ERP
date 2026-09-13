@@ -6,6 +6,7 @@ import { financeApi, exportApi } from '../../../services/api';
 import ExportButton from '../../../components/ExportButton';
 import Modal, { FormField } from '../../../components/Modal';
 import { formatINR } from '../../../lib/currency';
+import { formatDate } from '../../../lib/date';
 
 export default function LedgerPage() {
   const [activeTab, setActiveTab] = useState<'ledger' | 'taxes'>('ledger');
@@ -128,7 +129,7 @@ export default function LedgerPage() {
               ) : ledgerEntries.map((entry, i) => (
                 <tr key={entry.id || i}>
                   <td style={{ fontWeight: 600, color: 'var(--color-text-muted)' }}>{entry.entryNumber || `JE-${i+101}`}</td>
-                  <td>{new Date(entry.date || entry.createdAt).toLocaleDateString()}</td>
+                  <td>{formatDate(entry.date || entry.createdAt)}</td>
                   <td>{entry.description}</td>
                   <td><span className="badge badge-default">{entry.accountCode}</span></td>
                   <td style={{ fontWeight: 600, color: 'var(--color-success)' }}>
@@ -162,7 +163,7 @@ export default function LedgerPage() {
                   <td style={{ fontWeight: 600 }}>{t.period}</td>
                   <td>{t.type}</td>
                   <td style={{ fontWeight: 700 }}>{formatINR(t.amount)}</td>
-                  <td>{t.dueDate ? new Date(t.dueDate).toLocaleDateString() : 'N/A'}</td>
+                  <td>{formatDate(t.dueDate, 'N/A')}</td>
                   <td>
                     <span className={t.status === 'PAID' ? 'badge badge-healthy' : 'badge badge-warning'}>{t.status}</span>
                   </td>

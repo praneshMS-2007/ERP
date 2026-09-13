@@ -10,6 +10,7 @@ import { crmApi, exportApi } from '../../services/api';
 import ExportButton from '../../components/ExportButton';
 import Modal, { FormField } from '../../components/Modal';
 import { formatINRCompact } from '../../lib/currency';
+import { formatDate } from '../../lib/date';
 
 export default function CRMPage() {
   const [leads, setLeads] = useState<any[]>([]);
@@ -180,7 +181,7 @@ export default function CRMPage() {
                       </div>
                     </td>
                     <td><span className={badgeClass(l.status)}>{l.status}</span></td>
-                    <td style={{ color: 'var(--color-text-secondary)' }}>{new Date(l.createdAt).toLocaleDateString()}</td>
+                    <td style={{ color: 'var(--color-text-secondary)' }}>{formatDate(l.createdAt)}</td>
                     <td>
                       {l.status !== 'CONVERTED' && l.status !== 'LOST' && (
                         <button className="btn btn-primary btn-sm" onClick={(e) => { e.stopPropagation(); handleConvertLead(l.id); }}>Convert</button>
@@ -234,7 +235,7 @@ export default function CRMPage() {
                     <input type="checkbox" defaultChecked={false} style={{ marginTop: '2px' }} />
                     <div>
                       <div style={{ fontWeight: 600 }}>{f.notes || 'Follow up with lead'}</div>
-                      <div style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>Due: {new Date(f.nextActionDate || f.date).toLocaleDateString()}</div>
+                      <div style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>Due: {formatDate(f.nextActionDate || f.date)}</div>
                     </div>
                   </div>
                 ))}

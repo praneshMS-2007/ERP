@@ -76,14 +76,13 @@ export default function PayrollPageContent({ mode }: { mode: 'hr' | 'finance' })
   // local day. Parsed by hand here instead of new Date(str), so the label
   // always matches what's shown in the picker, in any timezone.
   function formatPeriodLabel(startStr: string, endStr: string) {
-    const opts: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'short', year: 'numeric' };
     const parseLocal = (s: string) => {
       const [y, m, d] = s.split('-').map(Number);
-      return new Date(y, m - 1, d);
+      const dd = String(d).padStart(2, '0');
+      const mm = String(m).padStart(2, '0');
+      return `${dd}/${mm}/${y}`;
     };
-    const start = parseLocal(startStr).toLocaleDateString(undefined, opts);
-    const end = parseLocal(endStr).toLocaleDateString(undefined, opts);
-    return `${start} – ${end}`;
+    return `${parseLocal(startStr)} – ${parseLocal(endStr)}`;
   }
 
   async function fetchAll() {

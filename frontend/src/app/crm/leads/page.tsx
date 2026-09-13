@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { Pencil, Trash2, ArrowRightCircle, Plus } from 'lucide-react';
 import { crmApi } from '../../../services/api';
 import Modal, { FormField } from '../../../components/Modal';
+import { formatDate } from '../../../lib/date';
 
 const STATUS_BADGE: Record<string, string> = {
   NEW: 'badge-contacted', CONTACTED: 'badge-contacted', QUALIFIED: 'badge-warning',
@@ -139,7 +140,7 @@ export default function LeadsPage() {
                 </td>
                 <td>{l.source || '—'}</td>
                 <td><span className={`badge ${STATUS_BADGE[l.status] || ''}`}>{l.status}</span></td>
-                <td style={{ color: 'var(--color-text-secondary)' }}>{new Date(l.createdAt).toLocaleDateString()}</td>
+                <td style={{ color: 'var(--color-text-secondary)' }}>{formatDate(l.createdAt)}</td>
                 <td>
                   <div style={{ display: 'flex', gap: '6px' }}>
                     <button className="btn btn-secondary btn-sm" onClick={() => openEdit(l)}><Pencil size={13} /></button>

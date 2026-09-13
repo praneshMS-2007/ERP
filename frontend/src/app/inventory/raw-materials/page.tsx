@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { Pencil, Trash2, Plus, SlidersHorizontal } from 'lucide-react';
 import { rawMaterialApi, inventoryApi } from '../../../services/api';
 import Modal, { FormField } from '../../../components/Modal';
+import { formatDate } from '../../../lib/date';
 
 const emptyForm = {
   name: '', code: '', unit: 'kg', minLevel: '10', status: 'ACTIVE', warehouseId: '', initialQuantity: '0',
@@ -195,7 +196,7 @@ export default function RawMaterialsPage() {
                 <tr><td colSpan={4} style={{ textAlign: 'center', padding: '20px' }}>No stock has been added yet</td></tr>
               ) : additions.map((m) => (
                 <tr key={m.id}>
-                  <td>{new Date(m.date).toLocaleDateString()}</td>
+                  <td>{formatDate(m.date)}</td>
                   <td style={{ fontWeight: 600 }}>{m.rawMaterial?.name || 'Unknown'} <span style={{ color: 'var(--color-text-muted)', fontFamily: 'monospace', fontSize: '12px' }}>({m.rawMaterial?.code})</span></td>
                   <td style={{ fontWeight: 700, color: '#16a34a' }}>+{m.changeAmount} {m.rawMaterial?.unit}</td>
                   <td>{m.warehouse?.name || 'Unknown'}</td>

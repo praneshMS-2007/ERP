@@ -5,6 +5,7 @@ import { ShoppingCart, Package, Download, Plus } from 'lucide-react';
 import { inventoryApi, crmApi } from '../../../services/api';
 import Modal, { FormField } from '../../../components/Modal';
 import { formatINR } from '../../../lib/currency';
+import { formatDate } from '../../../lib/date';
 
 const emptyForm = { customerId: '', productId: '', warehouseId: '', quantity: '1' };
 
@@ -192,7 +193,7 @@ export default function SalesOrdersPage() {
                 <tr><td colSpan={4} style={{ textAlign: 'center', padding: '20px' }}>No sales recorded yet</td></tr>
               ) : filteredHistory.map((m) => (
                 <tr key={m.id}>
-                  <td>{new Date(m.date).toLocaleDateString()}</td>
+                  <td>{formatDate(m.date)}</td>
                   <td style={{ fontWeight: 600 }}>{m.product?.name || 'Unknown'} <span style={{ color: 'var(--color-text-muted)', fontFamily: 'monospace', fontSize: '12px' }}>({m.product?.sku})</span></td>
                   <td style={{ fontWeight: 700 }}>{Math.abs(m.changeAmount)}</td>
                   <td>{m.warehouse?.name || 'Unknown'}</td>
@@ -221,7 +222,7 @@ export default function SalesOrdersPage() {
                   <td style={{ fontWeight: 600, color: 'var(--color-primary)' }}>{o.orderNo || `SO-${i + 1001}`}</td>
                   <td style={{ fontWeight: 600 }}>{o.customer?.company || o.customer?.name || 'Customer'}</td>
                   <td>{o.product ? `${o.product.name} × ${o.quantity}` : '—'}</td>
-                  <td>{new Date(o.createdAt).toLocaleDateString()}</td>
+                  <td>{formatDate(o.createdAt)}</td>
                   <td style={{ fontWeight: 700 }}>{formatINR(o.totalAmount)}</td>
                   <td><span className={badgeClass(o.status)}>{o.status}</span></td>
                   <td>

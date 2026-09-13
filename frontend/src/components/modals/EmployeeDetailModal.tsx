@@ -72,9 +72,10 @@ function toDateInput(v: any): string {
 function formatDate(v: any): string {
   if (!v) return '—';
   const d = new Date(v);
-  return Number.isNaN(d.getTime())
-    ? '—'
-    : d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+  if (Number.isNaN(d.getTime())) return '—';
+  const dd = String(d.getDate()).padStart(2, '0');
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  return `${dd}/${mm}/${d.getFullYear()}`;
 }
 
 const rupee = (n: number) => `₹${Number(n || 0).toLocaleString('en-IN')}`;
@@ -140,6 +141,8 @@ export default function EmployeeDetailModal({
         nomineeName: data.nomineeName ?? '', nomineeRelation: data.nomineeRelation ?? '',
         nomineeDob: toDateInput(data.nomineeDob), nomineePhone: data.nomineePhone ?? '',
         taxRegime: data.taxRegime ?? '', taxDeclarationNotes: data.taxDeclarationNotes ?? '',
+        hasStipend: data.hasStipend ?? true,
+        stipendAmount: data.stipendAmount != null ? String(data.stipendAmount) : '',
       });
       setRevealed(new Set());
       const cur = data.compensation?.current;
@@ -277,7 +280,12 @@ export default function EmployeeDetailModal({
     setSaving(true);
     setError(null);
     try {
-      await hrmApi.updateEmployee(employeeId!, form);
+      const payload = {
+        ...form,
+        hasStipend: form.hasStipend === true || form.hasStipend === 'true',
+        stipendAmount: form.hasStipend && form.stipendAmount ? Number(form.stipendAmount) : null,
+      };
+      await hrmApi.updateEmployee(employeeId!, payload);
       setToast('Profile saved');
       setEditing(false);
       await load();
@@ -464,7 +472,7 @@ export default function EmployeeDetailModal({
                 <div className="edm-grid">
                   <Field label="First name" value={form.firstName} editing={editing} required
                          onChange={(v) => setForm({ ...form, firstName: v })} />
-                  <Field label="Last name" value={form.lastName} editing={editing} required
+                  <Field label="Last name" value={form.lastName} editing={editing}
                          onChange={(v) => setForm({ ...form, lastName: v })} />
                   <Field label="Date of birth" value={form.dob} display={formatDate(emp.dob)} type="date"
                          editing={editing} onChange={(v) => setForm({ ...form, dob: v })} />
@@ -595,6 +603,17 @@ export default function EmployeeDetailModal({
                            display={formatDate(emp.engagementEndDate)} type="date" editing={editing}
                            hint="Fixed-term engagements need an end date"
                            onChange={(v) => setForm({ ...form, engagementEndDate: v })} />
+                  )}
+                  <Field label="Stipend arrangement" value={form.hasStipend ? 'PAID' : 'UNPAID'} editing={editing} type="select"
+                         options={['PAID', 'UNPAID']}
+                         labels={{ PAID: 'With Stipend (Paid)', UNPAID: 'No Stipend (Unpaid)' }}
+                         display={emp.hasStipend ? `Paid (${rupee(emp.stipendAmount || 0)} / mo)` : 'No Stipend (Unpaid)'}
+                         onChange={(v) => setForm({ ...form, hasStipend: v === 'PAID', stipendAmount: v === 'PAID' ? form.stipendAmount : '' })} />
+                  {form.hasStipend && (
+                    <Field label="Monthly stipend" value={form.stipendAmount}
+                           display={rupee(emp.stipendAmount || 0)} editing={editing} mono
+                           hint="Consolidated monthly stipend in INR"
+                           onChange={(v) => setForm({ ...form, stipendAmount: v })} />
                   )}
                 </div>
               )}

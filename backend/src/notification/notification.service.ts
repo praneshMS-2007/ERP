@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { formatDateDMY } from '../common/date-format';
 
 const UPCOMING_DEADLINE_WINDOW_DAYS = 7;
 
@@ -86,7 +87,7 @@ export class NotificationService {
         id: `virtual-deadline-${p.id}`,
         userId: '',
         title: 'Project deadline',
-        message: `${p.name} ${overdue ? 'was due' : 'is due'} ${p.endDate!.toLocaleDateString()}${overdue ? ' — overdue' : ''}.`,
+        message: `${p.name} ${overdue ? 'was due' : 'is due'} ${formatDateDMY(p.endDate)}${overdue ? ' — overdue' : ''}.`,
         type: overdue ? 'ALERT' : 'WARNING',
         link: `/projects/${p.id}`,
         isRead: false,

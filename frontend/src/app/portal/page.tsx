@@ -5,6 +5,7 @@ import { CalendarDays, KeyRound, ChevronLeft, Eye, EyeOff, Check, X, RotateCcw }
 import { hrmApi } from '../../services/api';
 import Modal from '../../components/Modal';
 import PageGuard from '../../components/PageGuard';
+import { formatDate } from '../../lib/date';
 
 const LEAVE_TYPE_LABELS: Record<string, string> = {
   SICK_LEAVE: 'Sick Leave',
@@ -147,7 +148,7 @@ function EmployeePortalHrPage() {
                       <span className={`badge ${l.status === 'APPROVED' ? 'badge-healthy' : l.status === 'REJECTED' ? 'badge-critical' : 'badge-warning'}`}>{l.status}</span>
                     </div>
                     <div style={{ fontSize: '12px', color: 'var(--color-text-muted)', marginTop: '4px' }}>
-                      {new Date(l.startDate).toLocaleDateString()} – {new Date(l.endDate).toLocaleDateString()}
+                      {formatDate(l.startDate)} – {formatDate(l.endDate)}
                     </div>
                     <div style={{ fontSize: '12.5px', color: 'var(--color-text-secondary)', marginTop: '6px' }}>{l.reason}</div>
                     {l.status === 'PENDING' && (
@@ -231,7 +232,7 @@ function EmployeePortalHrPage() {
                       return (
                         <div key={r.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', borderRadius: '8px', opacity: 0.65 }}>
                           <span style={{ fontSize: '12.5px' }}>{name}</span>
-                          <span style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>Resolved {r.resolvedAt ? new Date(r.resolvedAt).toLocaleDateString() : ''}</span>
+                          <span style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>Resolved {r.resolvedAt ? formatDate(r.resolvedAt) : ''}</span>
                         </div>
                       );
                     })}

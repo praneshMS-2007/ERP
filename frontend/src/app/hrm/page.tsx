@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { hrmApi, exportApi } from '../../services/api';
 import ExportButton from '../../components/ExportButton';
+import { formatDate } from '../../lib/date';
 
 export default function HRManagement() {
   // Core data
@@ -159,7 +160,8 @@ export default function HRManagement() {
   const absentLine = trendData.data.map((d, i) => `${i === 0 ? 'M' : 'L'} ${toChartX(i)} ${toChartY(d.absent)}`).join(' ');
 
   // Format selected date for display
-  const selectedDateStr = selectedDate.toLocaleDateString('en-IN', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+  const weekday = selectedDate.toLocaleDateString('en-IN', { weekday: 'short' });
+  const selectedDateStr = `${weekday}, ${formatDate(selectedDate)}`;
 
   return (
     <div className="fade-in">

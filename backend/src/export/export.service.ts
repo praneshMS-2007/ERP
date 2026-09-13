@@ -3,6 +3,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { HrmService } from '../hrm/hrm.service';
 import type { RequestUser } from '../hrm/hrm.service';
 import * as ExcelJS from 'exceljs';
+import { formatDateDMY } from '../common/date-format';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const PDFDocument = require('pdfkit');
 
@@ -49,7 +50,7 @@ export class ExportService {
         empType: emp.empType,
         status: emp.status,
         contact: emp.contact || '',
-        joinDate: emp.joinDate ? new Date(emp.joinDate).toLocaleDateString() : '',
+        joinDate: formatDateDMY(emp.joinDate, ''),
       });
     });
 
@@ -122,7 +123,7 @@ export class ExportService {
         phone: c.phone || '',
         company: c.company || '',
         opportunities: c.opportunities.length,
-        createdAt: new Date(c.createdAt).toLocaleDateString(),
+        createdAt: formatDateDMY(c.createdAt),
       });
     });
 
@@ -159,8 +160,8 @@ export class ExportService {
         priority: p.priority,
         totalTasks: p.tasks.length,
         completedTasks: p.tasks.filter(t => t.status === 'DONE').length,
-        startDate: p.startDate ? new Date(p.startDate).toLocaleDateString() : '',
-        endDate: p.endDate ? new Date(p.endDate).toLocaleDateString() : '',
+        startDate: formatDateDMY(p.startDate, ''),
+        endDate: formatDateDMY(p.endDate, ''),
       });
     });
 
@@ -187,7 +188,7 @@ export class ExportService {
 
     entries.forEach((e) => {
       sheet.addRow({
-        date: new Date(e.date).toLocaleDateString(),
+        date: formatDateDMY(e.date),
         account: e.account,
         type: e.type,
         amount: e.amount,
@@ -218,7 +219,7 @@ export class ExportService {
 
     expenses.forEach((e) => {
       sheet.addRow({
-        date: new Date(e.date).toLocaleDateString(),
+        date: formatDateDMY(e.date),
         category: e.category,
         amount: e.amount,
         description: e.description || '',
@@ -247,7 +248,7 @@ export class ExportService {
 
       // Title
       doc.fontSize(20).font('Helvetica-Bold').text('Employee Report', { align: 'center' });
-      doc.fontSize(10).font('Helvetica').text(`Generated: ${new Date().toLocaleDateString()}`, { align: 'center' });
+      doc.fontSize(10).font('Helvetica').text(`Generated: ${formatDateDMY(new Date())}`, { align: 'center' });
       doc.moveDown(2);
 
       // Table header
@@ -322,8 +323,8 @@ export class ExportService {
         employee: `${l.employee.firstName} ${l.employee.lastName}`,
         department: l.employee.department?.name || '-',
         type: l.leaveType.replace(/_/g, ' '),
-        start: new Date(l.startDate).toLocaleDateString(),
-        end: new Date(l.endDate).toLocaleDateString(),
+        start: formatDateDMY(l.startDate),
+        end: formatDateDMY(l.endDate),
         reason: l.reason || '-',
         status: l.status,
         actionTime: new Date(l.updatedAt).toLocaleString(),
@@ -350,7 +351,7 @@ export class ExportService {
 
       // Title
       doc.fontSize(20).font('Helvetica-Bold').text('Leave History Report', { align: 'center' });
-      doc.fontSize(10).font('Helvetica').text(`Generated: ${new Date().toLocaleDateString()}`, { align: 'center' });
+      doc.fontSize(10).font('Helvetica').text(`Generated: ${formatDateDMY(new Date())}`, { align: 'center' });
       doc.moveDown(2);
 
       // Table header
@@ -378,7 +379,7 @@ export class ExportService {
           y = 40;
         }
 
-        const dates = `${new Date(l.startDate).toLocaleDateString()} - ${new Date(l.endDate).toLocaleDateString()}`;
+        const dates = `${formatDateDMY(l.startDate)} - ${formatDateDMY(l.endDate)}`;
         doc.text(`${l.employee.firstName} ${l.employee.lastName}`, startX, y, { width: 120 });
         doc.text(l.employee.department?.name || '-', startX + 120, y, { width: 80 });
         doc.text(l.leaveType.replace(/_/g, ' '), startX + 200, y, { width: 80 });
@@ -445,7 +446,7 @@ export class ExportService {
           sheet.addRow({
             employee: `${emp.firstName} ${emp.lastName}`,
             department: emp.department?.name || '-',
-            date: new Date(a.date).toLocaleDateString(),
+            date: formatDateDMY(a.date),
             status: a.status,
             checkIn: a.checkIn ? new Date(a.checkIn).toLocaleTimeString() : '-',
             checkOut: a.checkOut ? new Date(a.checkOut).toLocaleTimeString() : '-',
@@ -492,7 +493,7 @@ export class ExportService {
     for (const d of days) {
       const dateObj = new Date(`${d.date}T00:00:00`);
       sheet.addRow({
-        date: dateObj.toLocaleDateString(),
+        date: formatDateDMY(dateObj),
         day: dateObj.toLocaleDateString(undefined, { weekday: 'long' }),
         status: this.ATTENDANCE_STATUS_LABEL[d.status] || d.status,
         note: d.holidayTitle || '',
@@ -538,7 +539,7 @@ export class ExportService {
       doc.on('end', () => resolve(Buffer.concat(chunks)));
 
       doc.fontSize(18).font('Helvetica-Bold').text(`Attendance Report — ${monthNames[month - 1]} ${year}`, { align: 'center' });
-      doc.fontSize(10).font('Helvetica').text(`Generated: ${new Date().toLocaleDateString()}`, { align: 'center' });
+      doc.fontSize(10).font('Helvetica').text(`Generated: ${formatDateDMY(new Date())}`, { align: 'center' });
       doc.moveDown(2);
 
       const startX = 30;
@@ -563,7 +564,7 @@ export class ExportService {
           if (y > 500) { doc.addPage(); y = 40; }
           doc.text(`${emp.firstName} ${emp.lastName}`, startX, y, { width: 150 });
           doc.text(emp.department?.name || '-', startX + 150, y, { width: 100 });
-          doc.text(new Date(a.date).toLocaleDateString(), startX + 250, y, { width: 100 });
+          doc.text(formatDateDMY(a.date), startX + 250, y, { width: 100 });
           doc.text(a.status, startX + 350, y, { width: 80 });
           doc.text(a.checkIn ? new Date(a.checkIn).toLocaleTimeString() : '-', startX + 430, y, { width: 100 });
           doc.text(a.checkOut ? new Date(a.checkOut).toLocaleTimeString() : '-', startX + 530, y, { width: 100 });

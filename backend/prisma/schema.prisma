@@ -237,6 +237,10 @@ model Employee {
   // Fixed-term engagements (internships, contracts) end on a known date.
   engagementEndDate DateTime? @map("engagement_end_date")
 
+  // Stipend / Compensation configuration for offer letter & payroll
+  hasStipend    Boolean @default(true) @map("has_stipend")
+  stipendAmount Float?  @map("stipend_amount")
+
   offerLetterDocumentId String?   @unique @map("offer_letter_document_id")
   offerLetterDocument   Document? @relation(name: "EmployeeOfferLetter", fields: [offerLetterDocumentId], references: [id])
 

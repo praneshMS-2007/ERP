@@ -6,6 +6,7 @@ const PDFDocument = require('pdfkit');
 import { PrismaService } from '../prisma/prisma.service';
 import { MailerService } from '../common/mailer.service';
 import { coverNoteHtml, escapeHtml } from '../common/email-template';
+import { formatDateDMY } from '../common/date-format';
 
 const COMPANY = {
   name: 'Shuroq',
@@ -35,9 +36,6 @@ const BRAND = {
 const ASSETS_DIR = path.join(process.cwd(), 'assets', 'brand');
 const ASSET_PATHS = {
   logo: path.join(ASSETS_DIR, 'shuroq-logo.png'),
-  seal: path.join(ASSETS_DIR, 'company-seal.png'),
-  signature: path.join(ASSETS_DIR, 'authorized-signature.png'),
-  msme: path.join(ASSETS_DIR, 'msme-logo.png'),
 };
 
 interface LetterData {
@@ -47,31 +45,20 @@ interface LetterData {
   startDate: Date;
   engagementEndDate: Date | null;
   grossMonthly: number | null;
+  hasStipend: boolean;
+  stipendAmount: number | null;
   mode: string;
 }
 
 /**
- * Generates and emails the offer/confirmation letter for a newly onboarded
- * employee. Two distinct visual styles:
- *
- * 1. OFFER LETTER (Part-time / Full-time / Intern offer):
- *    Clean layout — centered Shuroq logo at top, address + email line,
- *    numbered clauses with bold headings, acceptance block. No decorative
- *    elements. Matches the Aarif (part-time) and Kishore (intern) PDFs.
- *
- * 2. CONFIRMATION LETTER (Intern confirmation):
- *    Branded layout — blue diagonal stripes, Shuroq logo top-left,
- *    circular company seal top-right, section-based content
- *    (Internship Details, Program Overview, Important Terms, Completion),
- *    authorized signature bottom-left, MSME logo bottom-right.
- *    Matches the P kavitha WhatsApp template.
+ * Generates and emails the offer letter for a newly onboarded employee.
+ * Clean, standard layout with centered Shuroq logo, address + email line,
+ * numbered clauses with bold headings, and candidate acceptance block.
+ * Matches company offer letter standards for Intern, Part-Time, and Full-Time.
  */
 @Injectable()
 export class OfferLetterService {
   private readonly logger = new Logger(OfferLetterService.name);
-  // Not served by the public static mount — see the matching comment on
-  // PayslipService.outDir. Access goes through
-  // hrmService.resolveGeneratedDocumentForDownload.
   private readonly outDir = path.join(process.cwd(), 'private-uploads', 'offer-letters');
 
   constructor(
@@ -101,13 +88,18 @@ export class OfferLetterService {
       orderBy: { effectiveFrom: 'desc' },
     });
 
+    const hasStipend = employee.hasStipend ?? (salary ? (salary.basic + salary.hra + salary.specialAllowance > 0) : false);
+    const stipendAmount = employee.stipendAmount ?? (salary ? salary.basic + salary.hra + salary.specialAllowance : null);
+
     const data: LetterData = {
-      candidateName: `${employee.firstName} ${employee.lastName}`,
+      candidateName: [employee.firstName, employee.lastName].filter(Boolean).join(' ').trim(),
       roleTitle: employee.designation?.title ?? 'Employee',
       department: employee.department?.name ?? '',
       startDate: employee.joinDate,
       engagementEndDate: employee.engagementEndDate,
-      grossMonthly: salary ? salary.basic + salary.hra + salary.specialAllowance : null,
+      grossMonthly: stipendAmount,
+      hasStipend,
+      stipendAmount,
       mode: (employee as any).workMode ?? 'Remote',
     };
 
@@ -115,16 +107,6 @@ export class OfferLetterService {
     const kind: 'OFFER_LETTER' = 'OFFER_LETTER';
     try {
       if (employee.empType === 'INTERN') {
-        // Was renderInternConfirmationLetter (the branded blue-stripe/seal
-        // style) — the real reference document for an intern's OFFER
-        // letter (Pala lova kishore's PDF) is the same clean numbered-
-        // clause style as full-time/part-time, not that branded document.
-        // The branded confirmation letter is a different, separate
-        // document (matches a different reference — "WhatsApp Image...
-        // P kavitha", a different person) that this app has never had a
-        // real trigger point for; renderInternConfirmationLetter is left
-        // in place below, just no longer called from here, in case a
-        // genuine "mark internship confirmed" feature gets built later.
         pdfBuffer = await this.renderInternshipOfferLetter(data);
       } else if (employee.empType === 'PART_TIME') {
         pdfBuffer = await this.renderPartTimeOfferLetter(data);
@@ -192,11 +174,6 @@ export class OfferLetterService {
 
   /**
    * Covering note only — the offer letter itself is the attached PDF.
-   *
-   * This used to reproduce every numbered clause of the letter inline in
-   * HTML alongside the attachment, so the candidate received the same terms
-   * twice, in two formats that could drift apart. The signable document is
-   * the PDF; the mail just points at it.
    */
   private buildOfferLetterEmailHtml(empType: string, d: LetterData, firstName: string, contact: string): string {
     const kind =
@@ -221,109 +198,7 @@ export class OfferLetterService {
   }
 
   // =====================================================================
-  // TEMPLATE 1: INTERNSHIP CONFIRMATION LETTER (branded — WhatsApp style)
-  //
-  // Blue diagonal stripes, logo top-left, seal top-right,
-  // Internship Details / Program Overview / Important Terms / Completion,
-  // signature bottom-left, MSME bottom-right.
-  // Matches the P kavitha template exactly.
-  // =====================================================================
-
-  private async renderInternConfirmationLetter(d: LetterData): Promise<Buffer> {
-    return this.renderPdf((doc) => {
-      const W = doc.page.width;
-      const H = doc.page.height;
-      const M = 50;
-
-      // --- Blue diagonal stripes ---
-      this.drawBlueStripes(doc, W, H);
-
-      // --- Shuroq logo top-left ---
-      this.placeAsset(doc, ASSET_PATHS.logo, M, 30, 140);
-
-      // --- Company seal top-right ---
-      this.placeAsset(doc, ASSET_PATHS.seal, W - M - 100, 55, 100);
-
-      // --- Title ---
-      doc.y = 160;
-      doc.fontSize(16).font('Helvetica-Bold').fillColor(BRAND.darkBlue)
-        .text('INTERNSHIP CONFIRMATION LETTER', M, doc.y, { align: 'center', width: W - 2 * M });
-      doc.moveDown(1.2);
-
-      // --- Date ---
-      doc.fontSize(10.5).font('Helvetica-Bold').fillColor(BRAND.black)
-        .text(`Date: ${fmtDateShort(d.startDate)}`, M);
-      doc.moveDown(0.3);
-
-      // --- Greeting ---
-      doc.text(`Dear ${d.candidateName} ,`, M);
-      doc.moveDown(0.8);
-
-      // --- Intro paragraph ---
-      doc.fontSize(10.5).font('Helvetica').fillColor(BRAND.black);
-      doc.text('We are pleased to offer you the position of ', M, doc.y, {
-        continued: true, width: W - 2 * M,
-      });
-      doc.font('Helvetica-Bold').text(`${d.roleTitle} Intern`, { continued: true });
-      doc.font('Helvetica').text(
-        ' at Shuroq. This internship involves working on internal projects and assigned tasks, allowing you to build practical skills through active participation and guided execution',
-        { width: W - 2 * M },
-      );
-      doc.moveDown(1);
-
-      // --- Internship Details ---
-      doc.fontSize(10.5).font('Helvetica-Bold').text('Internship Details:', M);
-      doc.text(`Start Date: ${fmtDateShort(d.startDate)}`, M);
-      if (d.engagementEndDate) {
-        doc.text(`End Date  : ${fmtDateShort(d.engagementEndDate)}`, M);
-      }
-      doc.text(`Mode: ${d.mode}`, M);
-      doc.moveDown(0.8);
-
-      // --- Program Overview ---
-      doc.fontSize(10.5).font('Helvetica-Bold').text('Program Overview:', M);
-      doc.font('Helvetica').fontSize(10);
-      this.bullet(doc, M, W, 'Work on real internal projects and task-based assignments');
-      this.bullet(doc, M, W, 'Collaborate with team members and follow structured guidance');
-      this.bullet(doc, M, W, 'Develop practical understanding through execution of assigned work');
-      doc.moveDown(0.8);
-
-      // --- Important Terms ---
-      doc.fontSize(10.5).font('Helvetica-Bold').text('Important Terms:', M);
-      doc.font('Helvetica').fontSize(10);
-      this.bullet(doc, M, W, 'This internship is not an employment opportunity');
-      this.bullet(doc, M, W, 'No salary, stipend, or job guarantee is associated with this program');
-      this.bullet(doc, M, W, 'Continuation in the program depends on participation, performance, and adherence to guidelines');
-      doc.moveDown(0.8);
-
-      // --- Completion & Recognition ---
-      doc.fontSize(10.5).font('Helvetica-Bold').text('Completion & Recognition:', M);
-      doc.font('Helvetica').fontSize(10);
-      this.bullet(doc, M, W, 'Successful completion requires fulfilling assigned tasks and evaluation criteria');
-      this.bullet(doc, M, W, 'A Certificate of Completion will be issued After 3 month based on performance');
-      this.bullet(doc, M, W, 'We look forward to your participation and contribution.');
-      doc.moveDown(1.2);
-
-      // --- Welcome & Best Regards ---
-      doc.fontSize(13).font('Helvetica-BoldOblique').fillColor(BRAND.darkBlue)
-        .text('Welcome to Shuroq Technologies.', M);
-      doc.text('Best Regards,', M);
-      doc.moveDown(0.3);
-
-      // --- Authorized Signature (bottom-left) ---
-      this.placeAsset(doc, ASSET_PATHS.signature, M, doc.y, 130);
-
-      // --- MSME Logo (bottom-right) ---
-      this.placeAsset(doc, ASSET_PATHS.msme, W - M - 130, H - 190, 130);
-    });
-  }
-
-  // =====================================================================
-  // TEMPLATE 2: PART-TIME OFFER LETTER (clean — Aarif PDF style)
-  //
-  // Centered Shuroq logo, address + email line, centered title,
-  // Date/Candidate Name, numbered clauses with justified body text,
-  // acceptance block. No decorative elements.
+  // TEMPLATE 1: PART-TIME OFFER LETTER (clean — Aarif PDF style)
   // =====================================================================
 
   private async renderPartTimeOfferLetter(d: LetterData): Promise<Buffer> {
@@ -332,35 +207,28 @@ export class OfferLetterService {
       const M = 72;
       const textW = W - 2 * M;
 
-      // --- Centered logo ---
       this.placeLogoCentered(doc, W, M);
 
-      // --- Address & contact ---
       doc.fontSize(9).font('Helvetica').fillColor(BRAND.grey)
         .text(COMPANY.address, M, doc.y, { width: textW });
-      // Email in gray, website in blue (matches original hyperlink color)
       doc.fillColor(BRAND.grey)
         .text(`Email: ${COMPANY.email} | Website: `, M, doc.y, { width: textW, continued: true });
       doc.fillColor(BRAND.linkBlue).text(COMPANY.website, { link: `https://${COMPANY.website}` });
       doc.moveDown(1.5);
 
-      // --- Title ---
       doc.fontSize(14).font('Helvetica-Bold').fillColor(BRAND.black)
         .text(`${d.roleTitle.toUpperCase()} (PART TIME) \u2013 OFFER LETTER`, M, doc.y, { align: 'center', width: textW });
       doc.moveDown(1.2);
 
-      // --- Date ---
       doc.fontSize(10.5).font('Helvetica-Bold').fillColor(BRAND.black)
         .text('Date: ', M, doc.y, { continued: true });
       doc.font('Helvetica').text(fmtDateFull(new Date()));
       doc.moveDown(0.3);
 
-      // --- Candidate Name ---
       doc.font('Helvetica-Bold').text('Candidate Name: ', M, doc.y, { continued: true });
       doc.font('Helvetica').text(d.candidateName);
       doc.moveDown(0.5);
 
-      // --- Intro ---
       doc.fontSize(10.5).font('Helvetica').fillColor(BRAND.black).text(
         'We are pleased to offer you the position of ',
         M, doc.y, { continued: true, width: textW, align: 'left', lineGap: 1.5 },
@@ -372,67 +240,61 @@ export class OfferLetterService {
       );
       doc.moveDown(1);
 
-      // --- Clauses (1-6 stretched to fill the rest of page 1, matching
-      // the real reference — see computeFillGap) ---
-      const compLine = d.grossMonthly
-        ? `You will receive a monthly salary of Rs. ${d.grossMonthly.toLocaleString('en-IN')}.`
-        : 'Your compensation will be communicated separately.';
+      const stipendLine = d.hasStipend && d.stipendAmount
+        ? `Stipend: Rs. ${d.stipendAmount.toLocaleString('en-IN')} per month`
+        : 'Stipend: Unpaid';
+
+      const detailsBody =
+        `Start Date: ${fmtDateFull(d.startDate)}\n` +
+        `Mode: ${d.mode || 'Hybrid'}\n` +
+        `${stipendLine}`;
+
+      const statutoryClause = d.hasStipend && d.stipendAmount
+        ? {
+            heading: '4. Statutory Benefits & Deductions',
+            body: 'This part-time engagement is on a consolidated stipend/fee basis. Regular statutory benefits including Provident Fund (PF), Employees\u2019 State Insurance (ESI), bonus, gratuity, and paid leave accruals are not applicable. Applicable statutory deductions, including Tax Deducted at Source (TDS) and Professional Tax, will be deducted from the monthly stipend in accordance with prevailing statutory laws.',
+          }
+        : {
+            heading: '4. Statutory Benefits & Deductions',
+            body: 'This part-time engagement is strictly voluntary and unpaid. Statutory employee benefits including Provident Fund (PF), Employees\u2019 State Insurance (ESI), leave encashment, bonus, gratuity, and insurance are not applicable. Since no remuneration or stipend is payable, no statutory payroll deductions or tax withholdings shall apply.',
+          };
+
       const page1Clauses = [
-        { heading: '1. Employment Start Date', body: `Start Date: ${fmtDateFull(d.startDate)}` },
+        { heading: '1. Employment Details', body: detailsBody },
         { heading: '2. Nature of Engagement', body: 'This engagement is a part-time role focused on supporting technical tasks, system operations, and project-related activities as assigned by the company.' },
         { heading: '3. Role Scope', body: 'You will perform assigned system engineering tasks and provide technical support under guidance from the team.' },
-        { heading: '4. Compensation', body: compLine },
-        { heading: '5. Statutory Benefits', body: 'Provident Fund (PF), ESI, leave, bonus, gratuity, insurance, or any other employee benefits are not applicable for this part-time engagement.' },
-        { heading: '6. Notice Period / Termination', body: 'Either party may terminate this engagement by providing 1 month prior written notice.' },
+        statutoryClause,
+        { heading: '5. Notice Period / Termination', body: 'Either party may terminate this engagement by providing 1 month prior written notice.' },
       ];
       const fillGap = this.computeFillGap(doc, textW, page1Clauses);
 
-      this.clauseClean(doc, M, textW, page1Clauses[0].heading, page1Clauses[0].body, [fmtDateFull(d.startDate)], fillGap);
+      this.clauseClean(doc, M, textW, page1Clauses[0].heading, page1Clauses[0].body, [], fillGap);
       this.clauseClean(doc, M, textW, page1Clauses[1].heading, page1Clauses[1].body, ['part-time role'], fillGap);
       this.clauseClean(doc, M, textW, page1Clauses[2].heading, page1Clauses[2].body, [], fillGap);
-      this.clauseClean(doc, M, textW, page1Clauses[3].heading, page1Clauses[3].body,
-        d.grossMonthly ? [`monthly salary of Rs. ${d.grossMonthly.toLocaleString('en-IN')}`] : [], fillGap);
-      this.clauseClean(doc, M, textW, page1Clauses[4].heading, page1Clauses[4].body, [], fillGap);
-      this.clauseClean(doc, M, textW, page1Clauses[5].heading, page1Clauses[5].body, ['1 month prior written notice'], fillGap);
+      this.clauseClean(doc, M, textW, page1Clauses[3].heading, page1Clauses[3].body, [], fillGap);
+      this.clauseClean(doc, M, textW, page1Clauses[4].heading, page1Clauses[4].body, ['1 month prior written notice'], fillGap);
 
-      // The real reference (Aarif's PDF) breaks to page 2 right here — an
-      // explicit page break rather than trying to tune spacing to land
-      // naturally in the same place, since natural flow shifts with every
-      // candidate's actual name/role/department length.
       doc.addPage();
 
-      // Clauses 7-9 reuse the SAME gap as clauses 1-6 (`fillGap`) — see the
-      // comment on renderFullTimeOfferLetter's page 2 for why a gap
-      // independently stretched to fill page 2 gave the two pages a visibly
-      // different rhythm even though both looked "full".
-      //
-      // The extra bold confidentiality line (per the Aarif reference) is a
-      // continuation sentence *of* clause 7, not a clause of its own — so it
-      // must sit close under clause 7's body, not floating with a full
-      // fillGap on both sides. Passing 0 here suppresses clauseClean's own
-      // trailing gap so a small fixed gap can attach the line to the clause
-      // instead; the real fillGap is only added once, after the line, before
-      // clause 8 — the same rhythm as every other clause boundary.
-      this.clauseClean(doc, M, textW, '7. Confidentiality & Non-Disclosure (NDA)',
+      this.clauseClean(doc, M, textW, '6. Confidentiality & Non-Disclosure (NDA)',
         `You may have access to confidential, proprietary, technical, business, or client information of ${COMPANY.name}. You agree to maintain strict confidentiality and not disclose or misuse such information.`, [], 0);
       doc.moveDown(0.6);
       doc.fontSize(10.5).font('Helvetica-Bold').fillColor(BRAND.black)
         .text('This offer letter and employment terms are strictly confidential.', M, doc.y, { width: textW, align: 'left', lineGap: 1.5 });
       doc.y += fillGap;
 
-      this.clauseClean(doc, M, textW, '8. Intellectual Property Ownership',
+      this.clauseClean(doc, M, textW, '7. Intellectual Property Ownership',
         `All work products, source code, designs, documents, inventions, discoveries, improvements, processes, or materials created or contributed to by you during your engagement shall be the sole intellectual property of ${COMPANY.name}.`, [], fillGap);
 
-      this.clauseClean(doc, M, textW, '9. Governing Law',
+      this.clauseClean(doc, M, textW, '8. Governing Law',
         'This offer letter shall be governed by and construed in accordance with the laws of India.', [], fillGap);
 
-      // --- Acceptance ---
       this.acceptanceBlock(doc, M, textW, d.candidateName);
     }, { size: 'LETTER', margin: 72 });
   }
 
   // =====================================================================
-  // TEMPLATE 3: FULL-TIME OFFER LETTER (clean style, same as part-time)
+  // TEMPLATE 2: FULL-TIME OFFER LETTER (clean style)
   // =====================================================================
 
   private async renderFullTimeOfferLetter(d: LetterData): Promise<Buffer> {
@@ -463,7 +325,6 @@ export class OfferLetterService {
       doc.font('Helvetica').text(d.candidateName);
       doc.moveDown(0.5);
 
-      // --- Intro ---
       doc.fontSize(10.5).font('Helvetica').fillColor(BRAND.black).text(
         'We are pleased to offer you the position of ',
         M, doc.y, { continued: true, width: textW, align: 'left', lineGap: 1.5 },
@@ -475,63 +336,57 @@ export class OfferLetterService {
       );
       doc.moveDown(1);
 
-      // --- Clauses (1-6 stretched to fill the rest of page 1, matching
-      // the real reference family — see computeFillGap) ---
-      const startDateClauseBody = `Start Date: ${fmtDateFull(d.startDate)}\nMode: ${d.mode}`;
+      const stipendLine = d.hasStipend && d.stipendAmount
+        ? `Stipend: Rs. ${d.stipendAmount.toLocaleString('en-IN')} per month`
+        : 'Stipend: Unpaid';
+
+      const detailsBody =
+        `Start Date: ${fmtDateFull(d.startDate)}\n` +
+        `Mode: ${d.mode || 'On-site'}\n` +
+        `${stipendLine}`;
+
       const natureClauseBody = 'This is a full-time, permanent role. You are expected to devote your full working time and attention to the company during working hours.';
       const roleClauseBody = `You will join the ${d.department} department as ${d.roleTitle}, reporting to your assigned manager.`;
 
-      const compLine = d.grossMonthly
-        ? `Your gross monthly salary will be Rs. ${d.grossMonthly.toLocaleString('en-IN')}, payable monthly and subject to statutory deductions set out below. Compensation is reviewed annually at the company\u2019s discretion and is strictly confidential.`
-        : 'Your compensation will be communicated separately and is strictly confidential.';
-
-      const statutoryClauseBody = 'As a full-time employee you are covered by Provident Fund (PF) and, where eligible, Employees\u2019 State Insurance (ESI) and gratuity, in accordance with applicable Indian law. Income Tax (TDS) and Professional Tax will be deducted at source as required.';
+      const statutoryClause = d.hasStipend && d.stipendAmount
+        ? {
+            heading: '4. Statutory Benefits & Deductions',
+            body: 'As a full-time employee, you are entitled to statutory benefits including Provident Fund (PF) and, where eligible, Employees\u2019 State Insurance (ESI) and gratuity in accordance with applicable Indian labor laws. Statutory deductions including Income Tax (TDS), Provident Fund employee contribution, and Professional Tax will be deducted at source from your gross monthly salary as mandated by law.',
+          }
+        : {
+            heading: '4. Statutory Benefits & Deductions',
+            body: 'As this engagement is structured on an unpaid/voluntary basis, statutory employee benefits such as Provident Fund (PF), Employees\u2019 State Insurance (ESI), gratuity, and payroll-based monetary allowances are not applicable. Consequently, no salary deductions (TDS, PF contributions, or Professional Tax) will be processed.',
+          };
 
       const leaveClauseBody = 'You will accrue one sick leave and one casual leave for each completed month of service. Unused leave carries forward within the same calendar year and lapses on 31 December.';
 
       const page1Clauses = [
-        { heading: '1. Employment Start Date', body: startDateClauseBody },
+        { heading: '1. Employment Details', body: detailsBody },
         { heading: '2. Nature of Engagement', body: natureClauseBody },
         { heading: '3. Role & Reporting', body: roleClauseBody },
-        { heading: '4. Compensation', body: compLine },
-        { heading: '5. Statutory Benefits & Deductions', body: statutoryClauseBody },
-        { heading: '6. Leave Entitlement', body: leaveClauseBody },
+        statutoryClause,
+        { heading: '5. Leave Entitlement', body: leaveClauseBody },
       ];
       const fillGap = this.computeFillGap(doc, textW, page1Clauses);
 
-      this.clauseClean(doc, M, textW, page1Clauses[0].heading, page1Clauses[0].body, [fmtDateFull(d.startDate)], fillGap);
+      this.clauseClean(doc, M, textW, page1Clauses[0].heading, page1Clauses[0].body, [], fillGap);
       this.clauseClean(doc, M, textW, page1Clauses[1].heading, page1Clauses[1].body, [], fillGap);
       this.clauseClean(doc, M, textW, page1Clauses[2].heading, page1Clauses[2].body, [], fillGap);
       this.clauseClean(doc, M, textW, page1Clauses[3].heading, page1Clauses[3].body, [], fillGap);
       this.clauseClean(doc, M, textW, page1Clauses[4].heading, page1Clauses[4].body, [], fillGap);
-      this.clauseClean(doc, M, textW, page1Clauses[5].heading, page1Clauses[5].body, [], fillGap);
 
-      // Same "break after clause 6" convention as part-time/internship —
-      // see the comment on renderPartTimeOfferLetter's page break. No
-      // full-time reference PDF exists to verify this exact spot, but it's
-      // the same clause-body length family as the two verified templates.
       doc.addPage();
 
-      // --- Clauses 7-10 use the SAME gap as clauses 1-6 (`fillGap`), not a
-      // gap independently stretched to fill page 2. Filling each page to its
-      // own bottom margin produced a *different* gap per page \u2014 page 1 had
-      // 6 long clauses needing only ~56pt of extra gap each to reach the
-      // margin, page 2 has 4 shorter clauses needing ~85pt each to reach the
-      // same margin, so the rhythm between clauses visibly changed page to
-      // page even though both pages looked "full". Reusing one gap value
-      // keeps the spacing between every clause identical throughout the
-      // letter; page 2 simply ends with blank space below the acceptance
-      // block instead of being stretched to meet the margin exactly. ---
-      this.clauseClean(doc, M, textW, '7. Notice Period / Termination',
+      this.clauseClean(doc, M, textW, '6. Notice Period / Termination',
         'Either party may terminate this engagement by providing one month\u2019s prior written notice. The company may terminate without notice in cases of misconduct or breach of company policy.', [], fillGap);
 
-      this.clauseClean(doc, M, textW, '8. Confidentiality & Non-Disclosure (NDA)',
+      this.clauseClean(doc, M, textW, '7. Confidentiality & Non-Disclosure (NDA)',
         `You may have access to confidential, proprietary, technical, business, or client information of ${COMPANY.name}. You agree to maintain strict confidentiality and not disclose or misuse such information. This obligation survives the termination of your employment.`, [], fillGap);
 
-      this.clauseClean(doc, M, textW, '9. Intellectual Property Ownership',
+      this.clauseClean(doc, M, textW, '8. Intellectual Property Ownership',
         `All work products, source code, designs, documents, inventions, discoveries, improvements, processes, or materials created or contributed to by you during your employment shall be the sole intellectual property of ${COMPANY.name}.`, [], fillGap);
 
-      this.clauseClean(doc, M, textW, '10. Governing Law',
+      this.clauseClean(doc, M, textW, '9. Governing Law',
         'This offer letter shall be governed by and construed in accordance with the laws of India.', [], fillGap);
 
       this.acceptanceBlock(doc, M, textW, d.candidateName);
@@ -539,12 +394,7 @@ export class OfferLetterService {
   }
 
   // =====================================================================
-  // TEMPLATE 4: INTERNSHIP OFFER LETTER (clean style — matches the real
-  // Pala lova kishore reference PDF exactly: role in the title is Title
-  // Case, not upper-cased, with no dash before "OFFER LETTER"; the intro
-  // paragraph doesn't bold the role; clause 1 has three plain (non-bold)
-  // lines including a computed "Duration: N months"; clause 6 has an
-  // extra leading sentence the other two templates don't.)
+  // TEMPLATE 3: INTERNSHIP OFFER LETTER (clean style)
   // =====================================================================
 
   private async renderInternshipOfferLetter(d: LetterData): Promise<Buffer> {
@@ -562,9 +412,6 @@ export class OfferLetterService {
       doc.fillColor(BRAND.linkBlue).text(COMPANY.website, { link: `https://${COMPANY.website}` });
       doc.moveDown(1.5);
 
-      // Reference title: "Full Stack Developer Intern OFFER LETTER" — role
-      // stays as typed (Title Case), only "OFFER LETTER" is upper-cased,
-      // and there's no dash — unlike the full-time/part-time titles.
       doc.fontSize(14).font('Helvetica-Bold').fillColor(BRAND.black)
         .text(`${d.roleTitle} Intern OFFER LETTER`, M, doc.y, { align: 'center', width: textW });
       doc.moveDown(1.2);
@@ -578,29 +425,37 @@ export class OfferLetterService {
       doc.font('Helvetica').text(d.candidateName);
       doc.moveDown(0.5);
 
-      // Reference doesn't bold the role/type here, unlike full-time/part-time.
       doc.fontSize(10.5).font('Helvetica').fillColor(BRAND.black).text(
         `We are pleased to offer you the position of ${d.roleTitle} Intern (Internship) at ${COMPANY.name} under the following terms and conditions:`,
         M, doc.y, { width: textW, align: 'left', lineGap: 1.5 },
       );
       doc.moveDown(1);
 
-      const months = d.engagementEndDate ? monthsBetween(d.startDate, d.engagementEndDate) : null;
-      const duration =
-        `Start Date: ${fmtDateFull(d.startDate)}` +
-        (d.engagementEndDate ? `\nEnd Date: ${fmtDateFull(d.engagementEndDate)}` : '') +
-        (months !== null ? `\nDuration: ${months} month${months === 1 ? '' : 's'}` : '');
-      const stipendClauseBody = d.grossMonthly
-        ? `You will receive a training allowance of Rs. ${d.grossMonthly.toLocaleString('en-IN')} per month.`
-        : 'This internship is unpaid. No stipend, salary, or wages shall be provided during the training period.';
+      const stipendLine = d.hasStipend && d.stipendAmount
+        ? `Stipend: Rs. ${d.stipendAmount.toLocaleString('en-IN')} per month`
+        : 'Stipend: Unpaid';
+
+      const detailsBody =
+        `Start Date: ${fmtDateFull(d.startDate)}\n` +
+        `Mode: ${d.mode || 'Remote'}\n` +
+        `${stipendLine}`;
+
+      const statutoryClause = d.hasStipend && d.stipendAmount
+        ? {
+            heading: '4. Statutory Benefits & Deductions',
+            body: 'Provident Fund (PF), Employees\u2019 State Insurance (ESI), leave encashment, bonus, gratuity, and regular employee benefits are not applicable for this internship training program. The stipend provided is a consolidated monthly training allowance. Where applicable under Indian Income Tax regulations, statutory deductions including Tax Deducted at Source (TDS) will be deducted at source.',
+          }
+        : {
+            heading: '4. Statutory Benefits & Deductions',
+            body: 'This internship is an unpaid academic and training engagement. Statutory employee benefits including Provident Fund (PF), Employees\u2019 State Insurance (ESI), bonus, gratuity, leave encashment, and insurance coverage are not applicable. As no monetary stipend or remuneration is disbursed, no statutory tax deductions (such as TDS or Professional Tax) are applicable.',
+          };
 
       const page1Clauses = [
-        { heading: '1. Internship Duration', body: duration },
+        { heading: '1. Employment Details', body: detailsBody },
         { heading: '2. Nature of Engagement', body: 'This engagement is purely for training and skill development purposes and does not constitute regular employment or create an employer–employee relationship.' },
         { heading: '3. Training Scope', body: 'You will undergo structured training and may perform supervised technical tasks strictly incidental to training and learning objectives.' },
-        { heading: '4. Training Allowance (Stipend)', body: stipendClauseBody },
-        { heading: '5. Statutory Benefits', body: 'Provident Fund (PF), ESI, leave, bonus, gratuity, insurance, or any other employee benefits are not applicable during the training period.' },
-        { heading: '6. Termination / Early Exit', body: 'While this internship is intended to run for the full duration specified, it may be discontinued by either party at any time via written notice. In the event of an early exit, the Intern agrees to ensure a professional handover of all ongoing tasks and return any company property.' },
+        statutoryClause,
+        { heading: '5. Termination / Early Exit', body: 'While this internship is intended to run for the full duration specified, it may be discontinued by either party at any time via written notice. In the event of an early exit, the Intern agrees to ensure a professional handover of all ongoing tasks and return any company property.' },
       ];
       const fillGap = this.computeFillGap(doc, textW, page1Clauses);
 
@@ -609,26 +464,19 @@ export class OfferLetterService {
       this.clauseClean(doc, M, textW, page1Clauses[2].heading, page1Clauses[2].body, [], fillGap);
       this.clauseClean(doc, M, textW, page1Clauses[3].heading, page1Clauses[3].body, [], fillGap);
       this.clauseClean(doc, M, textW, page1Clauses[4].heading, page1Clauses[4].body, [], fillGap);
-      this.clauseClean(doc, M, textW, page1Clauses[5].heading, page1Clauses[5].body, [], fillGap);
 
-      // The real reference (Kishore's PDF) breaks to page 2 right here —
-      // see the comment on renderPartTimeOfferLetter's page break.
       doc.addPage();
 
-      // Clauses 7-10 reuse the SAME gap as clauses 1-6 (`fillGap`) — see the
-      // comment on renderFullTimeOfferLetter's page 2 for why a gap
-      // independently stretched to fill page 2 gave the two pages a visibly
-      // different rhythm even though both looked "full".
-      this.clauseClean(doc, M, textW, '7. Confidentiality & Non-Disclosure (NDA)',
+      this.clauseClean(doc, M, textW, '6. Confidentiality & Non-Disclosure (NDA)',
         `You may have access to confidential, proprietary, technical, business, or client information of ${COMPANY.name}. You agree to maintain strict confidentiality and not disclose or misuse such information. This obligation shall survive the completion or termination of the internship.`, [], fillGap);
 
-      this.clauseClean(doc, M, textW, '8. Intellectual Property Ownership',
+      this.clauseClean(doc, M, textW, '7. Intellectual Property Ownership',
         `All work products, source code, designs, documents, inventions, discoveries, improvements, processes, or materials created or contributed to by you during the internship shall be the sole intellectual property of ${COMPANY.name}. You irrevocably assign all rights, title, and interest in such work to ${COMPANY.name}.`, [], fillGap);
 
-      this.clauseClean(doc, M, textW, '9. Completion & Absorption',
+      this.clauseClean(doc, M, textW, '8. Completion & Absorption',
         'Upon successful completion, a Training / Internship Completion Certificate will be issued. Completion does not guarantee employment.', [], fillGap);
 
-      this.clauseClean(doc, M, textW, '10. Governing Law',
+      this.clauseClean(doc, M, textW, '9. Governing Law',
         'This offer letter shall be governed by and construed in accordance with the laws of India.', [], fillGap);
 
       this.acceptanceBlock(doc, M, textW, d.candidateName);
@@ -660,23 +508,6 @@ export class OfferLetterService {
     });
   }
 
-  /** Blue diagonal stripes — top-right and bottom-left (branded template only) */
-  private drawBlueStripes(doc: PDFKit.PDFDocument, W: number, H: number) {
-    doc.save();
-    doc.moveTo(W * 0.65, 0).lineTo(W, 0).lineTo(W, H * 0.28).closePath().fill(BRAND.darkBlue);
-    doc.restore();
-    doc.save();
-    doc.moveTo(0, H * 0.92).lineTo(W * 0.40, H).lineTo(0, H).closePath().fill(BRAND.darkBlue);
-    doc.restore();
-  }
-
-  /** Place a brand asset image at a specific position, with fallback */
-  private placeAsset(doc: PDFKit.PDFDocument, assetPath: string, x: number, y: number, width: number) {
-    if (fs.existsSync(assetPath)) {
-      doc.image(assetPath, x, y, { width });
-    }
-  }
-
   /** Centered Shuroq logo at the top of the page (clean offer letter style) */
   private placeLogoCentered(doc: PDFKit.PDFDocument, pageW: number, M: number) {
     if (fs.existsSync(ASSET_PATHS.logo)) {
@@ -691,15 +522,6 @@ export class OfferLetterService {
         .text('TECH REDEFINED', M, doc.y, { align: 'center', width: pageW - 2 * M, characterSpacing: 2 });
       doc.moveDown(1);
     }
-  }
-
-  /** Bullet point for the branded confirmation letter */
-  private bullet(doc: PDFKit.PDFDocument, M: number, pageW: number, text: string) {
-    const textX = M + 25;
-    const y = doc.y;
-    doc.fontSize(10).font('Helvetica').fillColor(BRAND.black);
-    doc.text('\u2022', M + 12, y);
-    doc.text(text, textX, y, { width: pageW - textX - M });
   }
 
   /** Split a string into bold and normal segments so we can render cleanly without dangling continued states */
@@ -839,24 +661,14 @@ export class OfferLetterService {
   }
 }
 
-/** DD-MM-YY format matching the confirmation letter (e.g., "09-05-26") */
+/** DD/MM/YYYY format for confirmation letters (e.g., "25/05/2026") */
 function fmtDateShort(d: Date | null): string {
-  if (!d) return '\u2014';
-  const dt = new Date(d);
-  const dd = String(dt.getDate()).padStart(2, '0');
-  const mm = String(dt.getMonth() + 1).padStart(2, '0');
-  const yy = String(dt.getFullYear()).slice(-2);
-  return `${dd}-${mm}-${yy}`;
+  return formatDateDMY(d);
 }
 
-/** MM/DD/YYYY format matching the clean offer letters (e.g., "01/07/2026") */
+/** DD/MM/YYYY format for clean offer letters (e.g., "25/05/2026") */
 function fmtDateFull(d: Date | null): string {
-  if (!d) return '\u2014';
-  const dt = new Date(d);
-  const dd = String(dt.getDate()).padStart(2, '0');
-  const mm = String(dt.getMonth() + 1).padStart(2, '0');
-  const yyyy = dt.getFullYear();
-  return `${mm}/${dd}/${yyyy}`;
+  return formatDateDMY(d);
 }
 
 /** Whole calendar months between two dates \u2014 matches the "Duration: 3 months" line on the real internship offer letter reference. */

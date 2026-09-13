@@ -10,6 +10,7 @@ import {
 import { projectApi, hrmApi, uploadApi } from '../../../services/api';
 import { useAuth } from '../../../context/AuthContext';
 import Modal, { FormField } from '../../../components/Modal';
+import { formatDate } from '../../../lib/date';
 
 const STATUS_LABEL: Record<string, string> = {
   NOT_STARTED: 'Not Started', IN_PROGRESS: 'In Progress', REVIEW: 'In Review', DONE: 'Completed',
@@ -359,8 +360,8 @@ function OverviewTab({ project, employees, isManager, canStaffProjects, onChange
               {project.description || 'No overview written yet.'}
             </p>
             <div style={{ fontSize: '12.5px', color: 'var(--color-text-muted)', display: 'flex', gap: '18px' }}>
-              <span><b style={{ color: 'var(--color-text-secondary)' }}>Start date:</b> {project.startDate ? new Date(project.startDate).toLocaleDateString() : 'Not set'}</span>
-              <span><b style={{ color: 'var(--color-text-secondary)' }}>Deadline:</b> {project.endDate ? new Date(project.endDate).toLocaleDateString() : 'Not set'}</span>
+              <span><b style={{ color: 'var(--color-text-secondary)' }}>Start date:</b> {formatDate(project.startDate, 'Not set')}</span>
+              <span><b style={{ color: 'var(--color-text-secondary)' }}>Deadline:</b> {formatDate(project.endDate, 'Not set')}</span>
             </div>
           </>
         )}
@@ -506,7 +507,7 @@ function MilestonesTab({ projectId, milestones, isManager, onChanged }: any) {
                 </div>
                 <div>
                   <div style={{ fontSize: '13.5px', fontWeight: 600, textDecoration: m.status === 'REACHED' ? 'line-through' : 'none' }}>{m.title}</div>
-                  {m.dueDate && <div style={{ fontSize: '12px', color: 'var(--color-text-muted)', marginTop: '2px' }}>Due {new Date(m.dueDate).toLocaleDateString()}</div>}
+                  {m.dueDate && <div style={{ fontSize: '12px', color: 'var(--color-text-muted)', marginTop: '2px' }}>Due {formatDate(m.dueDate)}</div>}
                 </div>
               </div>
               {isManager && (
@@ -625,7 +626,7 @@ function DocumentsTab({ projectId, documents, isManager, hasRoster, onChanged }:
                       <span style={{ fontSize: '10.5px', fontWeight: 700, color: format.color, background: format.bg, padding: '2px 7px', borderRadius: '999px' }}>{format.label}</span>
                     </div>
                     <div style={{ fontSize: '12px', color: 'var(--color-text-muted)', marginTop: '2px' }}>
-                      {d.uploader?.firstName} {d.uploader?.lastName} · {new Date(d.createdAt).toLocaleDateString()}
+                      {d.uploader?.firstName} {d.uploader?.lastName} · {formatDate(d.createdAt)}
                     </div>
                   </div>
                 </div>
@@ -846,7 +847,7 @@ function TaskSheet({ tasks, editable, onEdit, onDelete, onStatus }: any) {
       <tbody>
         {sorted.map((t: any) => (
           <tr key={t.id}>
-            <td style={{ whiteSpace: 'nowrap' }}>{t.dueDate ? new Date(t.dueDate).toLocaleDateString() : '—'}</td>
+            <td style={{ whiteSpace: 'nowrap' }}>{formatDate(t.dueDate, '—')}</td>
             <td>{t.title}</td>
             <td>
               {editable ? (
@@ -939,7 +940,9 @@ function MyTimesheetView({ projectId }: any) {
 
   if (!data) return <div className="card">Loading…</div>;
 
-  const todayLabel = new Date().toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+  const today = new Date();
+  const weekday = today.toLocaleDateString('en-IN', { weekday: 'long' });
+  const todayLabel = `${weekday}, ${formatDate(today)}`;
   const inactiveReason = data.projectStatus === 'NOT_STARTED'
     ? "This project hasn't started yet — timesheet entry opens once it's in progress."
     : data.projectStatus === 'ON_HOLD'
@@ -990,7 +993,7 @@ function MyTimesheetView({ projectId }: any) {
             {data.history.map((h: any) => (
               <div key={h.id} style={{ padding: '10px 12px', borderRadius: '8px', border: '1px solid var(--color-border)' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', fontWeight: 700 }}>
-                  <span>{new Date(h.date).toLocaleDateString()}</span>
+                  <span>{formatDate(h.date)}</span>
                   <span>{h.hours} hrs</span>
                 </div>
                 {h.description && <div style={{ fontSize: '12px', color: 'var(--color-text-muted)', marginTop: '4px' }}>{h.description}</div>}
@@ -1099,7 +1102,7 @@ function ManagerTimesheetView({ projectId, members }: any) {
                 <div key={h.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 10px', borderRadius: '8px', border: '1px solid var(--color-border)' }}>
                   <div>
                     <div style={{ fontSize: '13px', fontWeight: 600 }}>{h.title}</div>
-                    <div style={{ fontSize: '11.5px', color: 'var(--color-text-muted)' }}>{new Date(h.date).toLocaleDateString()}</div>
+                    <div style={{ fontSize: '11.5px', color: 'var(--color-text-muted)' }}>{formatDate(h.date)}</div>
                   </div>
                   <button onClick={() => handleDeleteHoliday(h.id)} style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#dc2626' }}><Trash2 size={14} /></button>
                 </div>

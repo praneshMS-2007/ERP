@@ -6,6 +6,7 @@ const PDFDocument = require('pdfkit');
 import { PrismaService } from '../prisma/prisma.service';
 import { MailerService } from '../common/mailer.service';
 import { coverNoteHtml, escapeHtml } from '../common/email-template';
+import { formatDateDMY } from '../common/date-format';
 
 const COMPANY = {
   name: 'Shuroq',
@@ -185,7 +186,7 @@ export class InternshipCertificateService {
     today.setHours(23, 59, 59, 999);
     if (employee.engagementEndDate > today) {
       throw new BadRequestException(
-        `This internship hasn't finished yet — it runs through ${employee.engagementEndDate.toLocaleDateString('en-GB')}.`,
+        `This internship hasn't finished yet — it runs through ${formatDateDMY(employee.engagementEndDate)}.`,
       );
     }
     if (employee.internshipCertStatus === 'APPROVED') throw new BadRequestException('Certificate has already been issued');
@@ -596,11 +597,11 @@ export class InternshipCertificateService {
   }
 }
 
-/** DD-MM-YYYY format matching the completion certificate reference image (e.g., "09-05-2026") */
+/** DD/MM/YYYY format matching the date/month/year standard (e.g., "09/05/2026") */
 function fmtDateLong(d: Date | null): string {
   if (!d) return '\u2014';
   const dt = new Date(d);
   const dd = String(dt.getDate()).padStart(2, '0');
   const mm = String(dt.getMonth() + 1).padStart(2, '0');
-  return `${dd}-${mm}-${dt.getFullYear()}`;
+  return `${dd}/${mm}/${dt.getFullYear()}`;
 }

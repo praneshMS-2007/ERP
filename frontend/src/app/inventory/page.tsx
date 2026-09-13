@@ -9,6 +9,7 @@ import { inventoryApi, exportApi } from '../../services/api';
 import ExportButton from '../../components/ExportButton';
 import Modal, { FormField } from '../../components/Modal';
 import { formatINR, formatINRCompact } from '../../lib/currency';
+import { formatDate } from '../../lib/date';
 
 const emptyPoForm = { productId: '', supplierId: '', warehouseId: '', quantity: '', totalAmount: '', orderDate: new Date().toISOString().slice(0, 10) };
 const emptyProdForm = { name: '', sku: '', category: '', unit: 'pcs', price: '', costPrice: '', status: 'ACTIVE', warehouseId: '', initialQuantity: '' };
@@ -240,7 +241,7 @@ export default function InventoryPage() {
                         <div style={{ color: 'var(--color-text-secondary)' }}>
                           {added ? '+' : ''}{m.changeAmount} units · {REASON_LABEL[m.reason] || m.reason}{m.warehouse?.name ? ` · ${m.warehouse.name}` : ''}
                         </div>
-                        <div style={{ fontSize: '10px', color: 'var(--color-text-muted)' }}>{new Date(m.date).toLocaleDateString()}</div>
+                        <div style={{ fontSize: '10px', color: 'var(--color-text-muted)' }}>{formatDate(m.date)}</div>
                       </div>
                     </div>
                   );

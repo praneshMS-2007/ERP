@@ -10,6 +10,7 @@ import { financeApi, exportApi } from '../../services/api';
 import ExportButton from '../../components/ExportButton';
 import Modal, { FormField } from '../../components/Modal';
 import { formatINR } from '../../lib/currency';
+import { formatDate } from '../../lib/date';
 
 const emptyPaymentForm = { amount: '', method: 'BANK_TRANSFER', date: new Date().toISOString().slice(0, 10) };
 
@@ -339,7 +340,7 @@ export default function FinancePage() {
                   <td style={{ fontWeight: 600, color: '#2563eb' }}>{inv.invoiceNo}</td>
                   <td>{inv.clientName}</td>
                   <td style={{ fontWeight: 600 }}>{formatINR(inv.amount)}</td>
-                  <td>{new Date(inv.dueDate).toLocaleDateString()}</td>
+                  <td>{formatDate(inv.dueDate)}</td>
                   <td><span className={badgeClass(inv.status)}>{inv.status}</span></td>
                   <td>
                     <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
@@ -377,7 +378,7 @@ export default function FinancePage() {
                 <div className="timeline-dot" style={{ background: '#16a34a' }} />
                 <div className="timeline-title">Payment Received{pay.invoice?.invoiceNo ? ` — ${pay.invoice.invoiceNo}` : ''}</div>
                 <div className="timeline-desc">{pay.invoice?.clientName || 'Unknown client'} · {pay.method?.replace('_', ' ')} — {formatINR(pay.amount)}</div>
-                <div className="timeline-time">{new Date(pay.date || pay.createdAt).toLocaleDateString()}</div>
+                <div className="timeline-time">{formatDate(pay.date || pay.createdAt)}</div>
               </div>
             ))}
           </div>
@@ -402,7 +403,7 @@ export default function FinancePage() {
               <tr><td colSpan={6} style={{ textAlign: 'center', padding: '20px' }}>No expenses recorded</td></tr>
             ) : paginatedExp.map((exp) => (
               <tr key={exp.id}>
-                <td>{new Date(exp.date).toLocaleDateString()}</td>
+                <td>{formatDate(exp.date)}</td>
                 <td>{exp.description}</td>
                 <td><span style={{ fontSize: '12px', background: '#f3f4f6', padding: '4px 8px', borderRadius: '4px', fontWeight: 600, color: '#4b5563' }}>{exp.category}</span></td>
                 <td style={{ fontWeight: 600 }}>{formatINR(exp.amount)}</td>
@@ -441,7 +442,7 @@ export default function FinancePage() {
               <tr><td colSpan={5} style={{ textAlign: 'center', padding: '20px' }}>No income recorded</td></tr>
             ) : paginatedInc.map((inc) => (
               <tr key={inc.id}>
-                <td>{new Date(inc.date).toLocaleDateString()}</td>
+                <td>{formatDate(inc.date)}</td>
                 <td style={{ fontWeight: 600 }}>{inc.source}</td>
                 <td>{inc.description || '—'}</td>
                 <td style={{ fontWeight: 600, color: '#16a34a' }}>{formatINR(inc.amount)}</td>

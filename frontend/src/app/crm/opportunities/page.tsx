@@ -5,6 +5,7 @@ import { Pencil, Plus } from 'lucide-react';
 import { crmApi } from '../../../services/api';
 import Modal, { FormField } from '../../../components/Modal';
 import { formatINR } from '../../../lib/currency';
+import { formatDate } from '../../../lib/date';
 
 const STAGE_LABEL: Record<string, string> = {
   DISCOVERY: 'Discovery', PROPOSAL: 'Proposal', NEGOTIATION: 'Negotiation',
@@ -155,7 +156,7 @@ export default function OpportunitiesPage() {
                   </span>
                 </td>
                 <td style={{ fontWeight: 700 }}>{formatINR(o.value)}</td>
-                <td style={{ color: 'var(--color-text-secondary)' }}>{o.expectedCloseDate ? new Date(o.expectedCloseDate).toLocaleDateString() : '—'}</td>
+                <td style={{ color: 'var(--color-text-secondary)' }}>{formatDate(o.expectedCloseDate, '—')}</td>
                 <td>
                   <button className="btn btn-secondary btn-sm" onClick={() => openEdit(o)}>
                     <Pencil size={13} /> Edit

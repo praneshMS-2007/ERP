@@ -10,6 +10,7 @@ import ExportButton from '../../../components/ExportButton';
 import Modal, { FormField } from '../../../components/Modal';
 import AttendanceCalendar from '../../../components/AttendanceCalendar';
 import AttendanceExportButton from '../../../components/AttendanceExportButton';
+import { formatDate } from '../../../lib/date';
 
 export default function AttendancePage() {
   const [employees, setEmployees] = useState<any[]>([]);
@@ -109,7 +110,8 @@ export default function AttendancePage() {
     setSelectedDate(d);
   }
 
-  const dateStr = selectedDate.toLocaleDateString('en-IN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+  const weekday = selectedDate.toLocaleDateString('en-IN', { weekday: 'long' });
+  const dateStr = `${weekday}, ${formatDate(selectedDate)}`;
   const isToday = selectedDate.toDateString() === new Date().toDateString();
 
   // An employee who joins in the future doesn't belong on a roster for a
@@ -157,7 +159,7 @@ export default function AttendancePage() {
         <div className="page-header">
           <div>
             <h1>{historyEmployee.firstName} {historyEmployee.lastName}</h1>
-            <p>Attendance history from {new Date(historyEmployee.joinDate).toLocaleDateString()} (their join date) to today.</p>
+            <p>Attendance history from {formatDate(historyEmployee.joinDate)} (their join date) to today.</p>
           </div>
           <div className="page-header-actions">
             <AttendanceExportButton
@@ -193,7 +195,7 @@ export default function AttendancePage() {
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
             {holidays.map((h) => (
               <div key={h.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 10px', borderRadius: '8px', border: '1px solid var(--color-border)', fontSize: '12.5px' }}>
-                <span style={{ fontWeight: 600 }}>{new Date(h.date).toLocaleDateString()}</span>
+                <span style={{ fontWeight: 600 }}>{formatDate(h.date)}</span>
                 <span style={{ color: 'var(--color-text-muted)' }}>{h.name}</span>
                 <button onClick={() => handleDeleteHoliday(h.id)} style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#dc2626', display: 'flex' }}><Trash2 size={13} /></button>
               </div>

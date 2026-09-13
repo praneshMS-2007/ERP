@@ -5,6 +5,7 @@ import { Pencil, Trash2, Plus, ShoppingCart, PackagePlus } from 'lucide-react';
 import { inventoryApi } from '../../../services/api';
 import Modal, { FormField } from '../../../components/Modal';
 import { formatINR } from '../../../lib/currency';
+import { formatDate } from '../../../lib/date';
 
 const emptyProductForm = {
   name: '', sku: '', category: '', unit: 'pcs', price: '', costPrice: '', isDigital: false,
@@ -250,7 +251,7 @@ export default function ProductsPage() {
                 <tr><td colSpan={5} style={{ textAlign: 'center', padding: '20px' }}>No stock has been added yet</td></tr>
               ) : additions.map((m) => (
                 <tr key={m.id}>
-                  <td>{new Date(m.date).toLocaleDateString()}</td>
+                  <td>{formatDate(m.date)}</td>
                   <td style={{ fontWeight: 600 }}>{m.product?.name || 'Unknown'} <span style={{ color: 'var(--color-text-muted)', fontFamily: 'monospace', fontSize: '12px' }}>({m.product?.sku})</span></td>
                   <td style={{ fontWeight: 700, color: '#16a34a' }}>+{m.changeAmount}</td>
                   <td>{m.warehouse?.name || 'Unknown'}</td>

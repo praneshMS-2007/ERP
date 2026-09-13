@@ -348,7 +348,7 @@ export default function AnalyticsPage() {
   const formatTimestamp = (ts: string) => {
     const d = new Date(ts);
     return {
-      date: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+      date: `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`,
       time: d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
     };
   };

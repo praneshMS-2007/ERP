@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { LifeBuoy, Plus, AlertCircle, Clock, CheckCircle2, Pencil, Trash2 } from 'lucide-react';
 import { crmApi } from '../../../services/api';
 import Modal, { FormField } from '../../../components/Modal';
+import { formatDate } from '../../../lib/date';
 
 const emptyForm = { customerId: '', subject: '', priority: 'MEDIUM', description: '', startDate: '', endDate: '' };
 
@@ -215,8 +216,8 @@ export default function SupportTicketsPage() {
                 <td><span className={statusBadge(t.status)}>{t.status}</span></td>
                 <td style={{ color: 'var(--color-text-secondary)', fontSize: '13px' }}>
                   {t.startDate || t.endDate
-                    ? `${t.startDate ? new Date(t.startDate).toLocaleDateString() : '—'} – ${t.endDate ? new Date(t.endDate).toLocaleDateString() : '—'}`
-                    : new Date(t.createdAt).toLocaleDateString()}
+                    ? `${formatDate(t.startDate, '—')} – ${formatDate(t.endDate, '—')}`
+                    : formatDate(t.createdAt)}
                 </td>
                 <td>
                   <div style={{ display: 'flex', gap: '6px' }}>

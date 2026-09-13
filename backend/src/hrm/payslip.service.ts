@@ -119,7 +119,7 @@ export class PayslipService {
     }
 
     const data: PayslipData = {
-      employeeName: `${employee.firstName} ${employee.lastName}`.toUpperCase(),
+      employeeName: [employee.firstName, employee.lastName].filter(Boolean).join(' ').trim().toUpperCase(),
       empCode: employee.empCode ?? '\u2014',
       designation: employee.designation?.title ?? '\u2014',
       department: employee.department?.name ?? '\u2014',
@@ -472,7 +472,9 @@ function fmtMoneyOrDash(amount: number): string {
 function fmtDate(d: Date | null): string {
   if (!d) return '\u2014';
   const dt = new Date(d);
-  return `${dt.getMonth() + 1}/${dt.getDate()}/${dt.getFullYear()}`;
+  const dd = String(dt.getDate()).padStart(2, '0');
+  const mm = String(dt.getMonth() + 1).padStart(2, '0');
+  return `${dd}/${mm}/${dt.getFullYear()}`;
 }
 
 /**
