@@ -435,8 +435,16 @@ export class OfferLetterService {
         ? `Stipend: Rs. ${d.stipendAmount.toLocaleString('en-IN')} per month`
         : 'Stipend: Unpaid';
 
+      const endDate = d.engagementEndDate;
+      const months = endDate ? monthsBetween(d.startDate, endDate) : null;
+      const durationLine = months !== null ? `Duration: ${months} month${months === 1 ? '' : 's'}\n` : '';
+      const endDateLine = endDate ? `End Date: ${fmtDateFull(endDate)}\n` : '';
+
+      // Order: Start Date -> End Date -> Duration -> Mode -> Stipend
       const detailsBody =
         `Start Date: ${fmtDateFull(d.startDate)}\n` +
+        endDateLine +
+        durationLine +
         `Mode: ${d.mode || 'Remote'}\n` +
         `${stipendLine}`;
 
@@ -675,5 +683,7 @@ function fmtDateFull(d: Date | null): string {
 function monthsBetween(start: Date, end: Date): number {
   const s = new Date(start);
   const e = new Date(end);
-  return (e.getFullYear() - s.getFullYear()) * 12 + (e.getMonth() - s.getMonth());
+  if (isNaN(s.getTime()) || isNaN(e.getTime())) return 1;
+  const months = (e.getFullYear() - s.getFullYear()) * 12 + (e.getMonth() - s.getMonth());
+  return Math.max(1, months);
 }

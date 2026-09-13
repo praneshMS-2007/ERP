@@ -34,6 +34,15 @@ function formatDateDMY(d) {
   return `${dd}/${mm}/${yyyy}`;
 }
 
+function monthsBetween(start, end) {
+  if (!start || !end) return null;
+  const s = new Date(start);
+  const e = new Date(end);
+  if (isNaN(s.getTime()) || isNaN(e.getTime())) return null;
+  const months = (e.getFullYear() - s.getFullYear()) * 12 + (e.getMonth() - s.getMonth());
+  return Math.max(1, months);
+}
+
 function parseSegments(body, boldPhrases = []) {
   if (!boldPhrases || boldPhrases.length === 0) {
     return [{ text: body, bold: false }];
@@ -208,8 +217,15 @@ function renderInternshipOfferLetter(d) {
       ? `Stipend: Rs. ${d.stipendAmount.toLocaleString('en-IN')} per month`
       : 'Stipend: Unpaid';
 
+    const endDate = d.engagementEndDate || d.endDate;
+    const months = endDate ? monthsBetween(d.startDate, endDate) : null;
+    const durationLine = months !== null ? `Duration: ${months} month${months === 1 ? '' : 's'}\n` : '';
+    const endDateLine = endDate ? `End Date: ${formatDateDMY(endDate)}\n` : '';
+
     const detailsBody =
       `Start Date: ${formatDateDMY(d.startDate)}\n` +
+      endDateLine +
+      durationLine +
       `Mode: ${d.mode || 'Remote'}\n` +
       `${stipendLine}`;
 
@@ -490,8 +506,41 @@ function saveWithRetry(basePath, buf) {
 async function main() {
   console.log('Generating clean Offer Letter templates (Intern, Part-Time, Full-Time) with Employment Details (Start Date, Mode, Stipend)...');
 
+  const TEMPLATE_DIR = 'D:\\sample template';
+  if (!fs.existsSync(TEMPLATE_DIR)) {
+    fs.mkdirSync(TEMPLATE_DIR, { recursive: true });
+  }
+
   const samples = [
-    // 1. Internship Offer Letter
+    // 1. Internship Offer Letters (with Start Date, End Date, Duration, Mode, Stipend)
+    {
+      fileName: 'Shuroq_Sample_Offer_Letter_Internship_Yogita.pdf',
+      renderer: renderInternshipOfferLetter,
+      data: {
+        candidateName: 'Yogita',
+        roleTitle: 'Data Analyst',
+        department: 'software',
+        startDate: new Date('2026-06-15'),
+        engagementEndDate: new Date('2026-10-14'),
+        hasStipend: false,
+        stipendAmount: null,
+        mode: 'Remote',
+      },
+    },
+    {
+      fileName: 'Shuroq_Sample_Offer_Letter_Internship_Yogita_WITH_STIPEND.pdf',
+      renderer: renderInternshipOfferLetter,
+      data: {
+        candidateName: 'Yogita',
+        roleTitle: 'Data Analyst',
+        department: 'software',
+        startDate: new Date('2026-06-15'),
+        engagementEndDate: new Date('2026-10-14'),
+        hasStipend: true,
+        stipendAmount: 15000,
+        mode: 'Remote',
+      },
+    },
     {
       fileName: 'Shuroq_Sample_Offer_Letter_Intern_WITH_STIPEND.pdf',
       renderer: renderInternshipOfferLetter,
@@ -500,6 +549,7 @@ async function main() {
         roleTitle: 'Software Engineering',
         department: 'Engineering',
         startDate: new Date('2026-10-01'),
+        engagementEndDate: new Date('2027-01-31'),
         hasStipend: true,
         stipendAmount: 15000,
         mode: 'Remote',
@@ -513,6 +563,7 @@ async function main() {
         roleTitle: 'Full Stack Developer',
         department: 'Engineering',
         startDate: new Date('2026-10-01'),
+        engagementEndDate: new Date('2026-12-31'),
         hasStipend: false,
         stipendAmount: 0,
         mode: 'Remote',
@@ -578,11 +629,13 @@ async function main() {
 
   for (const item of samples) {
     const buf = await item.renderer(item.data);
-    const dest = path.join(DOWNLOADS_DIR, item.fileName);
-    saveWithRetry(dest, buf);
+    const destDownloads = path.join(DOWNLOADS_DIR, item.fileName);
+    saveWithRetry(destDownloads, buf);
+    const destTemplate = path.join(TEMPLATE_DIR, item.fileName);
+    saveWithRetry(destTemplate, buf);
   }
 
-  console.log('\nAll 6 Offer Letter templates successfully saved to Downloads folder!');
+  console.log(`\nAll ${samples.length} Offer Letter templates successfully saved to both Downloads and D:\\sample template!`);
 }
 
 main().catch(err => {
