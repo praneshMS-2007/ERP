@@ -192,10 +192,6 @@ function renderInternshipOfferLetter(d) {
     doc.fillColor(BRAND.grey)
       .text(`Email: ${COMPANY.email} | Website: `, M, doc.y, { width: textW, continued: true });
     doc.fillColor(BRAND.linkBlue).text(COMPANY.website, { link: `https://${COMPANY.website}` });
-    doc.moveDown(1.5);
-
-    doc.fontSize(14).font('Helvetica-Bold').fillColor(BRAND.black)
-      .text(`${d.roleTitle} Intern OFFER LETTER`, M, doc.y, { align: 'center', width: textW });
     doc.moveDown(1.2);
 
     doc.fontSize(10.5).font('Helvetica-Bold').fillColor(BRAND.black)
@@ -295,10 +291,6 @@ function renderPartTimeOfferLetter(d) {
     doc.fillColor(BRAND.grey)
       .text(`Email: ${COMPANY.email} | Website: `, M, doc.y, { width: textW, continued: true });
     doc.fillColor(BRAND.linkBlue).text(COMPANY.website, { link: `https://${COMPANY.website}` });
-    doc.moveDown(1.5);
-
-    doc.fontSize(14).font('Helvetica-Bold').fillColor(BRAND.black)
-      .text(`${d.roleTitle.toUpperCase()} (PART TIME) \u2013 OFFER LETTER`, M, doc.y, { align: 'center', width: textW });
     doc.moveDown(1.2);
 
     doc.fontSize(10.5).font('Helvetica-Bold').fillColor(BRAND.black)
@@ -397,10 +389,6 @@ function renderFullTimeOfferLetter(d) {
     doc.fillColor(BRAND.grey)
       .text(`Email: ${COMPANY.email} | Website: `, M, doc.y, { width: textW, continued: true });
     doc.fillColor(BRAND.linkBlue).text(COMPANY.website, { link: `https://${COMPANY.website}` });
-    doc.moveDown(1.5);
-
-    doc.fontSize(14).font('Helvetica-Bold').fillColor(BRAND.black)
-      .text(`${d.roleTitle.toUpperCase()} (FULL TIME) \u2013 OFFER LETTER`, M, doc.y, { align: 'center', width: textW });
     doc.moveDown(1.2);
 
     doc.fontSize(10.5).font('Helvetica-Bold').fillColor(BRAND.black)
