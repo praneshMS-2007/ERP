@@ -25,6 +25,14 @@ export class MailerService {
 
     this.transporter = nodemailer.createTransport({
       service: 'gmail',
+      pool: true,
+      maxConnections: 1,
+      maxMessages: 20,
+      rateDelta: 1000,
+      rateLimit: 5,
+      connectionTimeout: 15000,
+      greetingTimeout: 15000,
+      socketTimeout: 30000,
       auth: { user, pass },
     });
     return this.transporter;
@@ -38,10 +46,6 @@ export class MailerService {
     to: string;
     subject: string;
     html: string;
-    // cid lets an attachment double as an inline image the html can
-    // reference via <img src="cid:the-cid">  — used for the logo header
-    // in the branded templates instead of a data: URI, which several
-    // mail clients (notably Outlook desktop) strip from inbound HTML.
     attachments?: { filename: string; path: string; cid?: string }[];
   }): Promise<{ sent: true } | { sent: false; error: string }> {
     const transporter = this.getTransporter();
@@ -49,18 +53,40 @@ export class MailerService {
       return { sent: false, error: 'Outbound email is not configured on this server.' };
     }
 
-    try {
-      await transporter.sendMail({
-        from: `"Shuroq HR" <${process.env.SMTP_USER}>`,
-        to: params.to,
-        subject: params.subject,
-        html: params.html,
-        attachments: params.attachments,
-      });
-      return { sent: true };
-    } catch (err: any) {
-      this.logger.error(`Failed to send email to ${params.to}: ${err.message}`);
-      return { sent: false, error: err.message || 'Unknown mail error' };
+    const maxAttempts = 3;
+    let lastError = '';
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        const info = await transporter.sendMail({
+          from: `"Shuroq HR" <${process.env.SMTP_USER}>`,
+          to: params.to,
+          subject: params.subject,
+          html: params.html,
+          attachments: params.attachments,
+        });
+        this.logger.log(
+          `Email successfully dispatched to ${params.to} | Subject: "${params.subject}" | Message-ID: ${info.messageId}`,
+        );
+        return { sent: true };
+      } catch (err: any) {
+        lastError = err.message || 'Unknown mail error';
+        this.logger.warn(`Mail send attempt ${attempt}/${maxAttempts} to ${params.to} failed: ${lastError}`);
+
+        // If it's a transient error (421 rate limit, timeout, connection reset) and we have attempts left, wait and retry
+        const isTransient = /421|450|451|452|ECONNRESET|ETIMEDOUT|ECONNREFUSED|ENOTFOUND|temporary/i.test(lastError);
+        if (attempt < maxAttempts && isTransient) {
+          const delayMs = attempt * 2000;
+          this.logger.log(`Retrying email to ${params.to} in ${delayMs}ms...`);
+          await new Promise((resolve) => setTimeout(resolve, delayMs));
+        } else if (!isTransient) {
+          // Hard error (e.g. invalid recipient syntax, auth failure) — stop immediately
+          break;
+        }
+      }
     }
+
+    this.logger.error(`Failed to send email to ${params.to} after ${maxAttempts} attempts: ${lastError}`);
+    return { sent: false, error: lastError };
   }
 }

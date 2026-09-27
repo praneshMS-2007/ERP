@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import {
   X, Pencil, Save, RotateCcw, Lock, AlertCircle, CheckCircle2,
-  Eye, EyeOff, Upload, Download, Trash2, Laptop,
+  Eye, EyeOff, Upload, Download, Trash2, Laptop, Mail,
 } from 'lucide-react';
 import { hrmApi, API_ORIGIN } from '../../services/api';
 
@@ -569,7 +569,8 @@ export default function EmployeeDetailModal({
               )}
 
               {section === 'employment' && (
-                <div className="edm-grid">
+                <>
+                  <div className="edm-grid">
                   <Field label="Employee ID" value={emp.empCode ?? '—'} editing={false}
                          hint="Generated automatically, cannot be edited" />
                   <Field label="Company email" value={emp.user?.email ?? 'Not yet assigned'} editing={false} />
@@ -616,7 +617,66 @@ export default function EmployeeDetailModal({
                            onChange={(v) => setForm({ ...form, stipendAmount: v })} />
                   )}
                 </div>
-              )}
+
+                <div style={{ marginTop: 24, padding: '16px', background: 'var(--color-surface, #f8fafc)', borderRadius: '8px', border: '1px solid var(--color-border)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
+                    <div>
+                      <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--color-text)' }}>Official Offer Letter</div>
+                      <div style={{ fontSize: '12px', color: 'var(--color-text-muted)', marginTop: '2px' }}>
+                        {emp.offerLetterSentAt ? (
+                          <span style={{ color: '#16a34a' }}>✓ Emailed on {formatDate(emp.offerLetterSentAt)} to {emp.personalEmail}</span>
+                        ) : emp.offerLetterSendError ? (
+                          <span style={{ color: '#dc2626' }}>✕ Delivery error: {emp.offerLetterSendError}</span>
+                        ) : (
+                          <span>Offer letter document generated upon onboarding</span>
+                        )}
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      {emp.offerLetterDocumentId && (
+                        <button
+                          type="button"
+                          className="btn btn-secondary"
+                          style={{ padding: '6px 12px', fontSize: '12.5px', display: 'flex', alignItems: 'center', gap: '6px' }}
+                          onClick={async () => {
+                            try {
+                              await hrmApi.downloadOfferLetter(emp.offerLetterDocumentId, `${emp.firstName} ${emp.lastName || ''} - Offer Letter.pdf`.trim());
+                            } catch (e: any) {
+                              setError(e.message || 'Could not download offer letter');
+                            }
+                          }}
+                        >
+                          <Download size={14} /> Download PDF
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        className="btn btn-primary"
+                        style={{ padding: '6px 12px', fontSize: '12.5px', display: 'flex', alignItems: 'center', gap: '6px' }}
+                        onClick={async () => {
+                          setError(null);
+                          setToast('Sending offer letter email...');
+                          try {
+                            const res = await hrmApi.sendOfferLetter(emp.id);
+                            if (res?.emailed) {
+                              setToast(`Offer letter emailed to ${emp.personalEmail}`);
+                            } else {
+                              setError(`Offer letter generated, but email failed: ${res?.error || 'error'}`);
+                            }
+                            await load();
+                            onSaved?.();
+                          } catch (e: any) {
+                            setError(e.message || 'Failed to send offer letter');
+                          }
+                        }}
+                      >
+                        <Mail size={14} /> {emp.offerLetterSentAt ? 'Resend Offer Letter' : 'Send Offer Letter'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
 
               {section === 'statutory' && (
                 <>

@@ -238,7 +238,6 @@ export class InternshipCertificateService {
       data: {
         internshipCertDocumentId: document.id,
         internshipCertStatus: 'APPROVED',
-        internshipCertSentAt: new Date(),
       },
     });
 
@@ -278,7 +277,13 @@ export class InternshipCertificateService {
       ],
     });
 
-    if (!result.sent) {
+    if (result.sent) {
+      await this.prisma.employee.update({
+        where: { id: employeeId },
+        data: { internshipCertSentAt: new Date() },
+      });
+      this.logger.log(`Certificate successfully generated (${document.fileName}) and emailed to ${employee.personalEmail} for ${data.candidateName}`);
+    } else {
       this.logger.warn(`Certificate generated but not emailed for ${employeeId}: ${result.error}`);
     }
 
@@ -594,6 +599,18 @@ export class InternshipCertificateService {
       return `If you have any questions, you can reach us at ${phone.value} or ${COMPANY.email}.`;
     }
     return `If you have any questions, you can reach us at ${COMPANY.email}.`;
+  }
+
+  async resolveCertificateForDownload(employeeId: string, actor?: RequestUser) {
+    const employee = await this.prisma.employee.findUnique({
+      where: { id: employeeId },
+      select: { id: true, internshipCertDocumentId: true, firstName: true, lastName: true },
+    });
+    if (!employee) throw new NotFoundException('Employee not found');
+    if (!employee.internshipCertDocumentId) {
+      throw new NotFoundException('No completion certificate has been generated for this intern.');
+    }
+    return employee.internshipCertDocumentId;
   }
 }
 

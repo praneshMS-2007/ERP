@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import {
   Users, UserPlus, MoreVertical, ChevronLeft, ChevronRight,
-  Trash2, Edit, Search, Eye, EyeOff,
+  Trash2, Edit, Search, Eye, EyeOff, Mail, Download, CheckCircle2, XCircle,
 } from 'lucide-react';
 import { hrmApi, exportApi, API_ORIGIN } from '../../../services/api';
 import ExportButton from '../../../components/ExportButton';
@@ -40,6 +40,12 @@ export default function EmployeeDirectory() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+
+  function showToast(message: string, type: 'success' | 'error' = 'success') {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 5000);
+  }
   // Management Account vs Employee Account — every Employee Account gets the
   // same uniform EMPLOYEE-tier access; a Management Account is the only way
   // to grant one of the elevated system roles (Super Admin only, enforced
@@ -187,7 +193,7 @@ export default function EmployeeDirectory() {
     setAddError(null);
     setAdding(true);
     try {
-      await hrmApi.createEmployee({
+      const created = await hrmApi.createEmployee({
         ...form,
         hasStipend: form.hasStipend,
         stipendAmount: form.hasStipend ? Number(form.stipendAmount) : null,
@@ -198,6 +204,14 @@ export default function EmployeeDirectory() {
       setAccountKind('EMPLOYEE');
       setForm(initialForm);
       fetchAll();
+
+      if (created?.offerLetter?.emailed) {
+        showToast(`Employee created! Offer letter emailed to ${form.personalEmail}.`, 'success');
+      } else if (created?.offerLetter?.error) {
+        showToast(`Employee created, but email could not be sent: ${created.offerLetter.error}`, 'error');
+      } else {
+        showToast('Employee created successfully!', 'success');
+      }
     } catch (e: any) {
       setAddError(e.message || 'Could not add this employee.');
     } finally {
@@ -226,6 +240,31 @@ export default function EmployeeDirectory() {
       setRemoveError(e.message || 'Could not remove this employee.');
     } finally {
       setRemoving(false);
+    }
+  }
+
+  async function handleSendOfferLetter(emp: any) {
+    setActionMenuId(null);
+    try {
+      showToast(`Sending offer letter to ${emp.personalEmail || emp.firstName}...`, 'success');
+      const res = await hrmApi.sendOfferLetter(emp.id);
+      if (res?.emailed) {
+        showToast(`Offer letter successfully emailed to ${emp.personalEmail}!`, 'success');
+      } else {
+        showToast(`Offer letter generated, but email delivery reported: ${res?.error || 'failed'}`, 'error');
+      }
+      fetchAll();
+    } catch (err: any) {
+      showToast(err.message || 'Failed to send offer letter.', 'error');
+    }
+  }
+
+  async function handleDownloadOfferLetter(docId: string, name: string) {
+    setActionMenuId(null);
+    try {
+      await hrmApi.downloadOfferLetter(docId, `${name} - Offer Letter.pdf`);
+    } catch (err: any) {
+      showToast(err.message || 'Could not download offer letter PDF.', 'error');
     }
   }
 
@@ -380,11 +419,19 @@ export default function EmployeeDirectory() {
                           <div style={{
                             position: 'absolute', right: 0, top: '100%', zIndex: 50,
                             background: 'var(--color-card)', border: '1px solid var(--color-border)', borderRadius: '8px',
-                            boxShadow: '0 4px 12px rgba(0,0,0,0.15)', padding: '4px', minWidth: '120px',
+                            boxShadow: '0 4px 12px rgba(0,0,0,0.15)', padding: '4px', minWidth: '160px',
                           }}>
                             <button onClick={() => { setActionMenuId(null); setDetailId(emp.id); }} style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%', padding: '8px 12px', border: 'none', background: 'transparent', cursor: 'pointer', borderRadius: '6px', fontSize: '13px', color: 'var(--color-text)' }}>
                               <Edit size={14} /> Edit
                             </button>
+                            <button onClick={() => handleSendOfferLetter(emp)} style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%', padding: '8px 12px', border: 'none', background: 'transparent', cursor: 'pointer', borderRadius: '6px', fontSize: '13px', color: 'var(--color-text)' }}>
+                              <Mail size={14} /> {emp.offerLetterSentAt ? 'Resend Offer Letter' : 'Send Offer Letter'}
+                            </button>
+                            {emp.offerLetterDocumentId && (
+                              <button onClick={() => handleDownloadOfferLetter(emp.offerLetterDocumentId, `${emp.firstName} ${emp.lastName}`.trim())} style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%', padding: '8px 12px', border: 'none', background: 'transparent', cursor: 'pointer', borderRadius: '6px', fontSize: '13px', color: 'var(--color-text)' }}>
+                                <Download size={14} /> Download PDF
+                              </button>
+                            )}
                             {activeTab === 'ACTIVE' && (
                               <button onClick={() => handleRemove(emp.id, `${emp.firstName} ${emp.lastName}`)} style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%', padding: '8px 12px', border: 'none', background: 'transparent', cursor: 'pointer', borderRadius: '6px', fontSize: '13px', color: '#dc2626' }}>
                                 <Trash2 size={14} /> Remove
@@ -595,6 +642,20 @@ export default function EmployeeDirectory() {
         departments={departments}
         designations={designations}
       />
+
+      {/* Floating Toast Notification */}
+      {toast && (
+        <div style={{
+          position: 'fixed', bottom: '24px', right: '24px', zIndex: 9999,
+          background: toast.type === 'success' ? '#059669' : '#dc2626',
+          color: '#ffffff', padding: '12px 20px', borderRadius: '8px',
+          boxShadow: '0 6px 20px rgba(0,0,0,0.2)', display: 'flex', alignItems: 'center', gap: '10px',
+          fontSize: '13.5px', fontWeight: 500,
+        }}>
+          {toast.type === 'success' ? <CheckCircle2 size={18} /> : <XCircle size={18} />}
+          <span>{toast.message}</span>
+        </div>
+      )}
     </div>
   );
 }

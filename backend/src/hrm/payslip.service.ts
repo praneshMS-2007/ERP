@@ -186,13 +186,14 @@ export class PayslipService {
     await this.prisma.payroll.update({
       where: { id: payrollId },
       data: {
-        payslipSentAt: result.sent ? new Date() : null,
-        payslipSendError: result.sent ? null : result.error,
+        ...(result.sent ? { payslipSentAt: new Date(), payslipSendError: null } : { payslipSendError: result.error }),
       },
     });
 
     if (!result.sent) {
       this.logger.warn(`Payslip generated but not emailed for payroll ${payrollId}: ${result.error}`);
+    } else {
+      this.logger.log(`Payslip successfully generated (${document.fileName}) and emailed to ${employee.personalEmail} for payroll ${payrollId}`);
     }
 
     return {

@@ -180,6 +180,22 @@ export const hrmApi = {
     a.click();
     window.URL.revokeObjectURL(url);
   },
+  downloadOfferLetter: async (documentId: string, fileName: string) => {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+    const res = await fetch(`${API_BASE}/hrm/documents/${documentId}/download`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    });
+    if (!res.ok) throw new Error('Download failed');
+    const blob = await res.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = fileName;
+    a.click();
+    window.URL.revokeObjectURL(url);
+  },
+  sendOfferLetter: (employeeId: string) =>
+    mutateApi(`/hrm/employees/${employeeId}/offer-letter`, { method: 'POST' }),
   getAttendance: () => fetchApi('/hrm/attendance'),
   getPayrolls: () => fetchApi('/hrm/payrolls'),
   getLeaves: () => fetchApi('/hrm/leaves'),
@@ -219,6 +235,25 @@ export const hrmApi = {
   getInternshipCertificates: () => fetchApi('/hrm/internship-certificates'),
   approveInternshipCertificate: (id: string) => mutateApi(`/hrm/internship-certificates/${id}/approve`, { method: 'POST' }),
   rejectInternshipCertificate: (id: string) => mutateApi(`/hrm/internship-certificates/${id}/reject`, { method: 'POST' }),
+  downloadInternshipCertificate: async (employeeIdOrDocId: string, fileName?: string) => {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+    let res = await fetch(`${API_BASE}/hrm/internship-certificates/${employeeIdOrDocId}/download`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    });
+    if (!res.ok) {
+      res = await fetch(`${API_BASE}/hrm/documents/${employeeIdOrDocId}/download`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      });
+    }
+    if (!res.ok) throw new Error('Failed to download internship certificate');
+    const blob = await res.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = fileName || 'Internship_Completion_Certificate.pdf';
+    a.click();
+    window.URL.revokeObjectURL(url);
+  },
 };
 
 export const announcementApi = {

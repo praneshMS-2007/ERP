@@ -155,13 +155,14 @@ export class OfferLetterService {
     await this.prisma.employee.update({
       where: { id: employeeId },
       data: {
-        offerLetterSentAt: result.sent ? new Date() : null,
-        offerLetterSendError: result.sent ? null : result.error,
+        ...(result.sent ? { offerLetterSentAt: new Date(), offerLetterSendError: null } : { offerLetterSendError: result.error }),
       },
     });
 
     if (!result.sent) {
       this.logger.warn(`Letter generated but not emailed for ${employeeId}: ${result.error}`);
+    } else {
+      this.logger.log(`Offer letter successfully generated (${document.fileName}) and emailed to ${employee.personalEmail} for ${data.candidateName} (${employee.empCode})`);
     }
 
     return {

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Award, CheckCircle2, XCircle, Clock, Mail, AlertCircle, FileText, Hourglass, Pencil } from 'lucide-react';
+import { Award, CheckCircle2, XCircle, Clock, Mail, AlertCircle, FileText, Hourglass, Pencil, Download } from 'lucide-react';
 import { hrmApi } from '../../../services/api';
 import { useAuth } from '../../../context/AuthContext';
 import Modal, { FormField } from '../../../components/Modal';
@@ -54,6 +54,7 @@ function InternshipCertificatesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const [filterStatus, setFilterStatus] = useState<'ALL' | 'IN_PROGRESS' | 'PENDING' | 'APPROVED' | 'REJECTED'>('ALL');
 
@@ -121,6 +122,27 @@ function InternshipCertificatesPage() {
       showToast(e.message || 'Failed to reject.', 'error');
     } finally {
       setActionLoading(null);
+    }
+  }
+
+  async function handleDownloadCertificate(intern: InternCert) {
+    const targetId = intern.id || intern.certDocumentId;
+    if (!targetId) {
+      showToast('Certificate not found.', 'error');
+      return;
+    }
+    setDownloadingId(intern.id);
+    try {
+      const sanitizedName = (intern.fullName || 'Intern').trim().replace(/\s+/g, '_');
+      await hrmApi.downloadInternshipCertificate(
+        targetId,
+        `${sanitizedName}_Internship_Completion_Certificate.pdf`
+      );
+      showToast(`Downloading certificate for ${intern.fullName}...`, 'success');
+    } catch (e: any) {
+      showToast(e.message || 'Failed to download certificate.', 'error');
+    } finally {
+      setDownloadingId(null);
     }
   }
 
@@ -414,7 +436,44 @@ function InternshipCertificatesPage() {
                             </button>
                           </div>
                         ) : intern.certStatus === 'APPROVED' ? (
-                          <span style={{ fontSize: 12, color: '#059669', fontWeight: 500 }}>Certificate Issued</span>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                            <span style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 4,
+                              fontSize: 12,
+                              color: '#059669',
+                              fontWeight: 600,
+                            }}>
+                              <CheckCircle2 size={13} /> Issued
+                            </span>
+                            <button
+                              onClick={() => handleDownloadCertificate(intern)}
+                              disabled={downloadingId === intern.id}
+                              title={`Download ${intern.fullName}'s Completion Certificate`}
+                              style={{
+                                padding: '5px 12px',
+                                borderRadius: 6,
+                                fontSize: 12,
+                                fontWeight: 600,
+                                background: '#0284c7',
+                                color: '#ffffff',
+                                border: 'none',
+                                cursor: downloadingId === intern.id ? 'wait' : 'pointer',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: 5,
+                                boxShadow: '0 1px 2px rgba(0,0,0,0.06)',
+                                transition: 'all 0.15s ease',
+                                opacity: downloadingId === intern.id ? 0.7 : 1,
+                              }}
+                              onMouseEnter={(e) => (e.currentTarget.style.background = '#0369a1')}
+                              onMouseLeave={(e) => (e.currentTarget.style.background = '#0284c7')}
+                            >
+                              <Download size={13} />
+                              {downloadingId === intern.id ? 'Downloading…' : 'Download PDF'}
+                            </button>
+                          </div>
                         ) : (
                           <span style={{ fontSize: 12, color: '#dc2626', fontWeight: 500 }}>Declined</span>
                         )}

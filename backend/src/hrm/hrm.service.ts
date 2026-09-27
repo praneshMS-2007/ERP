@@ -342,6 +342,7 @@ export class HrmService {
         joinDate: true, empType: true, status: true, workMode: true, lastWorkingDay: true,
         engagementEndDate: true, hasStipend: true, stipendAmount: true, departmentId: true, designationId: true,
         reportingManagerId: true, userId: true,
+        offerLetterDocumentId: true, offerLetterSentAt: true, offerLetterSendError: true,
         createdAt: true, updatedAt: true,
         department: true,
         designation: true,

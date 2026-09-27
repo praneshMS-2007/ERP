@@ -355,5 +355,17 @@ export class HrmController {
   rejectInternshipCertificate(@Param('id') id: string, @Body('reason') reason?: string, @CurrentUser() user?: RequestUser) {
     return this.internshipCertService.reject(id, reason, user);
   }
+
+  @Get('internship-certificates/:id/download')
+  @RequirePermission('HR', 'READ')
+  async downloadInternshipCertificate(
+    @Param('id') id: string,
+    @CurrentUser() user: RequestUser,
+    @Res() res: Response,
+  ) {
+    const documentId = await this.internshipCertService.resolveCertificateForDownload(id, user);
+    const { fullPath, fileName } = await this.hrmService.resolveGeneratedDocumentForDownload(documentId, user);
+    res.download(fullPath, fileName);
+  }
 }
 
