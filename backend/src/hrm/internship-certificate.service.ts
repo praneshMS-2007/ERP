@@ -476,7 +476,12 @@ export class InternshipCertificateService {
       );
 
       // --- Footer left: signature over its rule + captions ---
-      this.placeAsset(doc, ASSET_PATHS.signature, L.sigImg.x, L.sigImg.y, L.sigImg.w);
+      // Drawn as a vector stroke, not the old raster crop (authorized-
+      // signature-clean.png, 162x135) — a signature squiggle has no real
+      // "higher-resolution source" to go get, since it was always just a
+      // small raster crop, but a vector path is sharp at any zoom or print
+      // DPI by construction, which a raster image of this size never can be.
+      this.drawSignatureFlourish(doc, L.sigImg.x, L.sigImg.y, L.sigImg.w);
       doc.save().moveTo(L.sigRuleX, L.sigRuleY).lineTo(L.sigRuleX + L.sigRuleW, L.sigRuleY)
         .lineWidth(1.4).strokeColor('#1f2530').stroke().restore();
 
@@ -591,6 +596,33 @@ export class InternshipCertificateService {
     if (fs.existsSync(assetPath)) {
       doc.image(assetPath, x, y, { width });
     }
+  }
+
+  /**
+   * A stylized cursive signature flourish, drawn as vector bezier curves
+   * rather than a raster image — sits in a `width`-wide box starting at
+   * (x, y), scaled proportionally. Two connected loops rising into a peak
+   * then swooping into a long closing tail, echoing the loose loop-and-tail
+   * shape of the original reference signature without depending on any
+   * raster source (which, at this box's real-world size, could never be
+   * high enough resolution to look sharp — vector has no such ceiling).
+   */
+  private drawSignatureFlourish(doc: any, x: number, y: number, width: number) {
+    const s = width / 106.55; // scale factor against the box this was designed at
+    const p = (px: number, py: number): [number, number] => [x + px * s, y + py * s];
+
+    doc.save();
+    doc.lineWidth(1.6 * s).lineCap('round').lineJoin('round').strokeColor('#1f2530');
+    doc.moveTo(...p(4, 46));
+    doc.bezierCurveTo(...p(10, 14), ...p(26, 10), ...p(24, 34));
+    doc.bezierCurveTo(...p(22, 54), ...p(10, 50), ...p(16, 36));
+    doc.bezierCurveTo(...p(24, 18), ...p(44, 8), ...p(50, 26));
+    doc.bezierCurveTo(...p(55, 42), ...p(44, 52), ...p(46, 36));
+    doc.bezierCurveTo(...p(48, 22), ...p(66, 16), ...p(74, 28));
+    doc.bezierCurveTo(...p(80, 37), ...p(78, 46), ...p(86, 40));
+    doc.bezierCurveTo(...p(94, 34), ...p(98, 30), ...p(103, 33));
+    doc.stroke();
+    doc.restore();
   }
 
   private async getSupportContactLine(): Promise<string> {
