@@ -1,4 +1,5 @@
 import * as path from 'path';
+import { BRAND_ASSETS_DIR } from './brand-assets';
 
 /**
  * Shared branded shell for every outbound HTML email (payslip, offer
@@ -21,16 +22,7 @@ export const EMAIL_BRAND = {
 
 export const LOGO_CID = 'shuroq-logo';
 
-// process.cwd(), not __dirname — nest build's dist/ doesn't copy the
-// assets/ folder alongside compiled JS, so an __dirname-relative path
-// resolves to a nonexistent dist/assets/brand once running from dist
-// (which is what `npm run start:dev` actually spawns — see the sibling
-// bug this shares with payslip.service.ts / offer-letter.service.ts's
-// own ASSETS_DIR, same fix applied there). process.cwd() is stable
-// across both ts-node (src) and compiled (dist) execution because either
-// way the process is launched from the backend/ directory.
-const ASSETS_DIR = path.join(process.cwd(), 'assets', 'brand');
-export const LOGO_ASSET_PATH = path.join(ASSETS_DIR, 'shuroq-logo.png');
+export const LOGO_ASSET_PATH = path.join(BRAND_ASSETS_DIR, 'shuroq-logo.png');
 
 /** Attach alongside the PDF so `<img src="cid:shuroq-logo">` resolves. */
 export function logoAttachment(): { filename: string; path: string; cid: string } {

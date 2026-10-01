@@ -8,6 +8,7 @@ import { MailerService } from '../common/mailer.service';
 import { decryptField } from '../common/field-encryption';
 import { formatINR } from '../common/currency';
 import { coverNoteHtml, escapeHtml } from '../common/email-template';
+import { BRAND_ASSETS_DIR } from '../common/brand-assets';
 
 const COMPANY = {
   name: 'Shuroq',
@@ -30,14 +31,7 @@ const BRAND = {
   border: '#000000',
 };
 
-// process.cwd(), not __dirname — see email-template.ts's ASSETS_DIR
-// comment for why: nest build's dist/ doesn't carry the assets/ folder,
-// so an __dirname-relative path silently 404s once running from dist
-// (the configuration `npm run start:dev` actually spawns), and this PDF's
-// logo was falling back to plain text as a result — same root cause
-// found while wiring the email logo attachment, fixed here too.
-const ASSETS_DIR = path.join(process.cwd(), 'assets', 'brand');
-const LOGO_PATH = path.join(ASSETS_DIR, 'shuroq-logo.png');
+const LOGO_PATH = path.join(BRAND_ASSETS_DIR, 'shuroq-logo.png');
 
 interface PayslipData {
   employeeName: string;
@@ -392,7 +386,9 @@ export class PayslipService {
       .text('NET SALARY PAYABLE (A - B)', M + 5, netY + 4);
     doc.rect(M + contentW - 65, netY, 65, 20).fill(BRAND.netPayBg);
     doc.rect(M + contentW - 65, netY, 65, 20).stroke(BRAND.border);
-    doc.text(String(d.netPay), M + contentW - 65, netY + 4, { width: 60, align: 'right' });
+    // fill() above left the fill color as netPayBg — reset it or the amount is invisible
+    doc.fillColor(BRAND.black)
+      .text(String(d.netPay), M + contentW - 65, netY + 4, { width: 60, align: 'right' });
     doc.restore();
     doc.y = netY + 22;
 

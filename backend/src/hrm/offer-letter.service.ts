@@ -7,6 +7,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { MailerService } from '../common/mailer.service';
 import { coverNoteHtml, escapeHtml } from '../common/email-template';
 import { formatDateDMY } from '../common/date-format';
+import { BRAND_ASSETS_DIR } from '../common/brand-assets';
 
 const COMPANY = {
   name: 'Shuroq',
@@ -26,14 +27,7 @@ const BRAND = {
   linkBlue: '#1155cc',    // website URL (Google Docs hyperlink blue, extracted from original)
 };
 
-// Brand asset paths — process.cwd(), not __dirname. See email-template.ts's
-// ASSETS_DIR comment: nest build's dist/ doesn't carry the assets/
-// folder, so an __dirname-relative path silently 404s once running from
-// dist (the configuration `npm run start:dev` actually spawns), and
-// these letters' logo/seal/signature/MSME images were falling back to
-// plain text as a result — same root cause found while wiring the email
-// logo attachment, fixed here too.
-const ASSETS_DIR = path.join(process.cwd(), 'assets', 'brand');
+const ASSETS_DIR = BRAND_ASSETS_DIR;
 const ASSET_PATHS = {
   logo: path.join(ASSETS_DIR, 'shuroq-logo.png'),
 };
