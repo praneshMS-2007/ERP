@@ -15,6 +15,8 @@ interface User {
   role: string;
   name: string;
   permissions: Permission[];
+  /** True while the account still has a generated temporary password. */
+  mustChangePassword?: boolean;
 }
 
 interface AuthContextType {
@@ -24,6 +26,8 @@ interface AuthContextType {
   isLoading: boolean;
   login: (email: string, password: string) => Promise<void>;
   logout: () => void;
+  /** Called once the temporary password has been replaced. */
+  completePasswordChange: () => void;
   hasPermission: (module: string, action?: string) => boolean;
 }
 
@@ -83,7 +87,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       localStorage.setItem('user', JSON.stringify(data.user));
       setToken(data.token);
       setUser(data.user);
-      router.push('/');
+      router.push(data.user.mustChangePassword ? '/change-password' : '/');
     } else {
       throw new Error('Invalid response from server');
     }
@@ -108,6 +112,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     router.push('/login');
   }, [token, router]);
 
+  const completePasswordChange = useCallback(() => {
+    setUser((prev) => {
+      if (!prev) return prev;
+      const next = { ...prev, mustChangePassword: false };
+      localStorage.setItem('user', JSON.stringify(next));
+      return next;
+    });
+  }, []);
+
   const hasPermission = useCallback((module: string, action: string = 'READ') => {
     if (!user) return false;
     if (user.role === 'SUPER_ADMIN') return true;
@@ -126,6 +139,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         isLoading,
         login,
         logout,
+        completePasswordChange,
         hasPermission,
       }}
     >

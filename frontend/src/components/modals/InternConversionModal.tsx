@@ -66,7 +66,6 @@ export default function InternConversionModal({ employeeId, onClose, onConverted
           basic: p.basic != null ? String(p.basic) : '',
           hra: p.hra ? String(p.hra) : '',
           specialAllowance: p.specialAllowance ? String(p.specialAllowance) : '',
-          sendOfferLetter: true,
           note: '',
         });
       })
@@ -345,11 +344,10 @@ export default function InternConversionModal({ employeeId, onClose, onConverted
 
                 <section>
                   <h3><Mail size={15} /> Offer letter</h3>
-                  <label className="icm-check">
-                    <input type="checkbox" checked={form.sendOfferLetter} onChange={(e) => set('sendOfferLetter', e.target.checked)} />
-                    Email the {TYPE_LABEL[form.empType]} offer letter to <b>{form.personalEmail || '—'}</b>
-                  </label>
-                  <p className="icm-hint">The letter is always generated and saved to the employee's history; this only controls whether it is emailed now.</p>
+                  <p className="icm-hint">
+                    The {TYPE_LABEL[form.empType]} offer letter is generated for <b>{form.personalEmail || '—'}</b> and held in <b>Letter Outbox</b>,
+                    where you preview the PDF and email before anything is sent.
+                  </p>
                   <label>Note for the history log <em>(optional)</em>
                     <textarea rows={2} value={form.note} onChange={(e) => set('note', e.target.value)} placeholder="e.g. Strong internship — offered on the team lead's recommendation." />
                   </label>
@@ -383,7 +381,7 @@ export default function InternConversionModal({ employeeId, onClose, onConverted
                 <ul>
                   <li>{form.firstName} becomes <b>{TYPE_LABEL[form.empType]} — {form.designation}</b> everywhere in the app: directory, payroll, projects and their own portal.</li>
                   <li>{previousPay ? 'The internship stipend record closes' : 'The internship record closes'} on {fmtDate(form.effectiveDate)}{form.isPaid ? ` and a ${inr(gross)}/month salary record starts the same day.` : '. No salary record is created (unpaid role).'}</li>
-                  <li>A {TYPE_LABEL[form.empType]} offer letter mentioning the completed internship is generated{form.sendOfferLetter ? ` and emailed to ${form.personalEmail}` : ' (not emailed)'}.</li>
+                  <li>A {TYPE_LABEL[form.empType]} offer letter mentioning the completed internship is generated and held in Letter Outbox for your review before it is emailed to {form.personalEmail}.</li>
                   <li>{emp?.hasLogin ? `${form.firstName} gets an in-app notification.` : 'This person has no ERP login, so no in-app notification is sent.'}</li>
                   <li>The change is recorded in the employee's History tab and the audit trail.</li>
                 </ul>
@@ -394,16 +392,16 @@ export default function InternConversionModal({ employeeId, onClose, onConverted
               <CheckCircle2 size={40} />
               <h3>{form.firstName} is now {TYPE_LABEL[result.empType]} — {result.designation}</h3>
               <p>Role starts {fmtDate(result.effectiveDate)} · {result.statusLabel} · {result.workModeLabel}{result.monthlyGross ? ` · ${inr(result.monthlyGross)}/month` : ' · unpaid'}</p>
-              <div className={`icm-letter ${result.offerLetter?.emailed ? 'ok' : 'warn'}`}>
+              <div className={`icm-letter ${result.offerLetter?.emailed || result.offerLetter?.pending ? 'ok' : 'warn'}`}>
                 <Mail size={16} />
                 <span>
-                  {result.offerLetter?.emailed
-                    ? `Offer letter emailed to ${form.personalEmail}.`
-                    : result.offerLetter?.documentId
-                      ? form.sendOfferLetter
+                  {result.offerLetter?.pending
+                    ? `Offer letter is ready and waiting in Letter Outbox — preview it there, then send it to ${form.personalEmail}.`
+                    : result.offerLetter?.emailed
+                      ? `Offer letter emailed to ${form.personalEmail}.`
+                      : result.offerLetter?.documentId
                         ? `Offer letter generated, but the email was not sent: ${result.offerLetter.error || 'unknown error'}. You can download it and send it yourself.`
-                        : 'Offer letter generated (not emailed, as chosen).'
-                      : `The offer letter could not be generated: ${result.offerLetter?.error || 'unknown error'}.`}
+                        : `The offer letter could not be generated: ${result.offerLetter?.error || 'unknown error'}.`}
                 </span>
                 {result.offerLetter?.documentId && (
                   <button className="icm-btn" onClick={downloadLetter}><Download size={14} /> Download</button>
@@ -471,8 +469,8 @@ export default function InternConversionModal({ employeeId, onClose, onConverted
 .icm-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
 .icm-row-3{grid-template-columns:1fr 1fr 1fr;}
 @media (max-width:560px){.icm-row,.icm-row-3{grid-template-columns:1fr;}}
-.icm-form label{display:flex;flex-direction:column;gap:5px;font-size:12.5px;font-weight:600;color:var(--color-text-secondary,#475569);}
-.icm-form input,.icm-form select,.icm-form textarea{padding:9px 11px;border-radius:8px;border:1px solid var(--color-border,#d1d5db);background:var(--color-surface,#fff);color:var(--color-text-primary,#111);font-size:14px;font-weight:400;font-family:inherit;}
+.icm-form label{display:flex;flex-direction:column;gap:5px;font-size:12.5px;font-weight:600;color:var(--color-text-secondary,#475569);min-width:0;}
+.icm-form input,.icm-form select,.icm-form textarea{width:100%;min-width:0;box-sizing:border-box;padding:9px 11px;border-radius:8px;border:1px solid var(--color-border,#d1d5db);background:var(--color-surface,#fff);color:var(--color-text-primary,#111);font-size:14px;font-weight:400;font-family:inherit;}
 .icm-form input:focus,.icm-form select:focus,.icm-form textarea:focus{outline:2px solid #93c5fd;border-color:#2563eb;}
 .icm-types{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
 .icm-type{text-align:left;padding:12px 14px;border-radius:10px;border:1.5px solid var(--color-border,#d1d5db);background:var(--color-surface,#fff);cursor:pointer;display:flex;flex-direction:column;gap:2px;color:var(--color-text-primary,#111);}
@@ -486,11 +484,19 @@ export default function InternConversionModal({ employeeId, onClose, onConverted
 .icm-gross b{font-size:18px;font-variant-numeric:tabular-nums;}
 .icm-delta{font-size:12px;font-weight:600;color:#059669;background:rgba(5,150,105,.1);padding:2px 8px;border-radius:999px;}
 .icm-check{flex-direction:row !important;align-items:center;gap:8px !important;font-weight:500 !important;color:var(--color-text-primary,#111) !important;}
-.icm-check input{width:16px;height:16px;padding:0;}
+.icm-form .icm-check input{width:16px;height:16px;min-width:16px;padding:0;}
+.icm-grid>*,.icm-row>*{min-width:0;}
+@media (max-width:560px){
+.icm-diff thead{display:none;}
+.icm-diff,.icm-diff tbody{display:block;}
+.icm-diff tr{display:grid;grid-template-columns:1fr auto 1fr;gap:2px 8px;padding:9px 0;border-bottom:1px solid var(--color-border,#f1f5f9);}
+.icm-diff td{border:none;padding:0;width:auto !important;white-space:normal !important;}
+.icm-diff td:first-child{grid-column:1/-1;font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--color-text-muted,#6b7280);}
+.icm-foot-bar{flex-wrap:wrap;}.icm-foot-bar .icm-btn{flex:1;justify-content:center;}}
 .icm-lead{margin:0 0 12px;font-size:14px;}
 .icm-diff{width:100%;border-collapse:collapse;font-size:13.5px;}
 .icm-diff th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--color-text-muted,#6b7280);padding:8px 10px;border-bottom:1px solid var(--color-border,#e5e7eb);}
-.icm-diff td{padding:9px 10px;border-bottom:1px solid var(--color-border,#f1f5f9);vertical-align:top;}
+.icm-diff td{padding:9px 10px;border-bottom:1px solid var(--color-border,#f1f5f9);vertical-align:top;overflow-wrap:anywhere;}
 .icm-diff td:first-child{font-weight:600;color:var(--color-text-secondary,#475569);white-space:nowrap;}
 .icm-diff tr.is-changed td:last-child{color:#1d4ed8;}
 .icm-diff td:nth-child(3){color:#2563eb;width:24px;}

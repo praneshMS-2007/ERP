@@ -4,7 +4,8 @@ import * as fs from 'fs';
 import * as path from 'path';
 const PDFDocument = require('pdfkit');
 import { PrismaService } from '../prisma/prisma.service';
-import { MailerService } from '../common/mailer.service';
+import { LetterOutboxService } from './letter-outbox.service';
+import type { RequestUser } from './hrm.service';
 import { decryptField } from '../common/field-encryption';
 import { formatINR } from '../common/currency';
 import { coverNoteHtml, escapeHtml } from '../common/email-template';
@@ -82,15 +83,25 @@ export class PayslipService {
 
   constructor(
     private prisma: PrismaService,
-    private mailer: MailerService,
+    private outbox: LetterOutboxService,
   ) {
     fs.mkdirSync(this.outDir, { recursive: true });
   }
 
-  async issueAndSend(payrollId: string): Promise<{
+  /**
+   * Generates the payslip and hands it to the outbox: it waits there for a
+   * preview, or is mailed straight away when preview is switched off for
+   * payslips.
+   */
+  async issueAndSend(
+    payrollId: string,
+    options: { actor?: RequestUser | null; forceDraft?: boolean } = {},
+  ): Promise<{
     documentId: string | null;
     fileUrl: string | null;
     emailed: boolean;
+    pending?: boolean;
+    letterId?: string;
     error?: string;
   }> {
     const payroll = await this.prisma.payroll.findUnique({
@@ -168,33 +179,31 @@ export class PayslipService {
       data: { payslipDocumentId: document.id },
     });
 
-    const result = await this.mailer.send({
-      to: employee.personalEmail,
-      subject: `Your payslip for ${data.payPeriod} \u2014 ${COMPANY.name}`,
-      html: this.buildEmailHtml(employee.firstName, data),
-      attachments: [
-        { filename: `Payslip - ${data.employeeName} - ${data.payPeriod}.pdf`, path: fullPath },
-      ],
-    });
-
-    await this.prisma.payroll.update({
-      where: { id: payrollId },
-      data: {
-        ...(result.sent ? { payslipSentAt: new Date(), payslipSendError: null } : { payslipSendError: result.error }),
+    const queued = await this.outbox.queue(
+      {
+        kind: 'PAYSLIP',
+        payrollId,
+        employeeId: employee.id,
+        documentId: document.id,
+        to: employee.personalEmail,
+        subject: `Your payslip for ${data.payPeriod} \u2014 ${COMPANY.name}`,
+        html: this.buildEmailHtml(employee.firstName, data),
+        attachmentName: `Payslip - ${data.employeeName} - ${data.payPeriod}.pdf`,
+        actor: options.actor ?? null,
       },
-    });
-
-    if (!result.sent) {
-      this.logger.warn(`Payslip generated but not emailed for payroll ${payrollId}: ${result.error}`);
-    } else {
-      this.logger.log(`Payslip successfully generated (${document.fileName}) and emailed to ${employee.personalEmail} for payroll ${payrollId}`);
-    }
+      { forceDraft: options.forceDraft },
+    );
+    this.logger.log(
+      `Payslip generated (${document.fileName}) for payroll ${payrollId} — ${queued.pending ? 'waiting in the outbox for review' : queued.emailed ? 'emailed' : 'email failed'}`,
+    );
 
     return {
       documentId: document.id,
       fileUrl,
-      emailed: result.sent,
-      error: result.sent ? undefined : result.error,
+      emailed: queued.emailed,
+      pending: queued.pending,
+      letterId: queued.letterId,
+      error: queued.error,
     };
   }
 

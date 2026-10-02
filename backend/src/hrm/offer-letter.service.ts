@@ -4,10 +4,11 @@ import * as fs from 'fs';
 import * as path from 'path';
 const PDFDocument = require('pdfkit');
 import { PrismaService } from '../prisma/prisma.service';
-import { MailerService } from '../common/mailer.service';
 import { coverNoteHtml, escapeHtml } from '../common/email-template';
 import { formatDateDMY } from '../common/date-format';
 import { BRAND_ASSETS_DIR } from '../common/brand-assets';
+import { LetterOutboxService } from './letter-outbox.service';
+import type { RequestUser } from './hrm.service';
 
 const COMPANY = {
   name: 'Shuroq',
@@ -59,15 +60,26 @@ export class OfferLetterService {
 
   constructor(
     private prisma: PrismaService,
-    private mailer: MailerService,
+    private outbox: LetterOutboxService,
   ) {
     fs.mkdirSync(this.outDir, { recursive: true });
   }
 
-  async issueAndSend(employeeId: string, options: { sendEmail?: boolean } = {}): Promise<{
+  /**
+   * Generates the letter and hands it to the outbox: it waits there for a
+   * person to preview it, or is mailed straight away when HR has switched the
+   * preview off for offer letters. `sendEmail: false` keeps the old
+   * "generate only" behaviour (no outbox entry at all).
+   */
+  async issueAndSend(
+    employeeId: string,
+    options: { sendEmail?: boolean; actor?: RequestUser | null; forceDraft?: boolean } = {},
+  ): Promise<{
     documentId: string | null;
     fileUrl: string | null;
     emailed: boolean;
+    pending?: boolean;
+    letterId?: string;
     error?: string;
   }> {
     const employee = await this.prisma.employee.findUnique({
@@ -148,33 +160,30 @@ export class OfferLetterService {
       return { documentId: document.id, fileUrl, emailed: false };
     }
 
-    const result = await this.mailer.send({
-      to: employee.personalEmail,
-      subject: `Your ${letterWord} from Shuroq — ${data.roleTitle}`,
-      html: bodyHtml,
-      attachments: [
-        { filename: `${data.candidateName} - ${letterWord}.pdf`, path: fullPath },
-      ],
-    });
-
-    await this.prisma.employee.update({
-      where: { id: employeeId },
-      data: {
-        ...(result.sent ? { offerLetterSentAt: new Date(), offerLetterSendError: null } : { offerLetterSendError: result.error }),
+    const queued = await this.outbox.queue(
+      {
+        kind: 'OFFER_LETTER',
+        employeeId,
+        documentId: document.id,
+        to: employee.personalEmail,
+        subject: `Your ${letterWord} from Shuroq — ${data.roleTitle}`,
+        html: bodyHtml,
+        attachmentName: `${data.candidateName} - ${letterWord}.pdf`,
+        actor: options.actor ?? null,
       },
-    });
-
-    if (!result.sent) {
-      this.logger.warn(`Letter generated but not emailed for ${employeeId}: ${result.error}`);
-    } else {
-      this.logger.log(`Offer letter successfully generated (${document.fileName}) and emailed to ${employee.personalEmail} for ${data.candidateName} (${employee.empCode})`);
-    }
+      { forceDraft: options.forceDraft },
+    );
+    this.logger.log(
+      `Offer letter generated (${document.fileName}) for ${data.candidateName} (${employee.empCode}) — ${queued.pending ? 'waiting in the outbox for review' : queued.emailed ? 'emailed' : 'email failed'}`,
+    );
 
     return {
       documentId: document.id,
       fileUrl,
-      emailed: result.sent,
-      error: result.sent ? undefined : result.error,
+      emailed: queued.emailed,
+      pending: queued.pending,
+      letterId: queued.letterId,
+      error: queued.error,
     };
   }
 
@@ -257,6 +266,7 @@ export class OfferLetterService {
 
       const detailsBody =
         `Start Date: ${fmtDateFull(d.startDate)}\n` +
+        (d.engagementEndDate ? `End Date: ${fmtDateFull(d.engagementEndDate)}\n` : '') +
         `Mode: ${d.mode || 'Hybrid'}\n` +
         `${salaryLine}`;
 

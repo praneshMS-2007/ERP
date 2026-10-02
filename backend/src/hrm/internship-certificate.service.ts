@@ -4,7 +4,6 @@ import * as fs from 'fs';
 import * as path from 'path';
 const PDFDocument = require('pdfkit');
 import { PrismaService } from '../prisma/prisma.service';
-import { MailerService } from '../common/mailer.service';
 import { coverNoteHtml, escapeHtml } from '../common/email-template';
 import { formatDateDMY } from '../common/date-format';
 import { BRAND_ASSETS_DIR, FONT_ASSETS_DIR } from '../common/brand-assets';
@@ -107,6 +106,7 @@ interface CertificateData {
 import { AuditService } from '../audit/audit.service';
 import type { RequestUser } from './hrm.service';
 import { EmployeeHistoryService, EMP_TYPE_LABEL } from './employee-history.service';
+import { LetterOutboxService } from './letter-outbox.service';
 
 @Injectable()
 export class InternshipCertificateService {
@@ -118,9 +118,9 @@ export class InternshipCertificateService {
 
   constructor(
     private prisma: PrismaService,
-    private mailer: MailerService,
     private audit: AuditService,
     private history: EmployeeHistoryService,
+    private outbox: LetterOutboxService,
   ) {
     fs.mkdirSync(this.outDir, { recursive: true });
   }
@@ -192,12 +192,25 @@ export class InternshipCertificateService {
   }
 
   /**
-   * Approve: generate the PDF completion certificate, save it, email it.
+   * Approve: generate the PDF completion certificate and hand it to the
+   * outbox, where it waits for a preview (or is emailed at once if preview is
+   * switched off for certificates).
    */
-  async approveAndSend(employeeId: string, actor?: RequestUser): Promise<{
+  approveAndSend(employeeId: string, actor?: RequestUser) {
+    return this.issue(employeeId, actor, 'approve');
+  }
+
+  /** Re-renders a certificate that is still waiting in the outbox, e.g. after fixing a date. */
+  regenerate(employeeId: string, actor?: RequestUser) {
+    return this.issue(employeeId, actor, 'regenerate');
+  }
+
+  private async issue(employeeId: string, actor: RequestUser | undefined, mode: 'approve' | 'regenerate'): Promise<{
     documentId: string | null;
     fileUrl: string | null;
     emailed: boolean;
+    pending?: boolean;
+    letterId?: string;
     error?: string;
   }> {
     const employee = await this.prisma.employee.findUnique({
@@ -205,16 +218,30 @@ export class InternshipCertificateService {
       include: { department: true, designation: true, user: true },
     });
     if (!employee) throw new NotFoundException('Employee not found');
-    if (employee.empType !== 'INTERN') throw new BadRequestException('Only interns can receive completion certificates');
-    if (!employee.engagementEndDate) throw new BadRequestException('Intern has no engagement end date set');
-    const today = new Date();
-    today.setHours(23, 59, 59, 999);
-    if (employee.engagementEndDate > today) {
-      throw new BadRequestException(
-        `This internship hasn't finished yet — it runs through ${formatDateDMY(employee.engagementEndDate)}.`,
-      );
+
+    // For someone already hired, the internship's own end date is kept separately.
+    const internshipEnd = employee.convertedFromInternAt ? employee.internshipEndDate : employee.engagementEndDate;
+
+    if (mode === 'approve') {
+      if (employee.empType !== 'INTERN') throw new BadRequestException('Only interns can receive completion certificates');
+      if (!employee.engagementEndDate) throw new BadRequestException('Intern has no engagement end date set');
+      const today = new Date();
+      today.setHours(23, 59, 59, 999);
+      if (employee.engagementEndDate > today) {
+        throw new BadRequestException(
+          `This internship hasn't finished yet — it runs through ${formatDateDMY(employee.engagementEndDate)}.`,
+        );
+      }
+      if (employee.internshipCertStatus === 'APPROVED') throw new BadRequestException('Certificate has already been issued');
+    } else {
+      if (employee.internshipCertStatus !== 'APPROVED') throw new BadRequestException('No certificate has been issued for this person.');
+      if (employee.convertedFromInternAt) {
+        throw new BadRequestException(
+          'This person has since been hired, so a re-generated certificate would show their new job title. Send or discard the existing one instead.',
+        );
+      }
+      if (!internshipEnd) throw new BadRequestException('Intern has no engagement end date set');
     }
-    if (employee.internshipCertStatus === 'APPROVED') throw new BadRequestException('Certificate has already been issued');
     if (!employee.personalEmail) {
       return { documentId: null, fileUrl: null, emailed: false, error: 'No personal email address on file for this intern' };
     }
@@ -224,7 +251,7 @@ export class InternshipCertificateService {
       roleTitle: employee.designation?.title ?? 'Intern',
       department: employee.department?.name ?? '',
       startDate: employee.joinDate,
-      endDate: employee.engagementEndDate,
+      endDate: internshipEnd!,
       mode: (employee as any).workMode ?? 'Remote',
     };
 
@@ -270,13 +297,13 @@ export class InternshipCertificateService {
     await this.audit.log({
       userId: actor?.id,
       role: actor?.role,
-      action: 'APPROVE_INTERNSHIP_CERTIFICATE',
+      action: mode === 'approve' ? 'APPROVE_INTERNSHIP_CERTIFICATE' : 'REGENERATE_INTERNSHIP_CERTIFICATE',
       actionType: 'UPDATE',
       module: 'HR',
       entityType: 'Employee',
       entityId: employeeId,
       targetLabel: `${employee.firstName} ${employee.lastName}`,
-      description: `Approved and issued Internship Completion Certificate for ${employee.firstName} ${employee.lastName} (${employee.designation?.title ?? 'Intern'})`,
+      description: `${mode === 'approve' ? 'Approved' : 'Re-generated'} Internship Completion Certificate for ${employee.firstName} ${employee.lastName} (${employee.designation?.title ?? 'Intern'})`,
       details: {
         employeeId,
         internName: `${employee.firstName} ${employee.lastName}`,
@@ -285,47 +312,36 @@ export class InternshipCertificateService {
       },
     });
 
-    // Build and send the email.
-    //
     // The certificate travels as the PDF and nothing else: the mail carries a
     // single attachment and a short plain covering note. It deliberately does
     // NOT use the shared branded shell (emailShell) or any inline cid: images
     // — the body used to re-render the whole certificate in HTML alongside the
     // attachment, which meant the recipient got the same document twice.
     const contact = await this.getSupportContactLine();
-    const result = await this.mailer.send({
-      to: employee.personalEmail,
-      subject: `Internship Completion Certificate — ${data.candidateName} | Shuroq`,
-      html: this.buildCertificateEmailHtml(employee.firstName, contact),
-      attachments: [
-        { filename: `${data.candidateName} - Internship Completion Certificate.pdf`, path: fullPath },
-      ],
-    });
-
-    if (result.sent) {
-      await this.prisma.employee.update({
-        where: { id: employeeId },
-        data: { internshipCertSentAt: new Date() },
-      });
-      this.logger.log(`Certificate successfully generated (${document.fileName}) and emailed to ${employee.personalEmail} for ${data.candidateName}`);
-    } else {
-      this.logger.warn(`Certificate generated but not emailed for ${employeeId}: ${result.error}`);
-    }
-
-    await this.history.record({
-      employeeId,
-      type: 'INTERNSHIP_CERTIFICATE_ISSUED',
-      title: result.sent ? `Internship completion certificate issued and emailed to ${employee.personalEmail}` : 'Internship completion certificate issued — email failed',
-      documentId: document.id,
-      actor,
-      note: result.sent ? null : result.error ?? null,
-    });
+    const queued = await this.outbox.queue(
+      {
+        kind: 'COMPLETION_CERTIFICATE',
+        employeeId,
+        documentId: document.id,
+        to: employee.personalEmail,
+        subject: `Internship Completion Certificate — ${data.candidateName} | Shuroq`,
+        html: this.buildCertificateEmailHtml(employee.firstName, contact),
+        attachmentName: `${data.candidateName} - Internship Completion Certificate.pdf`,
+        actor,
+      },
+      { forceDraft: mode === 'regenerate' },
+    );
+    this.logger.log(
+      `Certificate generated (${document.fileName}) for ${data.candidateName} — ${queued.pending ? 'waiting in the outbox for review' : queued.emailed ? 'emailed' : 'email failed'}`,
+    );
 
     return {
       documentId: document.id,
       fileUrl,
-      emailed: result.sent,
-      error: result.sent ? undefined : result.error,
+      emailed: queued.emailed,
+      pending: queued.pending,
+      letterId: queued.letterId,
+      error: queued.error,
     };
   }
 

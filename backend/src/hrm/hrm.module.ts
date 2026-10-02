@@ -6,6 +6,11 @@ import { PayslipService } from './payslip.service';
 import { InternshipCertificateService } from './internship-certificate.service';
 import { EmployeeHistoryService } from './employee-history.service';
 import { InternConversionService } from './intern-conversion.service';
+import { LetterOutboxService } from './letter-outbox.service';
+import { LettersController } from './letters.controller';
+import { GoogleSheetsService } from './google-sheets.service';
+import { OnboardingImportService } from './onboarding-import.service';
+import { OnboardingController } from './onboarding.controller';
 import { MailerService } from '../common/mailer.service';
 import { EmployeeDocumentsController } from './employee-documents.controller';
 import { EmployeeDocumentsService } from './employee-documents.service';
@@ -15,8 +20,8 @@ import { AuditModule } from '../audit/audit.module';
 
 @Module({
   imports: [AnnouncementsModule, AuditModule],
-  controllers: [HrmController, EmployeeDocumentsController, SelfController],
-  providers: [HrmService, OfferLetterService, PayslipService, InternshipCertificateService, MailerService, EmployeeDocumentsService, EmployeeHistoryService, InternConversionService],
+  controllers: [HrmController, EmployeeDocumentsController, SelfController, LettersController, OnboardingController],
+  providers: [HrmService, OfferLetterService, PayslipService, InternshipCertificateService, MailerService, EmployeeDocumentsService, EmployeeHistoryService, InternConversionService, LetterOutboxService, GoogleSheetsService, OnboardingImportService],
   exports: [HrmService],
 })
 export class HrmModule {}

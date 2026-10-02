@@ -851,11 +851,10 @@ export class HrmService {
     // mail server or a PDF rendering hiccup must not undo an employee HR
     // already successfully created. HR sees the outcome in the response and
     // can retry the send later if it failed.
-    const offerLetter = await this.offerLetterService.issueAndSend(employee.id).catch((err) => {
+    const offerLetter = await this.offerLetterService.issueAndSend(employee.id, { actor: viewer }).catch((err) => {
       this.logger.error(`Offer letter pipeline threw for ${employee.id}: ${err.message}`);
       return { documentId: null, fileUrl: null, emailed: false, error: err.message as string };
     });
-    await this.recordOfferLetterEvent(employee.id, offerLetter, viewer);
 
     // No password to echo back here — HR/Admin typed it themselves, it was
     // never a secret this response needed to reveal. It's still readable
@@ -936,10 +935,27 @@ export class HrmService {
     // field name, so nothing downstream can confuse it with the hash. This
     // whole response is HR:WRITE-gated (SUPER_ADMIN / HR_MANAGER only) at
     // the controller — see the comment there.
-    return users.map(({ passwordHash, passwordPlain, resetToken, resetTokenExpiry, ...safe }) => ({
-      ...safe,
-      currentPassword: passwordPlain ? decryptField(passwordPlain) : null,
-    }));
+    // A stored password that can't be decrypted (the server's ENCRYPTION_KEY
+    // differs from the one that encrypted it) must not take down the whole
+    // list: that account just shows no password, and HR can set a new one.
+    let undecryptable = 0;
+    const result = users.map(({ passwordHash, passwordPlain, resetToken, resetTokenExpiry, ...safe }) => {
+      let currentPassword: string | null = null;
+      if (passwordPlain) {
+        try {
+          currentPassword = decryptField(passwordPlain);
+        } catch {
+          undecryptable++;
+        }
+      }
+      return { ...safe, currentPassword };
+    });
+    if (undecryptable > 0) {
+      this.logger.warn(
+        `${undecryptable} account password(s) could not be decrypted — ENCRYPTION_KEY does not match the key they were saved with.`,
+      );
+    }
+    return result;
   }
 
   /**
@@ -1768,7 +1784,7 @@ export class HrmService {
       // record Finance already successfully released. Whoever released it
       // sees the outcome in the response and can follow up manually if it
       // failed (no resend endpoint exists yet, matching offer letters).
-      const payslip = await this.payslipService.issueAndSend(id).catch((err) => {
+      const payslip = await this.payslipService.issueAndSend(id, { actor: viewer }).catch((err) => {
         this.logger.error(`Payslip pipeline threw for payroll ${id}: ${err.message}`);
         return { documentId: null, fileUrl: null, emailed: false, error: err.message as string };
       });
@@ -2010,28 +2026,10 @@ export class HrmService {
   }
 
   async sendOfferLetter(employeeId: string, actor?: RequestUser) {
-    const result = await this.offerLetterService.issueAndSend(employeeId);
-    await this.recordOfferLetterEvent(employeeId, result, actor);
-    return result;
+    return this.offerLetterService.issueAndSend(employeeId, { actor });
   }
 
-  private async recordOfferLetterEvent(
-    employeeId: string,
-    result: { documentId: string | null; emailed: boolean; error?: string },
-    actor?: RequestUser,
-  ) {
-    if (!result.documentId) return;
-    await this.history.record({
-      employeeId,
-      type: 'OFFER_LETTER_ISSUED',
-      title: result.emailed ? 'Offer letter issued and emailed' : 'Offer letter generated — email failed',
-      documentId: result.documentId,
-      actor,
-      note: result.emailed ? null : result.error ?? null,
-    });
-  }
-
-  async sendPayslip(payrollId: string) {
-    return this.payslipService.issueAndSend(payrollId);
+  async sendPayslip(payrollId: string, actor?: RequestUser) {
+    return this.payslipService.issueAndSend(payrollId, { actor });
   }
 }

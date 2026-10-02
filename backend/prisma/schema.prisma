@@ -33,6 +33,10 @@ model User {
   // Login is refused, and every existing session is rejected on its very next
   // request (JwtStrategy re-checks this per-request), when false.
   isActive               Boolean                 @default(true) @map("is_active")
+  // Set on accounts created in bulk with a generated temporary password: every
+  // request except changing the password is refused until the person has
+  // chosen their own (see MustChangePasswordGuard).
+  mustChangePassword     Boolean                 @default(false) @map("must_change_password")
   resetToken             String?                 @map("reset_token")
   resetTokenExpiry       DateTime?               @map("reset_token_expiry")
   roleId                 String                  @map("role_id")
@@ -269,7 +273,8 @@ model Employee {
   convertedFromInternAt DateTime? @map("converted_from_intern_at")
   internshipEndDate     DateTime? @map("internship_end_date")
 
-  events EmployeeEvent[]
+  events          EmployeeEvent[]
+  outgoingLetters OutgoingLetter[]
 
   departmentId String     @map("department_id")
   department   Department @relation(fields: [departmentId], references: [id])
@@ -298,6 +303,79 @@ model Employee {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   @@map("employees")
+}
+
+enum LetterKind {
+  OFFER_LETTER
+  COMPLETION_CERTIFICATE
+  PAYSLIP
+}
+
+enum LetterStatus {
+  DRAFT
+  SENT
+  FAILED
+  DISCARDED
+}
+
+/// A generated letter waiting for a person to look at it before it is emailed
+/// (or, when preview is switched off for its kind, one that was sent at once).
+/// The PDF itself is a Document; this row is the email around it.
+model OutgoingLetter {
+  id             String       @id @default(uuid())
+  kind           LetterKind
+  status         LetterStatus @default(DRAFT)
+  employeeId     String?      @map("employee_id")
+  employee       Employee?    @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  payrollId      String?      @map("payroll_id")
+  documentId     String       @map("document_id")
+  document       Document     @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  toEmail        String       @map("to_email")
+  subject        String
+  htmlBody       String       @map("html_body")
+  attachmentName String       @map("attachment_name")
+  createdById    String?      @map("created_by_id")
+  createdByName  String?      @map("created_by_name")
+  sentAt         DateTime?    @map("sent_at")
+  sentByName     String?      @map("sent_by_name")
+  error          String?
+  createdAt      DateTime     @default(now()) @map("created_at")
+  updatedAt      DateTime     @updatedAt @map("updated_at")
+
+  @@index([status, kind])
+  @@index([employeeId])
+  @@map("outgoing_letters")
+}
+
+enum SubmissionStatus {
+  PENDING
+  IMPORTED
+  DISMISSED
+}
+
+/// One person's answers from the onboarding Google Form (or an uploaded
+/// CSV/Excel file), held until HR reviews them and turns them into an
+/// employee. Aadhaar, PAN and bank numbers live only inside `payloadEnc`
+/// (AES-256-GCM, same key as the employee record) — never in plain columns.
+model OnboardingSubmission {
+  id               String           @id @default(uuid())
+  sourceKey        String           @unique @map("source_key")
+  source           String // GOOGLE_SHEET | UPLOAD
+  status           SubmissionStatus @default(PENDING)
+  fullName         String           @map("full_name")
+  email            String?
+  submittedAt      DateTime?        @map("submitted_at")
+  payloadEnc       String           @map("payload_enc")
+  files            Json?
+  employeeId       String?          @map("employee_id")
+  importedAt       DateTime?        @map("imported_at")
+  importedByName   String?          @map("imported_by_name")
+  dismissedReason  String?          @map("dismissed_reason")
+  createdAt        DateTime         @default(now()) @map("created_at")
+  updatedAt        DateTime         @updatedAt @map("updated_at")
+
+  @@index([status])
+  @@map("onboarding_submissions")
 }
 
 enum EmployeeEventType {
@@ -959,6 +1037,7 @@ model Document {
   offerLetterFor    Employee? @relation(name: "EmployeeOfferLetter")
   internshipCertFor Employee? @relation(name: "EmployeeInternshipCert")
   employeeEvents    EmployeeEvent[]
+  outgoingLetters   OutgoingLetter[]
 
   @@index([ownerUserId, kind])
   @@map("documents")

@@ -33,6 +33,11 @@ export class AuthController {
     return this.authService.getProfile(req.user?.sub || req.user?.id);
   }
 
+  @Post('change-password')
+  changePassword(@Request() req: any, @Body() body: { currentPassword: string; newPassword: string }) {
+    return this.authService.changePassword(req.user?.sub || req.user?.id, body?.currentPassword, body?.newPassword);
+  }
+
   @Get('sessions')
   getSessions(@Request() req: any) {
     return this.authService.getSessions(req.user?.sub || req.user?.id);

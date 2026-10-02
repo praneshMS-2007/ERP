@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { PrismaExceptionFilter } from './common/prisma-exception.filter';
+import { MustChangePasswordGuard } from './auth/must-change-password.guard';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { PrismaModule } from './prisma/prisma.module';
@@ -52,6 +53,11 @@ import { AnnouncementsModule } from './announcements/announcements.module';
     {
       provide: APP_GUARD,
       useClass: RolesGuard,
+    },
+    // An account still on its temporary password can do nothing but change it.
+    {
+      provide: APP_GUARD,
+      useClass: MustChangePasswordGuard,
     },
     // Database errors (not found / duplicate / still referenced) become real
     // 4xx answers instead of a generic 500.

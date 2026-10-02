@@ -352,7 +352,7 @@ export class InternConversionService {
 
     // ---- after commit: letter, notification, audit — never undo the conversion ----
     const offerLetter = await this.offerLetters
-      .issueAndSend(employeeId, { sendEmail: input.sendOfferLetter !== false })
+      .issueAndSend(employeeId, { sendEmail: input.sendOfferLetter !== false, actor })
       .catch((err) => {
         this.logger.error(`Offer letter after conversion failed for ${employeeId}: ${err.message}`);
         return { documentId: null, fileUrl: null, emailed: false, error: err.message as string };
@@ -360,18 +360,17 @@ export class InternConversionService {
 
     if (offerLetter.documentId) {
       await this.prisma.employeeEvent.update({ where: { id: event.id }, data: { documentId: offerLetter.documentId } });
-      await this.history.record({
-        employeeId,
-        type: 'OFFER_LETTER_ISSUED',
-        title: offerLetter.emailed
-          ? `${roleLabel} offer letter issued and emailed to ${personalEmail}`
-          : input.sendOfferLetter === false
-            ? `${roleLabel} offer letter generated (not emailed)`
-            : `${roleLabel} offer letter generated — email failed`,
-        documentId: offerLetter.documentId,
-        actor,
-        note: offerLetter.emailed || input.sendOfferLetter === false ? null : offerLetter.error ?? null,
-      });
+      // A letter that went through the outbox records its own history entry when
+      // it is actually sent; only the "generated, never queued" case needs one here.
+      if (input.sendOfferLetter === false) {
+        await this.history.record({
+          employeeId,
+          type: 'OFFER_LETTER_ISSUED',
+          title: `${roleLabel} offer letter generated (not emailed)`,
+          documentId: offerLetter.documentId,
+          actor,
+        });
+      }
     }
 
     if (before.user?.id) {

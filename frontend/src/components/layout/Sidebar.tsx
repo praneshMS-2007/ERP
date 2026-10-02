@@ -22,6 +22,7 @@ import {
   CalendarDays,
   Wallet,
   Megaphone,
+  Send,
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -84,6 +85,7 @@ const allNavItems: NavItem[] = [
     { name: 'Payroll', path: '/hrm/payroll', requiredRoles: ['SUPER_ADMIN', 'HR_MANAGER'] },
     { name: 'User Management', path: '/hrm/user-management', requiredAction: 'WRITE' },
     { name: 'Internship Certificates', path: '/hrm/internship-certificates', requiredAction: 'WRITE' },
+    { name: 'Bulk Onboarding', path: '/hrm/onboarding', requiredAction: 'WRITE' },
   ]},
   // The next three are an Employee's own dedicated sections — deliberately
   // NOT nested under HR Management (which Employees no longer see at all),
@@ -133,6 +135,9 @@ const allNavItems: NavItem[] = [
   // /finance/payroll (which have real actions), see PayrollPageContent vs
   // this route's much smaller standalone page.
   { name: 'Payroll', path: '/payroll', icon: Wallet, requiredRoles: ['EMPLOYEE'] },
+  // Every letter the ERP emails waits here for a preview first. HR/Admin see
+  // all of them; Finance sees payslips only (the server enforces that split).
+  { name: 'Letter Outbox', path: '/letters', icon: Send, requiredRoles: ['SUPER_ADMIN', 'HR_MANAGER', 'FINANCE_MANAGER'] },
   // No gate at all — visible to every signed-in account, management and
   // Employee alike, matching "independent section for every user account."
   { name: 'Announcements', path: '/announcements', icon: Megaphone },

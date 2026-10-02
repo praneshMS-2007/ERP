@@ -109,7 +109,9 @@ function InternshipCertificatesPage() {
     setActionLoading(intern.id);
     try {
       const result = await hrmApi.approveInternshipCertificate(intern.id);
-      if (result.emailed) {
+      if (result.pending) {
+        showToast(`Certificate for ${intern.fullName} is ready — review it in Letter Outbox before it is emailed.`, 'success');
+      } else if (result.emailed) {
         showToast(`Certificate sent to ${intern.fullName} at ${intern.personalEmail}`, 'success');
       } else if (result.documentId) {
         showToast(`Certificate generated for ${intern.fullName}, but email failed: ${result.error || 'Unknown error'}`, 'error');

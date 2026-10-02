@@ -287,8 +287,8 @@ export class HrmController {
 
   @Post('payrolls/:id/payslip')
   @RequirePermission('HR', 'READ')
-  sendPayslip(@Param('id') id: string) {
-    return this.hrmService.sendPayslip(id);
+  sendPayslip(@Param('id') id: string, @CurrentUser() user: RequestUser) {
+    return this.hrmService.sendPayslip(id, user);
   }
 
   // HR-only — the "resubmit" half of the Return to HR loop, and general

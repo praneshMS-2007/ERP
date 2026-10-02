@@ -205,7 +205,9 @@ export default function EmployeeDirectory() {
       setForm(initialForm);
       fetchAll();
 
-      if (created?.offerLetter?.emailed) {
+      if (created?.offerLetter?.pending) {
+        showToast('Employee created! Their offer letter is waiting in Letter Outbox for you to review before it is emailed.', 'success');
+      } else if (created?.offerLetter?.emailed) {
         showToast(`Employee created! Offer letter emailed to ${form.personalEmail}.`, 'success');
       } else if (created?.offerLetter?.error) {
         showToast(`Employee created, but email could not be sent: ${created.offerLetter.error}`, 'error');
@@ -246,9 +248,10 @@ export default function EmployeeDirectory() {
   async function handleSendOfferLetter(emp: any) {
     setActionMenuId(null);
     try {
-      showToast(`Sending offer letter to ${emp.personalEmail || emp.firstName}...`, 'success');
       const res = await hrmApi.sendOfferLetter(emp.id);
-      if (res?.emailed) {
+      if (res?.pending) {
+        showToast(`Offer letter for ${emp.firstName} is ready — review it in Letter Outbox, then send it.`, 'success');
+      } else if (res?.emailed) {
         showToast(`Offer letter successfully emailed to ${emp.personalEmail}!`, 'success');
       } else {
         showToast(`Offer letter generated, but email delivery reported: ${res?.error || 'failed'}`, 'error');

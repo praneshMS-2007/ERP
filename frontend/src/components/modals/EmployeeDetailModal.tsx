@@ -667,10 +667,11 @@ export default function EmployeeDetailModal({
                         style={{ padding: '6px 12px', fontSize: '12.5px', display: 'flex', alignItems: 'center', gap: '6px' }}
                         onClick={async () => {
                           setError(null);
-                          setToast('Sending offer letter email...');
                           try {
                             const res = await hrmApi.sendOfferLetter(emp.id);
-                            if (res?.emailed) {
+                            if (res?.pending) {
+                              setToast('Offer letter is ready — review it in Letter Outbox, then send it.');
+                            } else if (res?.emailed) {
                               setToast(`Offer letter emailed to ${emp.personalEmail}`);
                             } else {
                               setError(`Offer letter generated, but email failed: ${res?.error || 'error'}`);

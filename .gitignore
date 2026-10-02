@@ -21,3 +21,8 @@ backend/uploads/
 # can never be reached through the static /uploads mount in main.ts.
 backend/private-uploads/
 !backend/private-uploads/.gitkeep
+
+# Google service-account keys (grant access to the onboarding sheet and Drive folder) — never commit.
+google-service-account*.json
+*-service-account*.json
+**/shuroq-erp-integration-*.json

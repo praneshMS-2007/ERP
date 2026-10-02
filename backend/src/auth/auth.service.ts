@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { randomUUID } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
@@ -101,6 +101,7 @@ export class AuthService {
         username: user.username,
         role: user.role.name,
         permissions,
+        mustChangePassword: user.mustChangePassword,
         name: user.employee
           ? `${user.employee.firstName} ${user.employee.lastName}`
           : 'Admin User',
@@ -169,6 +170,45 @@ export class AuthService {
     return { ...safeUser, employee: safeEmployee };
   }
 
+
+  /**
+   * The one thing an account with a temporary password may do. Checks the
+   * current password first (so a stolen session alone can't lock the owner
+   * out), refuses a reuse of it, and clears the reversible copy that Admin/HR
+   * could read in User Management — once someone has chosen their own
+   * password, it is no longer something HR should be able to look up.
+   */
+  async changePassword(userId: string, currentPassword: string, newPassword: string) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new UnauthorizedException('User not found');
+    // Passwords are otherwise changed only by HR/Admin (see User Management);
+    // this route exists solely for the first sign-in on a temporary password.
+    if (!user.mustChangePassword) {
+      throw new ForbiddenException('Your password is changed by HR or an administrator. Ask them to reset it.');
+    }
+
+    if (!currentPassword || !(await bcrypt.compare(currentPassword, user.passwordHash))) {
+      // 400, not 401: a 401 makes the browser treat the session as expired and sign the person out.
+      throw new BadRequestException('Your current password is not correct.');
+    }
+    const next = newPassword ?? '';
+    if (next.length < 8) throw new BadRequestException('The new password must be at least 8 characters long.');
+    if (!/[A-Za-z]/.test(next) || !/[0-9]/.test(next)) {
+      throw new BadRequestException('The new password must contain at least one letter and one number.');
+    }
+    if (next === currentPassword) throw new BadRequestException('Choose a password different from your current one.');
+    const handle = (user.username || user.email?.split('@')[0] || '').toLowerCase();
+    if (handle && next.toLowerCase().includes(handle)) {
+      throw new BadRequestException('The password should not contain your username.');
+    }
+
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { passwordHash: await bcrypt.hash(next, 10), passwordPlain: null, mustChangePassword: false },
+    });
+    this.audit.log({ userId, action: 'CHANGE_PASSWORD', module: 'ADMIN' });
+    return { message: 'Password updated.' };
+  }
 
   async getSessions(userId: string) {
     return this.prisma.authentication.findMany({

@@ -590,3 +590,60 @@ export const settingsApi = {
   getSessions: () => fetchApi('/auth/sessions'),
   revokeSession: (id: string) => mutateApi(`/auth/sessions/${id}`, { method: 'DELETE' }),
 };
+
+export const lettersApi = {
+  list: (status?: string) => mutateApi(`/letters${status ? `?status=${status}` : ''}`),
+  counts: () => mutateApi('/letters/counts'),
+  settings: () => mutateApi('/letters/settings'),
+  setPreview: (kind: string, preview: boolean) =>
+    mutateApi(`/letters/settings/${kind}`, { method: 'PUT', body: JSON.stringify({ preview }) }),
+  get: (id: string) => mutateApi(`/letters/${id}`),
+  update: (id: string, data: { toEmail?: string; subject?: string }) =>
+    mutateApi(`/letters/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  send: (id: string) => mutateApi(`/letters/${id}/send`, { method: 'POST' }),
+  sendBatch: (ids: string[]) => mutateApi('/letters/send-batch', { method: 'POST', body: JSON.stringify({ ids }) }),
+  discard: (id: string) => mutateApi(`/letters/${id}/discard`, { method: 'POST' }),
+  regenerate: (id: string) => mutateApi(`/letters/${id}/regenerate`, { method: 'POST' }),
+  // The PDF route needs the Authorization header, which an <iframe src> can't
+  // send — fetch it as a blob and hand the iframe an object URL instead.
+  pdfUrl: async (id: string): Promise<string> => {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+    const res = await fetch(`${API_BASE}/letters/${id}/pdf`, { headers: token ? { Authorization: `Bearer ${token}` } : undefined });
+    if (!res.ok) throw new Error('Could not load the PDF preview.');
+    return window.URL.createObjectURL(await res.blob());
+  },
+};
+
+export const passwordApi = {
+  change: (currentPassword: string, newPassword: string) =>
+    mutateApi('/auth/change-password', { method: 'POST', body: JSON.stringify({ currentPassword, newPassword }) }),
+};
+
+export const onboardingApi = {
+  config: () => mutateApi('/onboarding/config'),
+  fetchResponses: () => mutateApi('/onboarding/fetch', { method: 'POST' }),
+  upload: async (file: File) => {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+    const body = new FormData();
+    body.append('file', file);
+    const res = await fetch(`${API_BASE}/onboarding/upload`, { method: 'POST', headers: token ? { Authorization: `Bearer ${token}` } : undefined, body });
+    const json = await res.json().catch(() => null);
+    if (!res.ok) throw new Error((Array.isArray(json?.message) ? json.message.join(', ') : json?.message) || `Upload failed (${res.status})`);
+    return json;
+  },
+  list: (status: 'PENDING' | 'IMPORTED' | 'DISMISSED') => mutateApi(`/onboarding/submissions?status=${status}`),
+  get: (id: string) => mutateApi(`/onboarding/submissions/${id}`),
+  update: (id: string, data: { payload?: Record<string, any>; hr?: Record<string, any> }) =>
+    mutateApi(`/onboarding/submissions/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  dismiss: (id: string, reason?: string) =>
+    mutateApi(`/onboarding/submissions/${id}/dismiss`, { method: 'POST', body: JSON.stringify({ reason }) }),
+  importMany: (ids: string[]) => mutateApi('/onboarding/import', { method: 'POST', body: JSON.stringify({ ids }) }),
+  // Files need the Authorization header, so fetch as a blob and hand back an object URL.
+  fileUrl: async (id: string, field: string): Promise<{ url: string; type: string }> => {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+    const res = await fetch(`${API_BASE}/onboarding/submissions/${id}/files/${field}`, { headers: token ? { Authorization: `Bearer ${token}` } : undefined });
+    if (!res.ok) throw new Error('Could not load the file.');
+    const blob = await res.blob();
+    return { url: window.URL.createObjectURL(blob), type: blob.type };
+  },
+};
