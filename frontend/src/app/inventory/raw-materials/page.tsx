@@ -5,6 +5,7 @@ import { Pencil, Trash2, Plus, SlidersHorizontal } from 'lucide-react';
 import { rawMaterialApi, inventoryApi } from '../../../services/api';
 import Modal, { FormField } from '../../../components/Modal';
 import { formatDate } from '../../../lib/date';
+import { useRefreshTick } from '@/lib/refresh';
 
 const emptyForm = {
   name: '', code: '', unit: 'kg', minLevel: '10', status: 'ACTIVE', warehouseId: '', initialQuantity: '0',
@@ -55,7 +56,8 @@ export default function RawMaterialsPage() {
     }
   }
 
-  useEffect(() => { fetchAll(); }, []);
+  const refreshTick = useRefreshTick();
+  useEffect(() => { fetchAll(); }, [refreshTick]);
 
   async function loadAdditions() {
     try {

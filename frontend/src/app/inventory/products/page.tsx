@@ -6,6 +6,7 @@ import { inventoryApi } from '../../../services/api';
 import Modal, { FormField } from '../../../components/Modal';
 import { formatINR } from '../../../lib/currency';
 import { formatDate } from '../../../lib/date';
+import { useRefreshTick } from '@/lib/refresh';
 
 const emptyProductForm = {
   name: '', sku: '', category: '', unit: 'pcs', price: '', costPrice: '', isDigital: false,
@@ -63,7 +64,8 @@ export default function ProductsPage() {
     }
   }
 
-  useEffect(() => { fetchAll(); }, []);
+  const refreshTick = useRefreshTick();
+  useEffect(() => { fetchAll(); }, [refreshTick]);
 
   async function loadAdditions() {
     try {

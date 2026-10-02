@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { Wallet, Download } from 'lucide-react';
 import { selfApi, uploadApi } from '../../services/api';
 import { formatINR } from '../../lib/currency';
+import { useRefreshTick } from '@/lib/refresh';
 
 const STATUS_LABEL: Record<string, string> = { DRAFT: 'Draft', PAID: 'Paid', REJECTED: 'Returned to HR' };
 
@@ -19,12 +20,13 @@ export default function EmployeePayrollPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
+  const refreshTick = useRefreshTick();
   useEffect(() => {
     selfApi.getPayroll()
       .then((data) => setPayrolls(Array.isArray(data) ? data : []))
       .catch((e: any) => setError(e?.message || 'Could not load your payroll records.'))
       .finally(() => setLoading(false));
-  }, []);
+  }, [refreshTick]);
 
   const lastPaid = payrolls.find((p) => p.status === 'PAID');
 

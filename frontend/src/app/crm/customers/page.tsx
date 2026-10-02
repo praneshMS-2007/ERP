@@ -5,6 +5,7 @@ import { Pencil, Trash2, UserCheck, UserX } from 'lucide-react';
 import { crmApi } from '../../../services/api';
 import Modal, { FormField } from '../../../components/Modal';
 import { formatDate } from '../../../lib/date';
+import { useRefreshTick } from '@/lib/refresh';
 
 export default function CustomersPage() {
   const [customers, setCustomers] = useState<any[]>([]);
@@ -25,7 +26,8 @@ export default function CustomersPage() {
     }
   }
 
-  useEffect(() => { fetchAll(); }, []);
+  const refreshTick = useRefreshTick();
+  useEffect(() => { fetchAll(); }, [refreshTick]);
 
   function openEdit(c: any) {
     setEditTarget(c);

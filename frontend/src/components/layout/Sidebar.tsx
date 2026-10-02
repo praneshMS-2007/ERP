@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
+import UserAvatar from './UserAvatar';
 import {
   LayoutDashboard,
   Users,
@@ -217,11 +218,6 @@ export default function Sidebar({ isOpen, toggleSidebar }: SidebarProps) {
     setExpandedMenus(prev => ({ ...prev, [path]: !prev[path] }));
   };
 
-  // Get initials for avatar
-  const getInitials = (name: string) => {
-    return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
-  };
-
   return (
     <aside className={`sidebar ${!isOpen ? 'collapsed' : ''}`}>
       {/* Header */}
@@ -295,9 +291,7 @@ export default function Sidebar({ isOpen, toggleSidebar }: SidebarProps) {
       {/* Footer — Dynamic user info from AuthContext */}
       <div className="sidebar-footer">
         <div className="sidebar-user">
-          <div className="sidebar-user-avatar">
-            {user ? getInitials(user.name) : 'U'}
-          </div>
+          <UserAvatar className="sidebar-user-avatar" name={user?.name} avatarUrl={user?.avatarUrl} />
           <div className="sidebar-user-info">
             <div className="sidebar-user-name">{user?.name || 'Guest'}</div>
             <div className="sidebar-user-role">{user?.role?.replace(/_/g, ' ') || 'Not logged in'}</div>

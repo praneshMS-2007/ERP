@@ -5,6 +5,7 @@ import { Search, Bell, Settings, LogOut, User } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '../../context/AuthContext';
+import UserAvatar from './UserAvatar';
 import { notificationApi, searchApi } from '../../services/api';
 import { formatINR } from '../../lib/currency';
 
@@ -109,7 +110,6 @@ export default function Topbar() {
   // accounts (username + password, no mailbox) have email: null by design.
   const displayName = (user?.name || 'User').toUpperCase();
   const displayContact = user?.email || (user?.username ? `@${user.username}` : '');
-  const initials = (user?.name || 'U').trim().split(/\s+/).filter(Boolean).map(w => w[0]).join('').slice(0, 2).toUpperCase() || 'U';
 
   const hasSearchResults = searchResults && (
     (searchResults.employees && searchResults.employees.length > 0) ||
@@ -251,7 +251,7 @@ export default function Topbar() {
               <div className="topbar-user-name">{displayName}</div>
               <div className="topbar-user-role">{user?.role || ''}</div>
             </div>
-            <div className="topbar-user-avatar">{initials}</div>
+            <UserAvatar className="topbar-user-avatar" name={user?.name} avatarUrl={user?.avatarUrl} />
           </div>
 
           {showProfile && (

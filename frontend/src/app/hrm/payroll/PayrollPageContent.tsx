@@ -7,6 +7,7 @@ import ExportButton from '../../../components/ExportButton';
 import Modal, { FormField } from '../../../components/Modal';
 import { useAuth } from '../../../context/AuthContext';
 import { formatINR } from '../../../lib/currency';
+import { useRefreshTick } from '@/lib/refresh';
 
 const AVATAR_COLORS = ['#2563eb', '#7c3aed', '#dc2626', '#16a34a', '#d97706', '#0891b2', '#db2777'];
 const STATUS_LABEL: Record<string, string> = { DRAFT: 'Draft', PAID: 'Paid', REJECTED: 'Returned to HR' };
@@ -91,7 +92,8 @@ export default function PayrollPageContent({ mode }: { mode: 'hr' | 'finance' })
     setEmployees(Array.isArray(empData) ? empData : []);
   }
 
-  useEffect(() => { fetchAll(); }, []);
+  const refreshTick = useRefreshTick();
+  useEffect(() => { fetchAll(); }, [refreshTick]);
 
   const activeEmployees = employees.filter((e) => e.status !== 'INACTIVE');
   const formerEmployees = employees.filter((e) => e.status === 'INACTIVE');

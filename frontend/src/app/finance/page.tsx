@@ -11,6 +11,7 @@ import ExportButton from '../../components/ExportButton';
 import Modal, { FormField } from '../../components/Modal';
 import { formatINR } from '../../lib/currency';
 import { formatDate } from '../../lib/date';
+import { useRefreshTick } from '@/lib/refresh';
 
 const emptyPaymentForm = { amount: '', method: 'BANK_TRANSFER', date: new Date().toISOString().slice(0, 10) };
 
@@ -68,7 +69,8 @@ export default function FinancePage() {
     } catch (e) { console.error('Finance error', e); }
   }
 
-  useEffect(() => { fetchAll(); }, []);
+  const refreshTick = useRefreshTick();
+  useEffect(() => { fetchAll(); }, [refreshTick]);
 
   async function handleAddExpense() {
     if (!expForm.description || !expForm.amount) { setExpError('Description and amount are required.'); return; }

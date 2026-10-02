@@ -9,10 +9,13 @@ import { hrmApi, exportApi } from '../../services/api';
 import ExportButton from '../../components/ExportButton';
 import { formatDate } from '../../lib/date';
 import { useAuth } from '../../context/AuthContext';
+import { useRefreshTick } from '@/lib/refresh';
 
 export default function HRManagement() {
   const { hasPermission } = useAuth();
   const canExport = hasPermission('HR', 'WRITE');
+  // Leave requests and performance reviews are HR/admin-only on the server; other roles skip them.
+  const canSeeHrDetail = hasPermission('HR', 'WRITE');
   // Core data
   const [employees, setEmployees] = useState<any[]>([]);
   const [allLeaves, setAllLeaves] = useState<any[]>([]);
@@ -33,8 +36,8 @@ export default function HRManagement() {
     try {
       const [empData, leaveData, perfData] = await Promise.all([
         hrmApi.getEmployees(),
-        hrmApi.getLeaves(),
-        hrmApi.getPerformanceReviews(),
+        canSeeHrDetail ? hrmApi.getLeaves() : Promise.resolve([]),
+        canSeeHrDetail ? hrmApi.getPerformanceReviews() : Promise.resolve([]),
       ]);
       setEmployees(Array.isArray(empData) ? empData : []);
       setAllLeaves(Array.isArray(leaveData) ? leaveData : []);
@@ -65,9 +68,10 @@ export default function HRManagement() {
     }
   }
 
-  useEffect(() => { fetchCoreData(); }, []);
-  useEffect(() => { fetchAttendanceStats(selectedDate); }, [selectedDate]);
-  useEffect(() => { fetchTrend(calYear); }, [calYear]);
+  const refreshTick = useRefreshTick();
+  useEffect(() => { fetchCoreData(); }, [canSeeHrDetail, refreshTick]);
+  useEffect(() => { fetchAttendanceStats(selectedDate); }, [selectedDate, refreshTick]);
+  useEffect(() => { fetchTrend(calYear); }, [calYear, refreshTick]);
 
   // ========== COMPUTED KPIs ==========
   const activeEmployees = employees.filter(e => e.status !== 'INACTIVE');
@@ -180,7 +184,7 @@ export default function HRManagement() {
       </div>
 
       {/* KPI Row 1 — Top Metrics */}
-      <div className="kpi-grid" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
+      <div className="kpi-grid" style={{ gridTemplateColumns: `repeat(${canSeeHrDetail ? 3 : 2}, 1fr)` }}>
         {/* Total Workforce */}
         <div className="kpi-card">
           <div className="kpi-card-top">
@@ -206,7 +210,7 @@ export default function HRManagement() {
         </div>
 
         {/* Avg Performance */}
-        <div className="kpi-card">
+        {canSeeHrDetail && <div className="kpi-card">
           <div className="kpi-card-top">
             <div className="kpi-card-label">AVG PERFORMANCE</div>
             <div className="kpi-card-icon" style={{ background: '#fffbeb', color: '#d97706' }}><Star size={22} /></div>
@@ -215,7 +219,7 @@ export default function HRManagement() {
           <div style={{ fontSize: '12px', color: 'var(--color-text-muted)' }}>
             {perfLabel(avgPerf)}
           </div>
-        </div>
+        </div>}
       </div>
 
       {/* Row 2 — Calendar + Compact Present/Absent & Request KPIs (Parallel Layout) */}
@@ -293,7 +297,7 @@ export default function HRManagement() {
           </div>
 
           {/* Leave Requests */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '16px' }}>
+          {canSeeHrDetail && <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '16px' }}>
             <div className="kpi-card" style={{ padding: '14px' }}>
               <div className="kpi-card-top" style={{ marginBottom: '8px' }}>
                 <div className="kpi-card-label" style={{ fontSize: '11px' }}>LEAVE REQUESTS</div>
@@ -304,7 +308,7 @@ export default function HRManagement() {
                 <TrendingUp size={12} /> {approvedThisMonth} approved
               </div>
             </div>
-          </div>
+          </div>}
 
         </div>
 

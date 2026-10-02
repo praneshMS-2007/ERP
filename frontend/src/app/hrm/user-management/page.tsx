@@ -7,6 +7,7 @@ import { useAuth } from '../../../context/AuthContext';
 import Modal from '../../../components/Modal';
 import PageGuard from '../../../components/PageGuard';
 import { formatDate } from '../../../lib/date';
+import { useRefreshTick } from '@/lib/refresh';
 
 /**
  * Every ERP login account. Split into Active / Former the same way the
@@ -66,7 +67,8 @@ function UserManagementPage() {
     }
   }
 
-  useEffect(() => { if (authorised) load(); }, [authorised]);
+  const refreshTick = useRefreshTick();
+  useEffect(() => { if (authorised) load(); }, [authorised, refreshTick]);
 
   if (!authorised) {
     return (

@@ -10,6 +10,7 @@ import { projectApi, hrmApi, exportApi } from '../../services/api';
 import ExportButton from '../../components/ExportButton';
 import Modal, { FormField } from '../../components/Modal';
 import { useAuth } from '../../context/AuthContext';
+import { useRefreshTick } from '@/lib/refresh';
 
 export default function ProjectsPage() {
   const { user } = useAuth();
@@ -43,7 +44,8 @@ export default function ProjectsPage() {
     } catch (e) { console.error('Projects error', e); }
   }
 
-  useEffect(() => { fetchAll(); }, []);
+  const refreshTick = useRefreshTick();
+  useEffect(() => { fetchAll(); }, [refreshTick]);
 
   let filtered = [...projects];
   if (filterStatus) filtered = filtered.filter(p => p.status === filterStatus);

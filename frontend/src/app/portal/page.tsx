@@ -6,6 +6,7 @@ import { hrmApi } from '../../services/api';
 import Modal from '../../components/Modal';
 import PageGuard from '../../components/PageGuard';
 import { formatDate } from '../../lib/date';
+import { useRefreshTick } from '@/lib/refresh';
 
 const LEAVE_TYPE_LABELS: Record<string, string> = {
   SICK_LEAVE: 'Sick Leave',
@@ -57,7 +58,8 @@ function EmployeePortalHrPage() {
     }
   }
 
-  useEffect(() => { fetchData(); }, []);
+  const refreshTick = useRefreshTick();
+  useEffect(() => { fetchData(); }, [refreshTick]);
 
   async function handleLeaveStatus(id: string, status: 'APPROVED' | 'REJECTED') {
     try {

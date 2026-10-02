@@ -6,6 +6,7 @@ import { inventoryApi, crmApi } from '../../../services/api';
 import Modal, { FormField } from '../../../components/Modal';
 import { formatINR } from '../../../lib/currency';
 import { formatDate } from '../../../lib/date';
+import { useRefreshTick } from '@/lib/refresh';
 
 const emptyForm = { customerId: '', productId: '', warehouseId: '', quantity: '1' };
 
@@ -38,9 +39,10 @@ export default function SalesOrdersPage() {
     }
   }
 
+  const refreshTick = useRefreshTick();
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [refreshTick]);
 
   async function loadHistory() {
     try {

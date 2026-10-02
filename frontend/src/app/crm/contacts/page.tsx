@@ -5,6 +5,7 @@ import { Calendar, Mail, Phone, Pencil, Plus, Check } from 'lucide-react';
 import { crmApi } from '../../../services/api';
 import Modal, { FormField } from '../../../components/Modal';
 import { formatDate } from '../../../lib/date';
+import { useRefreshTick } from '@/lib/refresh';
 
 export default function ContactsPage() {
   const [contacts, setContacts] = useState<any[]>([]);
@@ -40,9 +41,10 @@ export default function ContactsPage() {
     }
   }
 
+  const refreshTick = useRefreshTick();
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [refreshTick]);
 
   function openEdit(c: any) {
     setEditTarget(c);

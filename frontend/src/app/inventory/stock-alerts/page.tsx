@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { inventoryApi } from '../../../services/api';
+import { useRefreshTick } from '@/lib/refresh';
 
 export default function StockAlerts() {
   const [alerts, setAlerts] = useState<any[]>([]);
@@ -26,9 +27,10 @@ export default function StockAlerts() {
     }
   }
 
+  const refreshTick = useRefreshTick();
   useEffect(() => {
     loadStockAlerts();
-  }, []);
+  }, [refreshTick]);
 
   async function handleReorder(item: any) {
     const suppId = suppliers.length > 0 ? suppliers[0].id : null;

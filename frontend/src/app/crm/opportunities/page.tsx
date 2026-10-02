@@ -6,6 +6,7 @@ import { crmApi } from '../../../services/api';
 import Modal, { FormField } from '../../../components/Modal';
 import { formatINR } from '../../../lib/currency';
 import { formatDate } from '../../../lib/date';
+import { useRefreshTick } from '@/lib/refresh';
 
 const STAGE_LABEL: Record<string, string> = {
   DISCOVERY: 'Discovery', PROPOSAL: 'Proposal', NEGOTIATION: 'Negotiation',
@@ -52,7 +53,8 @@ export default function OpportunitiesPage() {
     }
   }
 
-  useEffect(() => { fetchAll(); }, []);
+  const refreshTick = useRefreshTick();
+  useEffect(() => { fetchAll(); }, [refreshTick]);
 
   function openEdit(o: any) {
     setEditTarget(o);

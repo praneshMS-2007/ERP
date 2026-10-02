@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { hrmApi } from '../../../services/api';
 import Modal from '../../../components/Modal';
 import PageGuard from '../../../components/PageGuard';
+import { useRefreshTick } from '@/lib/refresh';
 
 export default function HRMPerformanceGuarded() {
   return (
@@ -45,9 +46,10 @@ function HRMPerformance() {
     }
   }
 
+  const refreshTick = useRefreshTick();
   useEffect(() => {
     loadData();
-  }, []);
+  }, [refreshTick]);
 
   async function handleAddReview(e: React.FormEvent) {
     e.preventDefault();

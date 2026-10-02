@@ -11,6 +11,7 @@ import { projectApi, hrmApi, uploadApi } from '../../../services/api';
 import { useAuth } from '../../../context/AuthContext';
 import Modal, { FormField } from '../../../components/Modal';
 import { formatDate } from '../../../lib/date';
+import { useRefreshTick } from '@/lib/refresh';
 
 const STATUS_LABEL: Record<string, string> = {
   NOT_STARTED: 'Not Started', IN_PROGRESS: 'In Progress', REVIEW: 'In Review', DONE: 'Completed',
@@ -918,7 +919,8 @@ function MyTimesheetView({ projectId }: any) {
     }
   }
 
-  useEffect(() => { fetchData(); }, [projectId]);
+  const refreshTick = useRefreshTick();
+  useEffect(() => { fetchData(); }, [projectId, refreshTick]);
 
   async function handleSave() {
     const h = parseFloat(hours);

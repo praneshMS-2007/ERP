@@ -45,6 +45,8 @@ export default function Modal({ isOpen, onClose, title, children, width = '520px
       }}
     >
       <div
+        role="dialog"
+        aria-modal="true"
         style={{
           background: 'var(--color-card)', borderRadius: '16px',
           width, maxWidth: '95vw', maxHeight: '90vh', overflow: 'auto',

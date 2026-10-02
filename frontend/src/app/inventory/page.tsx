@@ -10,6 +10,7 @@ import ExportButton from '../../components/ExportButton';
 import Modal, { FormField } from '../../components/Modal';
 import { formatINR, formatINRCompact } from '../../lib/currency';
 import { formatDate } from '../../lib/date';
+import { useRefreshTick } from '@/lib/refresh';
 
 const emptyPoForm = { productId: '', supplierId: '', warehouseId: '', quantity: '', totalAmount: '', orderDate: new Date().toISOString().slice(0, 10) };
 const emptyProdForm = { name: '', sku: '', category: '', unit: 'pcs', price: '', costPrice: '', status: 'ACTIVE', warehouseId: '', initialQuantity: '' };
@@ -56,7 +57,8 @@ export default function InventoryPage() {
     } catch (e) { console.error('Inventory error', e); }
   }
 
-  useEffect(() => { fetchAll(); }, []);
+  const refreshTick = useRefreshTick();
+  useEffect(() => { fetchAll(); }, [refreshTick]);
 
   let filtered = [...products];
   if (filterCat) filtered = filtered.filter(p => p.category === filterCat);

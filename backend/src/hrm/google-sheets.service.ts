@@ -13,6 +13,8 @@ export interface SheetTable {
   header: string[];
   /** One entry per response row. `text` is what Sheets displays; `raw` is the underlying value (dates as serial numbers). */
   rows: { text: string[]; raw: (string | number | boolean | null)[] }[];
+  /** The spreadsheet's own time zone (e.g. "Asia/Kolkata"); form timestamps are wall-clock times in it. */
+  timeZone?: string;
 }
 
 const SCOPES = [
@@ -110,11 +112,13 @@ export class GoogleSheetsService {
     const id = this.sheetId;
     if (!id) throw new BadRequestException('No response sheet is configured (GOOGLE_ONBOARDING_SHEET_ID).');
 
+    const meta = await this.get(`https://sheets.googleapis.com/v4/spreadsheets/${id}?fields=properties.timeZone,sheets.properties.title`);
+    await this.assertOk(meta, 'open the response sheet');
+    const info: any = await meta.json();
+    const timeZone: string | undefined = info.properties?.timeZone || undefined;
     let tab = process.env.GOOGLE_ONBOARDING_SHEET_TAB?.trim();
     if (!tab) {
-      const meta = await this.get(`https://sheets.googleapis.com/v4/spreadsheets/${id}?fields=sheets.properties.title`);
-      await this.assertOk(meta, 'open the response sheet');
-      tab = ((await meta.json()) as any).sheets?.[0]?.properties?.title;
+      tab = info.sheets?.[0]?.properties?.title;
       if (!tab) throw new BadRequestException('The response sheet has no tabs.');
     }
     const range = encodeURIComponent(tab);
@@ -126,13 +130,14 @@ export class GoogleSheetsService {
     await this.assertOk(rawRes, 'read the response sheet');
     const text: string[][] = ((await textRes.json()) as any).values ?? [];
     const raw: any[][] = ((await rawRes.json()) as any).values ?? [];
-    if (text.length === 0) return { header: [], rows: [] };
+    if (text.length === 0) return { header: [], rows: [], timeZone };
 
     const width = text[0].length;
     const pad = <T,>(row: T[] | undefined, fill: T): T[] => Array.from({ length: width }, (_, i) => (row && row[i] !== undefined ? row[i] : fill));
     return {
       header: text[0],
       rows: text.slice(1).map((r, i) => ({ text: pad<string>(r, ''), raw: pad<any>(raw[i + 1], null) })),
+      timeZone,
     };
   }
 

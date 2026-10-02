@@ -5,6 +5,7 @@ import dynamic from 'next/dynamic';
 import { Package, Truck, ArrowRightLeft, MapPin, Plus, Filter, LayoutGrid, ArrowRight, ChevronLeft, Pencil } from 'lucide-react';
 import { inventoryApi } from '../../../services/api';
 import Modal, { FormField } from '../../../components/Modal';
+import { useRefreshTick } from '@/lib/refresh';
 
 // Leaflet touches `window` at import time, so both map components can only
 // ever run client-side — ssr:false keeps them out of the server bundle
@@ -50,9 +51,10 @@ export default function WarehousePage() {
     }
   }
 
+  const refreshTick = useRefreshTick();
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [refreshTick]);
 
   async function openDetail(id: string) {
     setDetailId(id);

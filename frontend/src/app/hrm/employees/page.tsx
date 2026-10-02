@@ -10,6 +10,7 @@ import ExportButton from '../../../components/ExportButton';
 import Modal, { FormField } from '../../../components/Modal';
 import EmployeeDetailModal from '../../../components/modals/EmployeeDetailModal';
 import { useAuth } from '../../../context/AuthContext';
+import { useRefreshTick } from '@/lib/refresh';
 
 export default function EmployeeDirectory() {
   const { hasPermission, user } = useAuth();
@@ -98,7 +99,8 @@ export default function EmployeeDirectory() {
     }
   }
 
-  useEffect(() => { fetchAll(); }, []);
+  const refreshTick = useRefreshTick();
+  useEffect(() => { fetchAll(); }, [refreshTick]);
 
   // Separate active vs former
   const activeEmployees = employees.filter(e => e.status !== 'INACTIVE');

@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { onboardingApi } from '../../../services/api';
 import PageGuard from '../../../components/PageGuard';
+import { useRefreshTick } from '@/lib/refresh';
 
 type Tab = 'PENDING' | 'IMPORTED' | 'DISMISSED';
 const TYPE_LABEL: Record<string, string> = { FULL_TIME: 'Full Time', PART_TIME: 'Part Time', INTERN: 'Intern', CONTRACT: 'Contract' };
@@ -13,6 +14,14 @@ const MODE_LABEL: Record<string, string> = { ONSITE: 'Onsite', REMOTE: 'Remote',
 const inr = (n: number) => `₹${Number(n || 0).toLocaleString('en-IN')}`;
 const stamp = (v: any) => (v ? new Date(v).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—');
 const dmy = (iso?: string) => (iso && /^\d{4}-\d{2}-\d{2}$/.test(iso) ? `${iso.slice(8)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}` : '—');
+/** When the joiner filled the form, in the viewer's local time, e.g. "03/10/2026, 10:42". */
+const submitted = (iso?: string | null) => {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '';
+  const p2 = (n: number) => String(n).padStart(2, '0');
+  return `${p2(d.getDate())}/${p2(d.getMonth() + 1)}/${d.getFullYear()}, ${p2(d.getHours())}:${p2(d.getMinutes())}`;
+};
 
 export default function OnboardingPageGuarded() {
   return (
@@ -53,7 +62,8 @@ function OnboardingPage() {
     }
   }, [tab]);
 
-  useEffect(() => { load(); }, [load]);
+  const refreshTick = useRefreshTick();
+  useEffect(() => { load(refreshTick > 0); }, [load, refreshTick]);
   useEffect(() => {
     if (!notice) return;
     const t = setTimeout(() => setNotice(null), 9000);
@@ -165,7 +175,7 @@ function OnboardingPage() {
                   {rows.map((r) => (
                     <tr key={r.id}>
                       {waiting && <td><input type="checkbox" aria-label={`Select ${r.fullName}`} checked={selected.has(r.id)} onChange={() => toggle(r.id)} /></td>}
-                      <td><div className="ob-name">{r.fullName}</div><div className="ob-sub">{r.email}</div></td>
+                      <td><div className="ob-name">{r.fullName}</div><div className="ob-sub">{r.email}</div>{r.submittedAt && <div className="ob-sub" title="When they filled the form">Submitted {submitted(r.submittedAt)}</div>}</td>
                       <td className="ob-sub">
                         {r.hr?.empType ? <><b style={{ color: 'var(--color-text-primary)' }}>{TYPE_LABEL[r.hr.empType]}</b><br />{[r.hr.designation, r.hr.department].filter(Boolean).join(' · ') || '—'}</> : <span className="ob-todo">Not set yet</span>}
                       </td>

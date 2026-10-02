@@ -5,6 +5,7 @@ import { LifeBuoy, Plus, AlertCircle, Clock, CheckCircle2, Pencil, Trash2 } from
 import { crmApi } from '../../../services/api';
 import Modal, { FormField } from '../../../components/Modal';
 import { formatDate } from '../../../lib/date';
+import { useRefreshTick } from '@/lib/refresh';
 
 const emptyForm = { customerId: '', subject: '', priority: 'MEDIUM', description: '', startDate: '', endDate: '' };
 
@@ -36,7 +37,8 @@ export default function SupportTicketsPage() {
     }
   }
 
-  useEffect(() => { fetchAll(); }, []);
+  const refreshTick = useRefreshTick();
+  useEffect(() => { fetchAll(); }, [refreshTick]);
 
   async function handleCreateTicket() {
     if (!form.subject) { setFormError('Subject is required.'); return; }

@@ -6,6 +6,7 @@ import { financeApi } from '../../../services/api';
 import Modal, { FormField } from '../../../components/Modal';
 import { formatINR } from '../../../lib/currency';
 import { formatDate } from '../../../lib/date';
+import { useRefreshTick } from '@/lib/refresh';
 
 const emptyForm = { department: '', planned: '', actual: '', startDate: '', endDate: '' };
 
@@ -27,9 +28,10 @@ export default function BudgetsPage() {
     }
   }
 
+  const refreshTick = useRefreshTick();
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [refreshTick]);
 
   async function handleAdd() {
     if (!form.department || !form.planned || !form.startDate || !form.endDate) {

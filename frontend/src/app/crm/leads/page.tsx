@@ -5,6 +5,7 @@ import { Pencil, Trash2, ArrowRightCircle, Plus } from 'lucide-react';
 import { crmApi } from '../../../services/api';
 import Modal, { FormField } from '../../../components/Modal';
 import { formatDate } from '../../../lib/date';
+import { useRefreshTick } from '@/lib/refresh';
 
 const STATUS_BADGE: Record<string, string> = {
   NEW: 'badge-contacted', CONTACTED: 'badge-contacted', QUALIFIED: 'badge-warning',
@@ -35,7 +36,8 @@ export default function LeadsPage() {
     }
   }
 
-  useEffect(() => { fetchAll(); }, []);
+  const refreshTick = useRefreshTick();
+  useEffect(() => { fetchAll(); }, [refreshTick]);
 
   function openEdit(l: any) {
     setEditTarget(l);

@@ -105,6 +105,7 @@ export class AuthService {
         name: user.employee
           ? `${user.employee.firstName} ${user.employee.lastName}`
           : 'Admin User',
+        avatarUrl: user.employee?.avatarUrl ?? null,
       },
     };
   }

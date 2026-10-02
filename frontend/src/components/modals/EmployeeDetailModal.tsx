@@ -224,6 +224,8 @@ export default function EmployeeDetailModal({
     setError(null);
     try {
       await hrmApi.setAvatar(employeeId!, file);
+      // If this is the signed-in person's own record, the header photo updates too.
+      window.dispatchEvent(new Event('erp:profile-changed'));
       setToast('Photo updated');
       await load();
       onSaved?.();

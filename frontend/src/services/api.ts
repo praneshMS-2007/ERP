@@ -1,4 +1,12 @@
+import { announceDataChange } from '../lib/refresh';
+
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+
+/** A save went through — let other open ERP tabs know their data may be stale. */
+function noteWrite(options: RequestInit) {
+  const method = (options.method || 'GET').toUpperCase();
+  if (method !== 'GET' && method !== 'HEAD') announceDataChange();
+}
 
 /** Backend origin without the /api suffix — for building src URLs to static
  * files (avatars, offer letters) that the backend serves directly, not
@@ -42,6 +50,7 @@ async function fetchApi(endpoint: string, options: RequestInit = {}) {
       throw new Error(`API Error: ${res.status} ${res.statusText}`);
     }
 
+    noteWrite(options);
     return await res.json();
   } catch (error) {
     console.error(`Error fetching ${url}:`, error);
@@ -87,6 +96,7 @@ async function mutateApi(endpoint: string, options: RequestInit = {}) {
     throw new Error(detail || `Request failed (${res.status})`);
   }
 
+  noteWrite(options);
   return body;
 }
 

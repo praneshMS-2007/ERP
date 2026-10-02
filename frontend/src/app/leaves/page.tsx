@@ -5,6 +5,7 @@ import { CalendarDays, Plus } from 'lucide-react';
 import { selfApi } from '../../services/api';
 import Modal, { FormField } from '../../components/Modal';
 import { formatDate } from '../../lib/date';
+import { useRefreshTick } from '@/lib/refresh';
 
 const LEAVE_TYPE_LABELS: Record<string, string> = {
   SICK_LEAVE: 'Sick Leave',
@@ -44,7 +45,8 @@ export default function LeavesPage() {
     }
   }
 
-  useEffect(() => { fetchData(); }, []);
+  const refreshTick = useRefreshTick();
+  useEffect(() => { fetchData(); }, [refreshTick]);
 
   async function handleSubmit() {
     if (!form.startDate || !form.endDate || !form.reason.trim()) {

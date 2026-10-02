@@ -7,6 +7,7 @@ import { useAuth } from '../../../context/AuthContext';
 import Modal, { FormField } from '../../../components/Modal';
 import PageGuard from '../../../components/PageGuard';
 import InternConversionModal from '../../../components/modals/InternConversionModal';
+import { useRefreshTick } from '@/lib/refresh';
 
 interface InternCert {
   id: string;
@@ -92,9 +93,10 @@ function InternshipCertificatesPage() {
     }
   }
 
+  const refreshTick = useRefreshTick();
   useEffect(() => {
     if (authorised) load();
-  }, [authorised]);
+  }, [authorised, refreshTick]);
 
   function showToast(message: string, type: 'success' | 'error') {
     setToast({ message, type });

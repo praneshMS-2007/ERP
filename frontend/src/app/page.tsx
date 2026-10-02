@@ -26,6 +26,7 @@ import { useAuth } from '../context/AuthContext';
 import { formatDate } from '../lib/date';
 import EmployeeDashboard from '../components/dashboard/EmployeeDashboard';
 import { formatINRCompact } from '../lib/currency';
+import { useRefreshTick } from '@/lib/refresh';
 
 export default function DashboardPage() {
   const { user } = useAuth();
@@ -55,6 +56,7 @@ function ExecutiveDashboard() {
   const [totalStockUnits, setTotalStockUnits] = useState(0);
   const [recentActivity, setRecentActivity] = useState<any[]>([]);
 
+  const refreshTick = useRefreshTick();
   useEffect(() => {
     async function loadDashboard() {
       try {
@@ -170,7 +172,7 @@ function ExecutiveDashboard() {
       }
     }
     loadDashboard();
-  }, []);
+  }, [refreshTick]);
 
   const totalUnits = inventoryBreakdown.reduce((s, c) => s + c.count, 0);
 

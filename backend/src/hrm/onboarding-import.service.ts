@@ -106,6 +106,43 @@ function toIsoDate(text: string, raw?: unknown): string {
   return dt.toISOString().slice(0, 10);
 }
 
+/** Offset (ms) of `timeZone` from UTC at the given instant; 0 if the zone is unknown. */
+function zoneOffset(timeZone: string, at: number): number {
+  try {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone, hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit',
+    }).formatToParts(new Date(at));
+    const v = (type: string) => Number(parts.find((x) => x.type === type)?.value);
+    return Date.UTC(v('year'), v('month') - 1, v('day'), v('hour'), v('minute'), v('second')) - Math.floor(at / 1000) * 1000;
+  } catch {
+    return 0;
+  }
+}
+
+/**
+ * The form's "Timestamp" cell -> a real instant (ISO string), or ''.
+ * Sheets gives a serial number with a time fraction; CSV exports give "dd/mm/yyyy hh:mm:ss".
+ * Both are wall-clock times in the spreadsheet's zone, so they are shifted to UTC here.
+ */
+function toTimestamp(text: string, raw: unknown, timeZone: string): string {
+  let wall: number | null = null;
+  if (typeof raw === 'number' && raw > 10000 && raw < 80000) {
+    wall = Math.round((Date.UTC(1899, 11, 30) + raw * 86400000) / 1000) * 1000;
+  } else {
+    const t = s(text);
+    let m = t.match(/^(\d{4})-(\d{1,2})-(\d{1,2})(?:[ T](\d{1,2}):(\d{2})(?::(\d{2}))?)?/);
+    let y = 0, mo = 0, d = 0;
+    if (m) { y = +m[1]; mo = +m[2]; d = +m[3]; }
+    else if ((m = t.match(/^(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{4})(?:[ T](\d{1,2}):(\d{2})(?::(\d{2}))?)?/))) { d = +m[1]; mo = +m[2]; y = +m[3]; }
+    if (m && toIsoDate(`${y}-${mo}-${d}`)) wall = Date.UTC(y, mo - 1, d, +(m[4] ?? 0), +(m[5] ?? 0), +(m[6] ?? 0));
+  }
+  if (wall === null) return '';
+  // Shift wall time to UTC; a second pass settles the offset near daylight-saving changes.
+  let at = wall - zoneOffset(timeZone, wall);
+  at = wall - zoneOffset(timeZone, at);
+  return new Date(at).toISOString();
+}
+
 function normMobile(v: string): string {
   let digits = v.replace(/\D/g, '');
   if (digits.length === 12 && digits.startsWith('91')) digits = digits.slice(2);
@@ -270,6 +307,8 @@ export class OnboardingImportService {
     }
     const result = { rowsRead: table.rows.length, added: 0, alreadyReceived: 0, skippedBlank: 0, problems: [] as { row: number; message: string }[] };
     const googleReady = this.google.isConfigured;
+    // CSV/Excel exports carry no zone; Shuroq's forms run on Indian time unless told otherwise.
+    const timeZone = table.timeZone || process.env.GOOGLE_ONBOARDING_TIMEZONE?.trim() || 'Asia/Kolkata';
 
     for (let n = 0; n < table.rows.length; n++) {
       const row = table.rows[n];
@@ -304,7 +343,7 @@ export class OnboardingImportService {
           qualification: cell('qualification'), institution: cell('institution'), yearOfPassing: cell('yearOfPassing'),
           emergencyName: cell('emergencyName'), emergencyPhone: normMobile(cell('emergencyPhone')), emergencyRelation: cell('emergencyRelation'),
           joiningDate: joining, consent: cell('consent').length > 0 && !/^(no|false|0)$/i.test(cell('consent')),
-          timestamp: idx.timestamp === undefined ? '' : toIsoDate(row.text[idx.timestamp], row.raw[idx.timestamp]) || s(row.text[idx.timestamp]),
+          timestamp: idx.timestamp === undefined ? '' : toTimestamp(row.text[idx.timestamp], row.raw[idx.timestamp], timeZone) || s(row.text[idx.timestamp]),
           hr: {
             empType: '', designation: '', department: '', workMode: '', reportingManagerId: '', joinDate: joining, engagementEndDate: '',
             isPaid: false, basic: '', hra: '', specialAllowance: '', username: '',
@@ -328,7 +367,7 @@ export class OnboardingImportService {
         await this.prisma.onboardingSubmission.create({
           data: {
             id, sourceKey, source, fullName, email: email || null,
-            submittedAt: payload.timestamp && /^\d{4}-\d{2}-\d{2}$/.test(payload.timestamp) ? new Date(payload.timestamp) : null,
+            submittedAt: /^\d{4}-\d{2}-\d{2}T/.test(payload.timestamp) ? new Date(payload.timestamp) : null,
             payloadEnc: encryptField(JSON.stringify(payload)),
             files: files as any,
           },

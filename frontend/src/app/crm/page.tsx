@@ -11,6 +11,7 @@ import ExportButton from '../../components/ExportButton';
 import Modal, { FormField } from '../../components/Modal';
 import { formatINRCompact } from '../../lib/currency';
 import { formatDate } from '../../lib/date';
+import { useRefreshTick } from '@/lib/refresh';
 
 export default function CRMPage() {
   const [leads, setLeads] = useState<any[]>([]);
@@ -51,7 +52,8 @@ export default function CRMPage() {
     } catch (e) { console.error('CRM fetch error', e); }
   }
 
-  useEffect(() => { fetchAll(); }, []);
+  const refreshTick = useRefreshTick();
+  useEffect(() => { fetchAll(); }, [refreshTick]);
 
   // Pipeline values from real opportunities
   const stageValues: Record<string, { value: number; count: number }> = {};

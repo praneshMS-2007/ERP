@@ -17,6 +17,8 @@ interface User {
   permissions: Permission[];
   /** True while the account still has a generated temporary password. */
   mustChangePassword?: boolean;
+  /** Profile photo path on the API server (e.g. /uploads/avatars/x.jpg), if the employee has one. */
+  avatarUrl?: string | null;
 }
 
 interface AuthContextType {
@@ -28,6 +30,8 @@ interface AuthContextType {
   logout: () => void;
   /** Called once the temporary password has been replaced. */
   completePasswordChange: () => void;
+  /** Re-reads name and photo from the server (e.g. after a profile photo changes). */
+  refreshUser: () => Promise<void>;
   hasPermission: (module: string, action?: string) => boolean;
 }
 
@@ -59,14 +63,46 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setIsLoading(false);
   }, []);
 
+  const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+
+  // The stored user is a snapshot from sign-in. Refresh the parts HR can change
+  // later (name, photo) so the header doesn't show stale details until next login.
+  const refreshUser = useCallback(async () => {
+    const t = localStorage.getItem('token');
+    if (!t) return;
+    try {
+      const res = await fetch(`${API_BASE}/auth/me`, { headers: { Authorization: `Bearer ${t}` } });
+      if (!res.ok) return; // expiry is handled by the regular API layer
+      const me = await res.json();
+      setUser((prev) => {
+        if (!prev) return prev;
+        const next = {
+          ...prev,
+          name: me.employee ? `${me.employee.firstName} ${me.employee.lastName}` : prev.name,
+          avatarUrl: me.employee?.avatarUrl ?? null,
+        };
+        localStorage.setItem('user', JSON.stringify(next));
+        return next;
+      });
+    } catch {
+      // offline or server down — keep the stored snapshot
+    }
+  }, [API_BASE]);
+
+  useEffect(() => {
+    if (!token) return;
+    refreshUser();
+    const onChange = () => { refreshUser(); };
+    window.addEventListener('erp:profile-changed', onChange);
+    return () => window.removeEventListener('erp:profile-changed', onChange);
+  }, [token, refreshUser]);
+
   // Redirect logic
   useEffect(() => {
     if (!isLoading && !user && pathname !== '/login') {
       router.push('/login');
     }
   }, [isLoading, user, pathname, router]);
-
-  const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
 
   const login = useCallback(async (email: string, password: string) => {
     const res = await fetch(`${API_BASE}/auth/login`, {
@@ -140,6 +176,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         login,
         logout,
         completePasswordChange,
+        refreshUser,
         hasPermission,
       }}
     >

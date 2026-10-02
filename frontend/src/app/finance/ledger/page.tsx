@@ -7,6 +7,7 @@ import ExportButton from '../../../components/ExportButton';
 import Modal, { FormField } from '../../../components/Modal';
 import { formatINR } from '../../../lib/currency';
 import { formatDate } from '../../../lib/date';
+import { useRefreshTick } from '@/lib/refresh';
 
 export default function LedgerPage() {
   const [activeTab, setActiveTab] = useState<'ledger' | 'taxes'>('ledger');
@@ -28,9 +29,10 @@ export default function LedgerPage() {
     }
   }
 
+  const refreshTick = useRefreshTick();
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [refreshTick]);
 
   async function handleAddEntry() {
     if (!form.description || !form.amount) return;

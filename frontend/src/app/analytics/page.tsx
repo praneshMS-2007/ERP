@@ -43,6 +43,7 @@ import {
 } from 'lucide-react';
 import { analyticsApi, AuditLogFilterParams } from '@/services/api';
 import { BarChart, DoughnutChart } from '@/components/dashboard/Charts';
+import { useRefreshTick } from '@/lib/refresh';
 
 interface AuditLogItem {
   id: string;
@@ -309,9 +310,10 @@ export default function AnalyticsPage() {
     limit,
   ]);
 
+  const refreshTick = useRefreshTick();
   useEffect(() => {
     fetchData();
-  }, [fetchData]);
+  }, [fetchData, refreshTick]);
 
   const handleRefresh = () => {
     setRefreshing(true);

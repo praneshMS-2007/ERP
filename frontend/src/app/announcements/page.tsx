@@ -5,6 +5,7 @@ import { Plus, Trash2, Upload, X, Megaphone } from 'lucide-react';
 import { announcementApi, uploadApi } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import Modal, { FormField } from '../../components/Modal';
+import { useRefreshTick } from '@/lib/refresh';
 
 function recipientLabel(u: any) {
   if (u.employee) return `${u.employee.firstName} ${u.employee.lastName}`;
@@ -40,7 +41,8 @@ export default function AnnouncementsPage() {
     }
   }
 
-  useEffect(() => { fetchData(); }, []);
+  const refreshTick = useRefreshTick();
+  useEffect(() => { fetchData(); }, [refreshTick]);
   useEffect(() => { feedEndRef.current?.scrollIntoView({ block: 'nearest' }); }, [announcements.length]);
 
   function openCompose() {

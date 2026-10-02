@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Send, FileText, Award, Wallet, X, RefreshCw, Trash2, CheckCircle2, AlertCircle, ChevronRight, Settings2, Mail } from 'lucide-react';
 import { lettersApi } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
+import { useRefreshTick } from '@/lib/refresh';
 
 type Status = 'DRAFT' | 'FAILED' | 'SENT' | 'DISCARDED';
 type Kind = 'OFFER_LETTER' | 'COMPLETION_CERTIFICATE' | 'PAYSLIP';
@@ -53,7 +54,8 @@ export default function LetterOutboxPage() {
     }
   }, [tab]);
 
-  useEffect(() => { load(); }, [load]);
+  const refreshTick = useRefreshTick();
+  useEffect(() => { load(); }, [load, refreshTick]);
   useEffect(() => { lettersApi.settings().then(setSettings).catch(() => setSettings(null)); }, []);
   useEffect(() => {
     if (!notice) return;

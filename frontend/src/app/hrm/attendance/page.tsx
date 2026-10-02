@@ -11,6 +11,7 @@ import Modal, { FormField } from '../../../components/Modal';
 import AttendanceCalendar from '../../../components/AttendanceCalendar';
 import AttendanceExportButton from '../../../components/AttendanceExportButton';
 import { formatDate } from '../../../lib/date';
+import { useRefreshTick } from '@/lib/refresh';
 
 export default function AttendancePage() {
   const [employees, setEmployees] = useState<any[]>([]);
@@ -48,7 +49,8 @@ export default function AttendancePage() {
     }
   }
 
-  useEffect(() => { fetchData(); }, []);
+  const refreshTick = useRefreshTick();
+  useEffect(() => { fetchData(); }, [refreshTick]);
 
   async function handleCreateHoliday() {
     if (!holidayForm.date || !holidayForm.name.trim()) {
