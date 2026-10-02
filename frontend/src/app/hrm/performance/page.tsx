@@ -4,8 +4,17 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { hrmApi } from '../../../services/api';
 import Modal from '../../../components/Modal';
+import PageGuard from '../../../components/PageGuard';
 
-export default function HRMPerformance() {
+export default function HRMPerformanceGuarded() {
+  return (
+    <PageGuard module="HR" action="WRITE">
+      <HRMPerformance />
+    </PageGuard>
+  );
+}
+
+function HRMPerformance() {
   const [reviews, setReviews] = useState<any[]>([]);
   const [employees, setEmployees] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -46,12 +55,10 @@ export default function HRMPerformance() {
       alert('Please select an employee and provide a review.');
       return;
     }
-    const reviewerId = form.reviewerId || (employees.length > 0 ? employees[0].id : form.employeeId);
 
     try {
       await hrmApi.createPerformanceReview({
         employeeId: form.employeeId,
-        reviewerId,
         quarter: form.quarter,
         rating: parseFloat(form.rating) || 4.5,
         goals: form.goals,
@@ -60,8 +67,9 @@ export default function HRMPerformance() {
       setShowModal(false);
       setForm({ employeeId: '', reviewerId: '', quarter: 'Q2 2026', rating: '4.5', goals: '', review: '' });
       loadData();
-    } catch (e) {
+    } catch (e: any) {
       console.error('Failed to create review', e);
+      alert(e?.message || 'Could not save this review.');
     }
   }
 

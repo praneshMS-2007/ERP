@@ -6,6 +6,7 @@ import {
   Eye, EyeOff, Upload, Download, Trash2, Laptop, Mail,
 } from 'lucide-react';
 import { hrmApi, API_ORIGIN } from '../../services/api';
+import EmployeeHistoryTimeline from './EmployeeHistoryTimeline';
 
 interface Props {
   employeeId: string | null;
@@ -15,7 +16,7 @@ interface Props {
   designations: any[];
 }
 
-type Section = 'personal' | 'employment' | 'background' | 'statutory' | 'compensation' | 'it-access' | 'documents';
+type Section = 'personal' | 'employment' | 'background' | 'statutory' | 'compensation' | 'it-access' | 'documents' | 'history';
 
 /** PAN/Aadhaar/UAN/PF/ESIC — the encrypted-at-rest fields, masked by default in the UI. */
 type IdentityFieldKey = 'pan' | 'aadhaarNumber' | 'uanNumber' | 'pfNumber' | 'esicNumber';
@@ -348,6 +349,8 @@ export default function EmployeeDetailModal({
     { id: 'compensation', label: 'Compensation' },
     { id: 'it-access', label: 'IT Access' },
     { id: 'documents', label: 'Documents' },
+    // Career timeline — HR/Admin only (the endpoint enforces the same rule).
+    ...(emp?.canViewFullProfile ? [{ id: 'history' as Section, label: 'History' }] : []),
   ];
 
   return (
@@ -385,6 +388,11 @@ export default function EmployeeDetailModal({
               </h2>
               <div className="edm-sub">
                 <span className="edm-code">{emp?.empCode ?? '—'}</span>
+                {emp?.convertedFromInternAt && (
+                  <span title={`Hired from internship on ${formatDate(emp.convertedFromInternAt)}`} style={{ fontSize: 11, fontWeight: 700, color: '#6d28d9', background: 'rgba(124,58,237,.1)', padding: '1px 8px', borderRadius: 999 }}>
+                    Ex-intern
+                  </span>
+                )}
                 {emp?.designation?.title && <span>· {emp.designation.title}</span>}
                 {emp?.department?.name && <span>· {emp.department.name}</span>}
               </div>
@@ -457,6 +465,10 @@ export default function EmployeeDetailModal({
             <p className="edm-dim">No record to show.</p>
           ) : (
             <>
+              {section === 'history' && emp.canViewFullProfile && (
+                <EmployeeHistoryTimeline employeeId={employeeId} refreshKey={emp.updatedAt} />
+              )}
+
               {section === 'personal' && (
                 !emp.canViewFullProfile ? (
                   <div className="edm-locked">

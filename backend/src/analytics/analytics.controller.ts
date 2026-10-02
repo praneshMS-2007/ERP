@@ -1,7 +1,8 @@
 import { Controller, Get, Query, Res, Header } from '@nestjs/common';
 import type { Response } from 'express';
 import { AnalyticsService, AuditLogFilterDto } from './analytics.service';
-import { RequirePermission, RequireRole } from '../auth/decorators';
+import { RequirePermission, RequireRole, CurrentUser } from '../auth/decorators';
+import type { AuthenticatedUser } from '../auth/permission.util';
 
 @Controller('analytics')
 export class AnalyticsController {
@@ -50,18 +51,21 @@ export class AnalyticsController {
 
   @Get('dashboard')
   @RequirePermission('ANALYTICS', 'READ')
-  getDashboardMetrics() {
-    return this.analyticsService.getDashboardMetrics();
+  getDashboardMetrics(@CurrentUser() user: AuthenticatedUser) {
+    return this.analyticsService.getDashboardMetrics(user);
   }
 
+  // Monthly income is Finance data — ANALYTICS:READ alone (held by HR, Sales
+  // and Inventory managers) must not be enough to read it.
   @Get('revenue-trend')
-  @RequirePermission('ANALYTICS', 'READ')
+  @RequirePermission('FINANCE', 'READ')
   getRevenueTrend() {
     return this.analyticsService.getRevenueTrend();
   }
 
+  // Headcount and leaver figures are HR data, same reasoning as above.
   @Get('retention')
-  @RequirePermission('ANALYTICS', 'READ')
+  @RequirePermission('HR', 'READ')
   getRetention() {
     return this.analyticsService.getRetention();
   }

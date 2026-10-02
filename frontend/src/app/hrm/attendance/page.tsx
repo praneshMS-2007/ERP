@@ -98,8 +98,9 @@ export default function AttendancePage() {
         checkIn: status === 'PRESENT' || status === 'LATE' || status === 'HALF_DAY' ? new Date().toISOString() : null,
       });
       fetchData();
-    } catch (e) {
+    } catch (e: any) {
       console.error('Failed to mark attendance:', e);
+      alert(e?.message || 'Could not mark attendance.');
     }
   }
 

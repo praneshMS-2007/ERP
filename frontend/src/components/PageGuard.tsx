@@ -25,17 +25,19 @@ export default function PageGuard({
 
   if (isLoading) return null;
 
-  if (!hasPermission(module, action)) {
-    return (
-      <div className="fade-in" style={{ padding: '60px 20px', textAlign: 'center' }}>
-        <ShieldAlert size={40} style={{ color: 'var(--color-text-muted)', marginBottom: 16 }} />
-        <h2 style={{ fontSize: '18px', fontWeight: 700, marginBottom: 8 }}>You don&apos;t have access to this page</h2>
-        <p style={{ fontSize: '14px', color: 'var(--color-text-muted)' }}>
-          Contact an administrator if you believe this is a mistake.
-        </p>
-      </div>
-    );
-  }
+  if (!hasPermission(module, action)) return <AccessDenied />;
 
   return <>{children}</>;
+}
+
+export function AccessDenied() {
+  return (
+    <div className="fade-in" style={{ padding: '60px 20px', textAlign: 'center' }}>
+      <ShieldAlert size={40} style={{ color: 'var(--color-text-muted)', marginBottom: 16 }} />
+      <h2 style={{ fontSize: '18px', fontWeight: 700, marginBottom: 8 }}>You don&apos;t have access to this page</h2>
+      <p style={{ fontSize: '14px', color: 'var(--color-text-muted)' }}>
+        Contact an administrator if you believe this is a mistake.
+      </p>
+    </div>
+  );
 }

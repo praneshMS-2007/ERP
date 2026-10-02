@@ -216,11 +216,11 @@ export const hrmApi = {
   deletePayroll: (id: string) => mutateApi(`/hrm/payrolls/${id}`, { method: 'DELETE' }),
   updatePayrollStatus: (id: string, status: string, reason?: string) =>
     mutateApi(`/hrm/payrolls/${id}/status`, { method: 'PUT', body: JSON.stringify({ status, reason }) }),
-  markAttendance: (data: any) => fetchApi('/hrm/attendance', { method: 'POST', body: JSON.stringify(data) }),
-  requestLeave: (data: any) => fetchApi('/hrm/leaves', { method: 'POST', body: JSON.stringify(data) }),
-  updateLeaveStatus: (id: string, status: string) => fetchApi(`/hrm/leaves/${id}/status`, { method: 'PUT', body: JSON.stringify({ status }) }),
+  markAttendance: (data: any) => mutateApi('/hrm/attendance', { method: 'POST', body: JSON.stringify(data) }),
+  requestLeave: (data: any) => mutateApi('/hrm/leaves', { method: 'POST', body: JSON.stringify(data) }),
+  updateLeaveStatus: (id: string, status: string) => mutateApi(`/hrm/leaves/${id}/status`, { method: 'PUT', body: JSON.stringify({ status }) }),
   getPerformanceReviews: () => fetchApi('/hrm/performance-reviews'),
-  createPerformanceReview: (data: any) => fetchApi('/hrm/performance-reviews', { method: 'POST', body: JSON.stringify(data) }),
+  createPerformanceReview: (data: any) => mutateApi('/hrm/performance-reviews', { method: 'POST', body: JSON.stringify(data) }),
   getAttendanceStats: (date: string) => fetchApi(`/hrm/attendance/stats?date=${date}`),
   getAttendanceTrend: (year: number) => fetchApi(`/hrm/attendance/trend?year=${year}`),
   getEmployeeAttendanceCalendar: (employeeId: string, year: number, month: number) =>
@@ -235,6 +235,10 @@ export const hrmApi = {
   getInternshipCertificates: () => fetchApi('/hrm/internship-certificates'),
   approveInternshipCertificate: (id: string) => mutateApi(`/hrm/internship-certificates/${id}/approve`, { method: 'POST' }),
   rejectInternshipCertificate: (id: string) => mutateApi(`/hrm/internship-certificates/${id}/reject`, { method: 'POST' }),
+  getConversionDraft: (id: string) => mutateApi(`/hrm/internship-certificates/${id}/conversion`),
+  convertIntern: (id: string, data: any) =>
+    mutateApi(`/hrm/internship-certificates/${id}/convert`, { method: 'POST', body: JSON.stringify(data) }),
+  getEmployeeHistory: (id: string) => mutateApi(`/hrm/employees/${id}/history`),
   downloadInternshipCertificate: async (employeeIdOrDocId: string, fileName?: string) => {
     const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
     let res = await fetch(`${API_BASE}/hrm/internship-certificates/${employeeIdOrDocId}/download`, {
@@ -274,11 +278,12 @@ export const selfApi = {
   getLeaveBalance: () => mutateApi('/self/leaves/balance'),
   getAttendance: () => fetchApi('/self/attendance'),
   getAttendanceCalendar: (year: number, month: number) => mutateApi(`/self/attendance/calendar?year=${year}&month=${month}`),
-  clockIn: () => fetchApi('/self/attendance/clock-in', { method: 'POST' }),
+  clockIn: () => mutateApi('/self/attendance/clock-in', { method: 'POST' }),
   getProjects: () => fetchApi('/self/projects'),
   getTasks: () => fetchApi('/self/tasks'),
   getAnnouncements: () => fetchApi('/self/announcements'),
   getPayroll: () => mutateApi('/self/payroll'),
+  getHistory: () => mutateApi('/self/history'),
 };
 
 export const inventoryApi = {
@@ -286,7 +291,7 @@ export const inventoryApi = {
   getProduct: (id: string) => fetchApi(`/inventory/products/${id}`),
   getStockAlerts: () => fetchApi('/inventory/stock-alerts'),
   getCategories: () => fetchApi('/inventory/categories'),
-  createCategory: (data: any) => fetchApi('/inventory/categories', { method: 'POST', body: JSON.stringify(data) }),
+  createCategory: (data: any) => mutateApi('/inventory/categories', { method: 'POST', body: JSON.stringify(data) }),
   getSuppliers: () => fetchApi('/inventory/suppliers'),
   getWarehouses: () => fetchApi('/inventory/warehouses'),
   getWarehouseDetail: (id: string) => fetchApi(`/inventory/warehouses/${id}`),
@@ -299,7 +304,7 @@ export const inventoryApi = {
     mutateApi(`/inventory/products/${id}/sell`, { method: 'POST', body: JSON.stringify(data) }),
   addProductStock: (id: string, data: { warehouseId: string; quantity: number }) =>
     mutateApi(`/inventory/products/${id}/add-stock`, { method: 'POST', body: JSON.stringify(data) }),
-  createSupplier: (data: any) => fetchApi('/inventory/suppliers', { method: 'POST', body: JSON.stringify(data) }),
+  createSupplier: (data: any) => mutateApi('/inventory/suppliers', { method: 'POST', body: JSON.stringify(data) }),
   createPurchaseOrder: (data: any) => mutateApi('/inventory/purchase-orders', { method: 'POST', body: JSON.stringify(data) }),
   createWarehouse: (data: any) => mutateApi('/inventory/warehouses', { method: 'POST', body: JSON.stringify(data) }),
   updateWarehouse: (id: string, data: any) => mutateApi(`/inventory/warehouses/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
@@ -310,7 +315,7 @@ export const inventoryApi = {
   getProductAdditionsHistory: () => fetchApi('/inventory/product-additions'),
   createSalesOrder: (data: any) => mutateApi('/inventory/sales-orders', { method: 'POST', body: JSON.stringify(data) }),
   updateSalesOrderStatus: (id: string, status: string) => mutateApi(`/inventory/sales-orders/${id}/status`, { method: 'PUT', body: JSON.stringify({ status }) }),
-  updatePurchaseOrderStatus: (id: string, status: string) => fetchApi(`/inventory/purchase-orders/${id}/status`, { method: 'PUT', body: JSON.stringify({ status }) }),
+  updatePurchaseOrderStatus: (id: string, status: string) => mutateApi(`/inventory/purchase-orders/${id}/status`, { method: 'PUT', body: JSON.stringify({ status }) }),
 };
 
 export const rawMaterialApi = {
@@ -583,5 +588,5 @@ export const settingsApi = {
   // happen through HR/Admin's Employee Directory (hrmApi.updateEmployee) or
   // password reset flow (hrmApi.resetUserPassword + the /portal inbox).
   getSessions: () => fetchApi('/auth/sessions'),
-  revokeSession: (id: string) => fetchApi(`/auth/sessions/${id}`, { method: 'DELETE' }),
+  revokeSession: (id: string) => mutateApi(`/auth/sessions/${id}`, { method: 'DELETE' }),
 };

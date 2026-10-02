@@ -3,13 +3,14 @@
 import React, { useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { AuthProvider, useAuth } from '@/context/AuthContext';
-import Sidebar from '@/components/layout/Sidebar';
+import Sidebar, { canAccessPath } from '@/components/layout/Sidebar';
+import { AccessDenied } from '@/components/PageGuard';
 import Topbar from '@/components/layout/Topbar';
 
 function AuthenticatedLayout({ children }: { children: React.ReactNode }) {
   const [isOpen, setIsOpen] = useState(true);
   const pathname = usePathname();
-  const { isAuthenticated, isLoading } = useAuth();
+  const { user, isAuthenticated, isLoading, hasPermission } = useAuth();
 
   // Show login page without sidebar
   if (pathname === '/login') {
@@ -38,7 +39,7 @@ function AuthenticatedLayout({ children }: { children: React.ReactNode }) {
       <div className={`main-area ${!isOpen ? 'sidebar-collapsed' : ''}`}>
         <Topbar />
         <main className="content">
-          {children}
+          {canAccessPath(pathname, user?.role, hasPermission) ? children : <AccessDenied />}
         </main>
       </div>
     </div>

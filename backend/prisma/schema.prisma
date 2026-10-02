@@ -261,6 +261,16 @@ model Employee {
   internshipCertSentAt     DateTime? @map("internship_cert_sent_at")
   internshipCertStatus     String?   @map("internship_cert_status") // "APPROVED" | "REJECTED" | null (pending)
 
+  // Intern → employee conversion. convertedFromInternAt is the date the new
+  // part-time/full-time role starts; internshipEndDate keeps the internship's
+  // own end date, since engagementEndDate is reused for the new role (null for
+  // full-time, an optional contract end for part-time). Internship start stays
+  // joinDate — the person's company tenure begins there either way.
+  convertedFromInternAt DateTime? @map("converted_from_intern_at")
+  internshipEndDate     DateTime? @map("internship_end_date")
+
+  events EmployeeEvent[]
+
   departmentId String     @map("department_id")
   department   Department @relation(fields: [departmentId], references: [id])
 
@@ -288,6 +298,47 @@ model Employee {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   @@map("employees")
+}
+
+enum EmployeeEventType {
+  JOINED
+  OFFER_LETTER_ISSUED
+  ROLE_CONVERTED
+  EMPLOYMENT_TYPE_CHANGED
+  DESIGNATION_CHANGED
+  DEPARTMENT_CHANGED
+  COMPENSATION_CHANGED
+  STATUS_CHANGED
+  WORK_MODE_CHANGED
+  REPORTING_CHANGED
+  ENGAGEMENT_DATES_CHANGED
+  INTERNSHIP_CERTIFICATE_ISSUED
+  INTERNSHIP_CERTIFICATE_REJECTED
+  EXITED
+}
+
+/// One entry in an employee's career history — written by the code paths that
+/// actually change the record (onboarding, edits, salary, certificates,
+/// conversion, removal), never typed in by hand.
+model EmployeeEvent {
+  id            String            @id @default(uuid())
+  employeeId    String            @map("employee_id")
+  employee      Employee          @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  type          EmployeeEventType
+  title         String
+  effectiveDate DateTime          @map("effective_date")
+  // [{ field, label, from, to, sensitive? }] — `sensitive` marks compensation
+  // values, which are blanked for viewers who may not see pay.
+  changes       Json?
+  documentId    String?           @map("document_id")
+  document      Document?         @relation(fields: [documentId], references: [id], onDelete: SetNull)
+  actorUserId   String?           @map("actor_user_id")
+  actorName     String?           @map("actor_name")
+  note          String?
+  createdAt     DateTime          @default(now()) @map("created_at")
+
+  @@index([employeeId, effectiveDate])
+  @@map("employee_events")
 }
 
 model Department {
@@ -907,6 +958,7 @@ model Document {
   payroll           Payroll?
   offerLetterFor    Employee? @relation(name: "EmployeeOfferLetter")
   internshipCertFor Employee? @relation(name: "EmployeeInternshipCert")
+  employeeEvents    EmployeeEvent[]
 
   @@index([ownerUserId, kind])
   @@map("documents")

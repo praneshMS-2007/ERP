@@ -2,6 +2,7 @@ import { Body, Controller, Get, Post, Query } from '@nestjs/common';
 import { HrmService } from './hrm.service';
 import { RequirePermission, CurrentUser } from '../auth/decorators';
 import type { RequestUser } from './hrm.service';
+import { EmployeeHistoryService } from './employee-history.service';
 
 /**
  * Self-service routes — every one derives the employee from the caller's
@@ -12,7 +13,16 @@ import type { RequestUser } from './hrm.service';
  */
 @Controller('self')
 export class SelfController {
-  constructor(private readonly hrmService: HrmService) {}
+  constructor(
+    private readonly hrmService: HrmService,
+    private readonly historyService: EmployeeHistoryService,
+  ) {}
+
+  @Get('history')
+  @RequirePermission('SELF', 'READ')
+  getHistory(@CurrentUser() user: RequestUser) {
+    return this.historyService.getOwnHistory(user);
+  }
 
   @Get('profile')
   @RequirePermission('SELF', 'READ')

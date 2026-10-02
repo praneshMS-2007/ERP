@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { selfApi } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import { formatDate } from '../../lib/date';
+import EmployeeHistoryTimeline from '../modals/EmployeeHistoryTimeline';
 
 const STATUS_LABEL: Record<string, string> = {
   PRESENT: 'Present', ABSENT: 'Absent', HALF_DAY: 'Half Day', LATE: 'Present',
@@ -140,6 +141,14 @@ export default function EmployeeDashboard() {
             </Link>
           ))}
         </div>
+      </div>
+
+      <div className="card" style={{ marginTop: '24px' }}>
+        <h3 style={{ fontSize: '16px', fontWeight: 700, marginBottom: '4px' }}>My journey at Shuroq</h3>
+        <p style={{ fontSize: '12.5px', color: 'var(--color-text-muted)', margin: '0 0 14px' }}>
+          Your role, pay and documents over time — recorded automatically whenever HR updates your record.
+        </p>
+        <EmployeeHistoryTimeline self />
       </div>
 
       <Link href="/ai" className="ai-fab" aria-label="AI Assistant" style={{ textDecoration: 'none', color: 'white' }}>

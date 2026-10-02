@@ -163,8 +163,16 @@ export class ProjectsService {
       },
     });
     if (!rawProject) throw new NotFoundException('Project not found');
-    const project = await this.syncStatus(rawProject);
     const employeeId = await this.resolveEmployeeId(viewer);
+    // The list endpoint already hides projects a person isn't on; opening one
+    // by its id must not be a way around that.
+    if (!canStaffProjects(viewer)) {
+      const staffed =
+        !!employeeId &&
+        (rawProject.projectManagerId === employeeId || rawProject.assignments.some((a) => a.employeeId === employeeId));
+      if (!staffed) throw new ForbiddenException('You are not part of this project.');
+    }
+    const project = await this.syncStatus(rawProject);
     const isManager = await this.canManageProject(viewer, id);
 
     // A plain team member only ever receives their OWN tasks in the API
@@ -318,7 +326,10 @@ export class ProjectsService {
     });
   }
 
-  async getProjectStaff(id: string) {
+  async getProjectStaff(id: string, viewer?: AuthenticatedUser) {
+    if (!canStaffProjects(viewer) && !(await this.isStaffedOnProject(viewer, id))) {
+      throw new ForbiddenException('Only people staffed on this project can see its team.');
+    }
     const project = await this.prisma.project.findUnique({
       where: { id },
       include: {
@@ -410,8 +421,15 @@ export class ProjectsService {
 
   // ========== TASKS ==========
 
-  async getTasks(projectId?: string) {
-    const where = projectId ? { projectId } : {};
+  async getTasks(projectId?: string, viewer?: AuthenticatedUser) {
+    const where: Prisma.TaskWhereInput = projectId ? { projectId } : {};
+    // HR/Admin see every task. A project's manager sees that project's tasks;
+    // everyone else only the tasks assigned to them — never a colleague's.
+    if (!canStaffProjects(viewer)) {
+      const employeeId = await this.resolveEmployeeId(viewer);
+      if (!employeeId) return [];
+      where.AND = [{ OR: [{ assignedEmployeeId: employeeId }, { project: { projectManagerId: employeeId } }] }];
+    }
     return this.prisma.task.findMany({
       where,
       include: {

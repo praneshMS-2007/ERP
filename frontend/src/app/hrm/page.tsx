@@ -8,8 +8,11 @@ import {
 import { hrmApi, exportApi } from '../../services/api';
 import ExportButton from '../../components/ExportButton';
 import { formatDate } from '../../lib/date';
+import { useAuth } from '../../context/AuthContext';
 
 export default function HRManagement() {
+  const { hasPermission } = useAuth();
+  const canExport = hasPermission('HR', 'WRITE');
   // Core data
   const [employees, setEmployees] = useState<any[]>([]);
   const [allLeaves, setAllLeaves] = useState<any[]>([]);
@@ -172,7 +175,7 @@ export default function HRManagement() {
           <p>Monitor workforce performance, attendance, and organizational growth.</p>
         </div>
         <div className="page-header-actions">
-          <ExportButton onExport={(format) => exportApi.exportEmployees(format)} label="Export Employees" />
+          {canExport && <ExportButton onExport={(format) => exportApi.exportEmployees(format)} label="Export Employees" />}
         </div>
       </div>
 

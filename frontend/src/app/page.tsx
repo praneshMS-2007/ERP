@@ -34,6 +34,13 @@ export default function DashboardPage() {
 }
 
 function ExecutiveDashboard() {
+  const { user, hasPermission } = useAuth();
+  const canHR = hasPermission('HR');
+  const canProjects = hasPermission('PROJECTS');
+  const canInventory = hasPermission('INVENTORY');
+  const canFinance = hasPermission('FINANCE');
+  const canCRM = hasPermission('CRM');
+  const isSuperAdmin = user?.role === 'SUPER_ADMIN';
   const [kpis, setKpis] = useState({
     totalEmployees: 0,
     activeProjects: 0,
@@ -45,17 +52,20 @@ function ExecutiveDashboard() {
   const [revenueLabels, setRevenueLabels] = useState<string[]>([]);
   const [deptPerformance, setDeptPerformance] = useState<{ dept: string; pct: number; color: string }[]>([]);
   const [inventoryBreakdown, setInventoryBreakdown] = useState<{ label: string; count: number; color: string }[]>([]);
+  const [totalStockUnits, setTotalStockUnits] = useState(0);
   const [recentActivity, setRecentActivity] = useState<any[]>([]);
 
   useEffect(() => {
     async function loadDashboard() {
       try {
+        // Only ask for what this role may read - a refused call comes back empty,
+        // which the cards below would otherwise show as a real zero.
         const [employees, projects, products, financeDash, revenueTrend] = await Promise.all([
-          hrmApi.getEmployees(),
-          projectApi.getProjects(),
-          inventoryApi.getProducts(),
-          financeApi.getDashboardMetrics(),
-          analyticsApi.getRevenueTrend(),
+          canHR ? hrmApi.getEmployees() : null,
+          canProjects ? projectApi.getProjects() : null,
+          canInventory ? inventoryApi.getProducts() : null,
+          canFinance ? financeApi.getDashboardMetrics() : null,
+          canFinance ? analyticsApi.getRevenueTrend() : null,
         ]);
 
         // KPIs from real data
@@ -74,7 +84,11 @@ function ExecutiveDashboard() {
 
         // Revenue YTD trend
         const totalRevenue = financeDash?.totalRevenue || 0;
-        const revGrowthPct = totalRevenue > 0 ? Math.min(15, Math.max(3, Math.round((totalRevenue / 50000) * 10) / 10)) : 0;
+        // Real month-over-month change; null when last month had no income to compare against.
+        const trendData: number[] = Array.isArray(revenueTrend?.data) ? revenueTrend.data : [];
+        const thisMonthRev = trendData[trendData.length - 1] ?? 0;
+        const lastMonthRev = trendData[trendData.length - 2] ?? 0;
+        const revGrowthPct = lastMonthRev > 0 ? Math.round(((thisMonthRev - lastMonthRev) / lastMonthRev) * 100) : null;
 
         setKpis({
           totalEmployees: empList.length,
@@ -87,25 +101,20 @@ function ExecutiveDashboard() {
         } as any);
 
         // Revenue trend chart
-        if (Array.isArray(revenueTrend) && revenueTrend.length > 0) {
-          setRevenueLabels(revenueTrend.map((r: any) => r.month || r.label || ''));
-          setRevenueData(revenueTrend.map((r: any) => r.revenue || r.value || 0));
-        } else {
-          // Fallback: generate from months if no trend API data
-          const months = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN'];
-          setRevenueLabels(months);
-          setRevenueData([0, 0, 0, 0, 0, financeDash?.totalRevenue || 0]);
+        if (Array.isArray(revenueTrend?.labels) && Array.isArray(revenueTrend?.data)) {
+          setRevenueLabels(revenueTrend.labels.map((l: string) => l.toUpperCase()));
+          setRevenueData(revenueTrend.data);
         }
 
         // Department performance from attendance (% of active employees per dept)
         const deptMap: Record<string, number> = {};
         empList.forEach((e: any) => {
-          const dept = e.department?.name || 'Other';
+          const dept = (e.department?.name || 'Other').toUpperCase();
           deptMap[dept] = (deptMap[dept] || 0) + 1;
         });
         const colors = ['#1d4ed8', '#6b7280', '#ea580c', '#059669', '#7c3aed', '#d97706'];
         const deptEntries = Object.entries(deptMap).slice(0, 4).map(([dept, count], i) => ({
-          dept: dept.toUpperCase(),
+          dept,
           pct: empList.length > 0 ? Math.round((count / empList.length) * 100) : 0,
           color: colors[i % colors.length],
         }));
@@ -122,6 +131,7 @@ function ExecutiveDashboard() {
           label, count, color: catColors[i % catColors.length],
         }));
         setInventoryBreakdown(catEntries);
+        setTotalStockUnits(prodList.reduce((sum: number, p: any) => sum + (Number(p.stockLevel) || 0), 0));
 
         // Recent Activity from real data (last created items)
         const activities: any[] = [];
@@ -173,52 +183,58 @@ function ExecutiveDashboard() {
           <p>Real-time oversight of global operations and key performance metrics.</p>
         </div>
         <div className="page-header-actions">
-          <ExportButton onExport={(format) => exportApi.exportEmployees(format)} label="Export Report" />
-          <Link href="/hrm" className="btn btn-primary" style={{ textDecoration: 'none' }}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-            + New Entry
-          </Link>
+          {canHR && <ExportButton onExport={(format) => exportApi.exportEmployees(format)} label="Export Report" />}
+          {canHR && (
+            <Link href="/hrm" className="btn btn-primary" style={{ textDecoration: 'none' }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              + New Entry
+            </Link>
+          )}
         </div>
       </div>
 
       {/* KPI Grid — ALL LIVE DATA */}
       {/* KPI Grid — ALL LIVE DATA */}
       <div className="kpi-grid">
-        <div className="kpi-card">
+        {canHR && <div className="kpi-card">
           <div className="kpi-card-top">
             <div className="kpi-card-icon" style={{ background: '#eff6ff', color: '#2563eb' }}><Building2 size={22} /></div>
             <div className="kpi-card-trend up">+{((kpis as any).empGrowthPct || 0)}% <TrendingUp size={16} /></div>
           </div>
           <div className="kpi-card-label">TOTAL EMPLOYEES</div>
           <div className="kpi-card-value">{kpis.totalEmployees.toLocaleString()}</div>
-        </div>
+        </div>}
 
-        <div className="kpi-card">
+        {canProjects && <div className="kpi-card">
           <div className="kpi-card-top">
             <div className="kpi-card-icon" style={{ background: '#f5f3ff', color: '#7c3aed' }}><FolderKanban size={22} /></div>
             <div className="kpi-card-trend neutral">{kpis.activeProjects} Active</div>
           </div>
           <div className="kpi-card-label">ACTIVE PROJECTS</div>
           <div className="kpi-card-value">{kpis.activeProjects}</div>
-        </div>
+        </div>}
 
-        <div className="kpi-card">
+        {canFinance && <div className="kpi-card">
           <div className="kpi-card-top">
             <div className="kpi-card-icon" style={{ background: '#fff7ed', color: '#ea580c' }}><IndianRupee size={22} /></div>
-            <div className="kpi-card-trend up">+{((kpis as any).revGrowthPct || 0)}% <TrendingUp size={16} /></div>
+            {(kpis as any).revGrowthPct != null && (
+              <div className={`kpi-card-trend ${(kpis as any).revGrowthPct >= 0 ? 'up' : 'down'}`}>
+                {(kpis as any).revGrowthPct > 0 ? '+' : ''}{(kpis as any).revGrowthPct}% <TrendingUp size={16} />
+              </div>
+            )}
           </div>
           <div className="kpi-card-label">REVENUE</div>
           <div className="kpi-card-value">{formatINRCompact(kpis.totalRevenue)}</div>
-        </div>
+        </div>}
 
-        <div className="kpi-card">
+        {canInventory && <div className="kpi-card">
           <div className="kpi-card-top">
             <div className="kpi-card-icon" style={{ background: '#fef2f2', color: '#dc2626' }}><AlertTriangle size={22} /></div>
             <div className="kpi-card-trend down">Low Stock <AlertTriangle size={16} /></div>
           </div>
           <div className="kpi-card-label">INVENTORY ALERTS</div>
           <div className="kpi-card-value">{kpis.lowStockCount}</div>
-        </div>
+        </div>}
       </div>
 
       {/* Main Dashboard Two-Column Split */}
@@ -228,7 +244,7 @@ function ExecutiveDashboard() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
           
           {/* Revenue Trend */}
-          <div className="chart-card">
+          {canFinance && <div className="chart-card">
             <div className="chart-card-header">
               <div><div className="chart-card-title">Revenue Trend</div></div>
               <span style={{ fontSize: '12px', color: 'var(--color-text-primary)', background: 'var(--color-border-light)', padding: '4px 10px', borderRadius: '6px', fontWeight: 600 }}>Last 6 Months</span>
@@ -239,12 +255,12 @@ function ExecutiveDashboard() {
                 datasets={[{ label: 'Revenue (₹)', data: revenueData.length > 0 ? revenueData : [0] }]}
               />
             </div>
-          </div>
+          </div>}
 
           {/* Bottom Left 2-Column Split */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
             {/* Employee Performance (Was Dept Dist) */}
-            <div className="card">
+            {canHR && <div className="card">
               <h3 style={{ fontSize: '16px', fontWeight: 700, marginBottom: '20px' }}>Employee Performance</h3>
               {deptPerformance.length === 0 ? (
                 <div style={{ color: 'var(--color-text-muted)', fontSize: '13px' }}>No employees found</div>
@@ -259,10 +275,10 @@ function ExecutiveDashboard() {
                   </div>
                 </div>
               ))}
-            </div>
+            </div>}
 
             {/* Inventory Overview */}
-            <div className="card">
+            {canInventory && <div className="card">
               <h3 style={{ fontSize: '16px', fontWeight: 700, marginBottom: '20px' }}>Inventory Overview</h3>
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '16px', height: '100%' }}>
                 <div style={{ position: 'relative', width: '140px', height: '140px' }}>
@@ -279,12 +295,12 @@ function ExecutiveDashboard() {
                     })}
                   </svg>
                   <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', textAlign: 'center' }}>
-                    <div style={{ fontSize: '24px', fontWeight: 800 }}>{(totalUnits / 1000).toFixed(1)}k</div>
+                    <div style={{ fontSize: '24px', fontWeight: 800 }}>{totalStockUnits.toLocaleString('en-IN')}</div>
                     <div style={{ fontSize: '10px', color: 'var(--color-text-muted)', textTransform: 'uppercase', fontWeight: 700 }}>UNITS</div>
                   </div>
                 </div>
               </div>
-            </div>
+            </div>}
           </div>
         </div>
 
@@ -295,22 +311,22 @@ function ExecutiveDashboard() {
           <div className="card">
             <h3 style={{ fontSize: '16px', fontWeight: 700, marginBottom: '16px' }}>Quick Actions</h3>
             <div className="quick-actions-grid" style={{ gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-              <Link href="/hrm" className="quick-action-btn" style={{ background: '#f8fafc', border: '1px solid var(--color-border)' }}>
+              {canHR && <Link href="/hrm" className="quick-action-btn" style={{ background: '#f8fafc', border: '1px solid var(--color-border)' }}>
                 <UserPlus className="qa-icon" style={{ color: '#2563eb' }} />
                 <span className="qa-label" style={{ fontWeight: 600, color: 'var(--color-text-primary)' }}>Add Employee</span>
-              </Link>
-              <Link href="/projects" className="quick-action-btn" style={{ background: '#f8fafc', border: '1px solid var(--color-border)' }}>
+              </Link>}
+              {canProjects && <Link href="/projects" className="quick-action-btn" style={{ background: '#f8fafc', border: '1px solid var(--color-border)' }}>
                 <FolderPlus className="qa-icon" style={{ color: '#2563eb' }} />
                 <span className="qa-label" style={{ fontWeight: 600, color: 'var(--color-text-primary)' }}>Create Project</span>
-              </Link>
-              <Link href="/crm" className="quick-action-btn" style={{ background: '#f8fafc', border: '1px solid var(--color-border)' }}>
+              </Link>}
+              {canCRM && <Link href="/crm" className="quick-action-btn" style={{ background: '#f8fafc', border: '1px solid var(--color-border)' }}>
                 <UserCheck className="qa-icon" style={{ color: '#2563eb' }} />
                 <span className="qa-label" style={{ fontWeight: 600, color: 'var(--color-text-primary)' }}>New Lead</span>
-              </Link>
-              <Link href="/inventory" className="quick-action-btn" style={{ background: '#f8fafc', border: '1px solid var(--color-border)' }}>
+              </Link>}
+              {canInventory && <Link href="/inventory" className="quick-action-btn" style={{ background: '#f8fafc', border: '1px solid var(--color-border)' }}>
                 <PackagePlus className="qa-icon" style={{ color: '#2563eb' }} />
                 <span className="qa-label" style={{ fontWeight: 600, color: 'var(--color-text-primary)' }}>Add Product</span>
-              </Link>
+              </Link>}
             </div>
           </div>
 
@@ -318,7 +334,7 @@ function ExecutiveDashboard() {
           <div className="card" style={{ flexGrow: 1, display: 'flex', flexDirection: 'column' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
               <h3 style={{ fontSize: '16px', fontWeight: 700 }}>Recent Activity</h3>
-              <Link href="/analytics" style={{ fontSize: '13px', color: 'var(--color-primary)', fontWeight: 600, textDecoration: 'none' }}>View All</Link>
+              {isSuperAdmin && <Link href="/analytics" style={{ fontSize: '13px', color: 'var(--color-primary)', fontWeight: 600, textDecoration: 'none' }}>View All</Link>}
             </div>
             <div className="activity-feed" style={{ flexGrow: 1, gap: '20px', display: 'flex', flexDirection: 'column' }}>
               {recentActivity.length === 0 ? (

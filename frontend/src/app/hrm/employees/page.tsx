@@ -389,7 +389,14 @@ export default function EmployeeDirectory() {
                         <div className="employee-avatar" style={{ background: color }}>{initials}</div>
                       )}
                       <div>
-                        <div className="employee-name">{emp.firstName} {emp.lastName}</div>
+                        <div className="employee-name">
+                          {emp.firstName} {emp.lastName}
+                          {emp.convertedFromInternAt && (
+                            <span title="Hired from internship" style={{ marginLeft: 6, fontSize: 10, fontWeight: 700, color: '#6d28d9', background: 'rgba(124,58,237,.1)', padding: '1px 7px', borderRadius: 999, verticalAlign: 'middle' }}>
+                              Ex-intern
+                            </span>
+                          )}
+                        </div>
                         <div className="employee-id">ID: {emp.empCode || emp.id.slice(0, 8)}</div>
                       </div>
                     </div>

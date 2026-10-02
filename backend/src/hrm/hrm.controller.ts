@@ -5,6 +5,9 @@ import type { Response } from 'express';
 import { HrmService } from './hrm.service';
 import type { RequestUser, PayrollManualInput } from './hrm.service';
 import { InternshipCertificateService } from './internship-certificate.service';
+import { InternConversionService } from './intern-conversion.service';
+import type { ConversionInput } from './intern-conversion.service';
+import { EmployeeHistoryService } from './employee-history.service';
 import { Prisma } from '@prisma/client';
 import { RequirePermission, CurrentUser } from '../auth/decorators';
 
@@ -13,6 +16,8 @@ export class HrmController {
   constructor(
     private readonly hrmService: HrmService,
     private readonly internshipCertService: InternshipCertificateService,
+    private readonly conversionService: InternConversionService,
+    private readonly historyService: EmployeeHistoryService,
   ) {}
 
   // Gated at HR:READ so every role can reach it (including EMPLOYEE, who
@@ -53,14 +58,22 @@ export class HrmController {
 
   @Put('employees/:id')
   @RequirePermission('HR', 'WRITE')
-  updateEmployee(@Param('id') id: string, @Body() data: Record<string, any>) {
-    return this.hrmService.updateEmployee(id, data);
+  updateEmployee(@Param('id') id: string, @Body() data: Record<string, any>, @CurrentUser() user: RequestUser) {
+    return this.hrmService.updateEmployee(id, data, user);
   }
 
   @Post('employees/:id/offer-letter')
   @RequirePermission('HR', 'WRITE')
-  sendOfferLetter(@Param('id') id: string) {
-    return this.hrmService.sendOfferLetter(id);
+  sendOfferLetter(@Param('id') id: string, @CurrentUser() user: RequestUser) {
+    return this.hrmService.sendOfferLetter(id, user);
+  }
+
+  // Career timeline. Controller gate is broad (HR:READ); the service narrows
+  // it to HR/Admin, since it gathers role, pay and exit history in one place.
+  @Get('employees/:id/history')
+  @RequirePermission('HR', 'READ')
+  getEmployeeHistory(@Param('id') id: string, @CurrentUser() user: RequestUser) {
+    return this.historyService.getHistory(id, user);
   }
 
   /**
@@ -91,8 +104,8 @@ export class HrmController {
    */
   @Put('employees/:id/remove')
   @RequirePermission('HR', 'WRITE')
-  removeEmployee(@Param('id') id: string, @Body('lastWorkingDay') lastWorkingDay?: string) {
-    return this.hrmService.removeEmployee(id, lastWorkingDay);
+  removeEmployee(@Param('id') id: string, @Body('lastWorkingDay') lastWorkingDay: string | undefined, @CurrentUser() user: RequestUser) {
+    return this.hrmService.removeEmployee(id, lastWorkingDay, user);
   }
 
   @Post('employees/:id/avatar')
@@ -306,6 +319,12 @@ export class HrmController {
     return this.hrmService.getPerformanceReviews(user);
   }
 
+  @Post('performance-reviews')
+  @RequirePermission('HR', 'WRITE')
+  createPerformanceReview(@Body() data: any, @CurrentUser() user: RequestUser) {
+    return this.hrmService.createPerformanceReview(data, user);
+  }
+
   // ========== IT ACCESS ==========
   @Get('employees/:id/it-access')
   @RequirePermission('HR', 'READ')
@@ -354,6 +373,19 @@ export class HrmController {
   @RequirePermission('HR', 'WRITE')
   rejectInternshipCertificate(@Param('id') id: string, @Body('reason') reason?: string, @CurrentUser() user?: RequestUser) {
     return this.internshipCertService.reject(id, reason, user);
+  }
+
+  // Intern → part-time / full-time conversion, after the certificate is issued.
+  @Get('internship-certificates/:id/conversion')
+  @RequirePermission('HR', 'WRITE')
+  getConversionDraft(@Param('id') id: string) {
+    return this.conversionService.getDraft(id);
+  }
+
+  @Post('internship-certificates/:id/convert')
+  @RequirePermission('HR', 'WRITE')
+  convertIntern(@Param('id') id: string, @Body() body: ConversionInput, @CurrentUser() user: RequestUser) {
+    return this.conversionService.convert(id, body, user);
   }
 
   @Get('internship-certificates/:id/download')

@@ -16,8 +16,8 @@ export class ProjectsController {
 
   @Get('tasks')
   @RequirePermission('PROJECTS', 'READ')
-  getTasks(@Query('projectId') projectId?: string) {
-    return this.projectsService.getTasks(projectId);
+  getTasks(@CurrentUser() user: AuthenticatedUser, @Query('projectId') projectId?: string) {
+    return this.projectsService.getTasks(projectId, user);
   }
 
   // Gate loosened to READ — the real check (project manager, or HR/Admin)
@@ -104,8 +104,8 @@ export class ProjectsController {
 
   @Get(':id/staff')
   @RequirePermission('PROJECTS', 'READ')
-  getProjectStaff(@Param('id') id: string) {
-    return this.projectsService.getProjectStaff(id);
+  getProjectStaff(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser) {
+    return this.projectsService.getProjectStaff(id, user);
   }
 
   // Relabels an existing team member's role on this project (e.g.

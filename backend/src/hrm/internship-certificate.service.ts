@@ -106,6 +106,7 @@ interface CertificateData {
  */
 import { AuditService } from '../audit/audit.service';
 import type { RequestUser } from './hrm.service';
+import { EmployeeHistoryService, EMP_TYPE_LABEL } from './employee-history.service';
 
 @Injectable()
 export class InternshipCertificateService {
@@ -119,6 +120,7 @@ export class InternshipCertificateService {
     private prisma: PrismaService,
     private mailer: MailerService,
     private audit: AuditService,
+    private history: EmployeeHistoryService,
   ) {
     fs.mkdirSync(this.outDir, { recursive: true });
   }
@@ -135,22 +137,25 @@ export class InternshipCertificateService {
     const today = new Date();
     today.setHours(23, 59, 59, 999);
 
+    // Current interns, plus former interns who were converted to an employee
+    // role — their row stays here as the record of how the internship ended.
+    // Every status is included (the old ACTIVE/INACTIVE filter silently hid
+    // interns on probation or leave).
     const interns = await this.prisma.employee.findMany({
-      where: {
-        empType: 'INTERN',
-        status: { in: ['ACTIVE', 'INACTIVE'] },
-      },
+      where: { OR: [{ empType: 'INTERN' }, { convertedFromInternAt: { not: null } }] },
       include: {
         department: true,
         designation: true,
         user: true,
         internshipCertDocument: true,
       },
-      orderBy: { engagementEndDate: 'desc' },
+      orderBy: { joinDate: 'desc' },
     });
 
     return interns.map((emp) => {
-      const isDurationComplete = !!emp.engagementEndDate && emp.engagementEndDate <= today;
+      const converted = !!emp.convertedFromInternAt;
+      const internshipEnd = converted ? emp.internshipEndDate : emp.engagementEndDate;
+      const isDurationComplete = !!internshipEnd && internshipEnd <= today;
       return {
         id: emp.id,
         firstName: emp.firstName,
@@ -160,8 +165,9 @@ export class InternshipCertificateService {
         designation: emp.designation?.title ?? 'Intern',
         department: emp.department?.name ?? '',
         joinDate: emp.joinDate,
-        engagementEndDate: emp.engagementEndDate,
+        engagementEndDate: internshipEnd,
         workMode: (emp as any).workMode ?? 'Remote',
+        status: emp.status,
         isDurationComplete,
         // PENDING | APPROVED | REJECTED — meaningless until the duration
         // actually completes, but kept as-is (usually PENDING/null) so it's
@@ -170,6 +176,17 @@ export class InternshipCertificateService {
         certSentAt: emp.internshipCertSentAt,
         certDocumentId: emp.internshipCertDocumentId,
         hasEmail: !!emp.personalEmail,
+        conversion: converted
+          ? {
+              effectiveDate: emp.convertedFromInternAt,
+              empType: emp.empType,
+              empTypeLabel: EMP_TYPE_LABEL[emp.empType],
+              designation: emp.designation?.title ?? null,
+              offerLetterSentAt: emp.offerLetterSentAt,
+              offerLetterDocumentId: emp.offerLetterDocumentId,
+            }
+          : null,
+        canConvert: !converted && emp.empType === 'INTERN' && emp.status !== 'INACTIVE' && emp.internshipCertStatus === 'APPROVED',
       };
     });
   }
@@ -295,6 +312,15 @@ export class InternshipCertificateService {
       this.logger.warn(`Certificate generated but not emailed for ${employeeId}: ${result.error}`);
     }
 
+    await this.history.record({
+      employeeId,
+      type: 'INTERNSHIP_CERTIFICATE_ISSUED',
+      title: result.sent ? `Internship completion certificate issued and emailed to ${employee.personalEmail}` : 'Internship completion certificate issued — email failed',
+      documentId: document.id,
+      actor,
+      note: result.sent ? null : result.error ?? null,
+    });
+
     return {
       documentId: document.id,
       fileUrl,
@@ -329,6 +355,14 @@ export class InternshipCertificateService {
       targetLabel: `${employee.firstName} ${employee.lastName}`,
       description: `Rejected Internship Completion Certificate for ${employee.firstName} ${employee.lastName}${reason ? `. Reason: ${reason}` : ''}`,
       details: { employeeId, internName: `${employee.firstName} ${employee.lastName}`, reason },
+    });
+
+    await this.history.record({
+      employeeId,
+      type: 'INTERNSHIP_CERTIFICATE_REJECTED',
+      title: 'Internship completion certificate declined',
+      actor,
+      note: reason ?? null,
     });
 
     return { success: true, status: 'REJECTED' };

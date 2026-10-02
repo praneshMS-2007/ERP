@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
-import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
+import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
+import { PrismaExceptionFilter } from './common/prisma-exception.filter';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { PrismaModule } from './prisma/prisma.module';
@@ -51,6 +52,12 @@ import { AnnouncementsModule } from './announcements/announcements.module';
     {
       provide: APP_GUARD,
       useClass: RolesGuard,
+    },
+    // Database errors (not found / duplicate / still referenced) become real
+    // 4xx answers instead of a generic 500.
+    {
+      provide: APP_FILTER,
+      useClass: PrismaExceptionFilter,
     },
     // Global audit trail — every successful authenticated mutation gets a
     // row, app-wide, without each controller having to remember to add one.

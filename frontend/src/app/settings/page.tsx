@@ -105,6 +105,7 @@ export default function SettingsPage() {
       setSessions(prev => prev.filter(s => s.id !== sessionId));
     } catch (err: any) {
       console.error(err);
+      alert(err?.message || 'Could not sign that device out.');
     }
   };
 

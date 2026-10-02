@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { resolveTargetRoute, buildPlainEnglishDescription } from '../audit/audit.service';
+import { AuthenticatedUser, hasModuleAccess } from '../auth/permission.util';
 
 export class AuditLogFilterDto {
   startDate?: string;
@@ -379,25 +380,28 @@ export class AnalyticsService {
   // EXISTING METRICS (RETENTION & REVENUE)
   // ==========================================
 
-  async getDashboardMetrics() {
-    const totalEmployees = await this.prisma.employee.count({ where: { status: { not: 'INACTIVE' } } });
-    const totalProjects = await this.prisma.project.count({ where: { status: 'IN_PROGRESS' } });
-    const totalCustomers = await this.prisma.customer.count();
-    
-    const incomeAgg = await this.prisma.income.aggregate({
-      _sum: { amount: true },
-    });
-    
-    const products = await this.prisma.product.findMany({ select: { stockLevel: true, price: true } });
-    const inventoryValue = products.reduce((acc, p) => acc + ((p.stockLevel || 0) * (p.price || 0)), 0);
+  // Each figure belongs to a different module, so each is only computed for a
+  // caller who could read that module directly; the rest come back null.
+  async getDashboardMetrics(user: AuthenticatedUser) {
+    const yearStart = new Date(new Date().getFullYear(), 0, 1);
 
-    return {
-      employees: totalEmployees,
-      activeProjects: totalProjects,
-      totalCustomers,
-      revenueYTD: incomeAgg._sum.amount || 0,
-      inventoryValue,
-    };
+    const employees = hasModuleAccess(user, 'HR')
+      ? await this.prisma.employee.count({ where: { status: { not: 'INACTIVE' } } })
+      : null;
+    const activeProjects = hasModuleAccess(user, 'PROJECTS')
+      ? await this.prisma.project.count({ where: { status: 'IN_PROGRESS' } })
+      : null;
+    const totalCustomers = hasModuleAccess(user, 'CRM') ? await this.prisma.customer.count() : null;
+    const revenueYTD = hasModuleAccess(user, 'FINANCE')
+      ? (await this.prisma.income.aggregate({ _sum: { amount: true }, where: { date: { gte: yearStart } } }))._sum.amount || 0
+      : null;
+    let inventoryValue: number | null = null;
+    if (hasModuleAccess(user, 'INVENTORY')) {
+      const products = await this.prisma.product.findMany({ select: { stockLevel: true, price: true } });
+      inventoryValue = products.reduce((acc, p) => acc + ((p.stockLevel || 0) * (p.price || 0)), 0);
+    }
+
+    return { employees, activeProjects, totalCustomers, revenueYTD, inventoryValue };
   }
 
   async getRetention() {
@@ -429,23 +433,25 @@ export class AnalyticsService {
   }
 
   async getRevenueTrend() {
+    // The last six calendar months ending with the current one, keyed by
+    // year+month so the same month of two different years never merges.
+    const now = new Date();
+    const months = Array.from({ length: 6 }, (_, i) => new Date(now.getFullYear(), now.getMonth() - 5 + i, 1));
     const incomes = await this.prisma.income.findMany({
+      where: { date: { gte: months[0] } },
       select: { amount: true, date: true },
     });
-    
-    const trend = Array(12).fill(0);
-    incomes.forEach(inc => {
-      if (inc.date) {
-        const month = new Date(inc.date).getMonth();
-        if (month >= 0 && month < 12) {
-          trend[month] += (inc.amount || 0);
-        }
-      }
-    });
+
+    const totals = new Map<string, number>();
+    for (const inc of incomes) {
+      const d = new Date(inc.date);
+      const key = `${d.getFullYear()}-${d.getMonth()}`;
+      totals.set(key, (totals.get(key) || 0) + (inc.amount || 0));
+    }
 
     return {
-      labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
-      data: trend,
+      labels: months.map((m) => m.toLocaleString('en-US', { month: 'short' })),
+      data: months.map((m) => totals.get(`${m.getFullYear()}-${m.getMonth()}`) || 0),
     };
   }
 }

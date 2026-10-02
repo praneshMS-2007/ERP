@@ -11,6 +11,7 @@ import { OfferLetterService } from './offer-letter.service';
 import { PayslipService } from './payslip.service';
 import { AnnouncementsService } from '../announcements/announcements.service';
 import { formatDateDMY } from '../common/date-format';
+import { EmployeeHistoryService, EMP_TYPE_LABEL } from './employee-history.service';
 
 export interface RequestUser {
   id: string;
@@ -221,6 +222,7 @@ export class HrmService {
     private offerLetterService: OfferLetterService,
     private payslipService: PayslipService,
     private announcementsService: AnnouncementsService,
+    private history: EmployeeHistoryService,
   ) {
     fs.mkdirSync(this.avatarDir, { recursive: true });
   }
@@ -310,6 +312,8 @@ export class HrmService {
       highestQualification, institutionName, yearOfPassing,
       previousCompany, previousDesignation, totalExperienceYears,
       nomineeName, nomineeRelation, nomineeDob, nomineePhone,
+      // Compensation — same tier as salary, so not part of a colleague's directory entry.
+      hasStipend, stipendAmount,
       ...safe
     } = employee;
     return safe;
@@ -341,6 +345,7 @@ export class HrmService {
         nomineeName: true, nomineeRelation: true, nomineeDob: true, nomineePhone: true,
         joinDate: true, empType: true, status: true, workMode: true, lastWorkingDay: true,
         engagementEndDate: true, hasStipend: true, stipendAmount: true, departmentId: true, designationId: true,
+        convertedFromInternAt: true, internshipEndDate: true,
         reportingManagerId: true, userId: true,
         offerLetterDocumentId: true, offerLetterSentAt: true, offerLetterSendError: true,
         createdAt: true, updatedAt: true,
@@ -825,6 +830,23 @@ export class HrmService {
 
     this.logger.log(`Provisioned ERP account "${username}" for new employee ${empCode}`);
 
+    await this.history.record({
+      employeeId: employee.id,
+      type: 'JOINED',
+      title: `Joined as ${designation.title} (${EMP_TYPE_LABEL[employee.empType]})`,
+      effectiveDate: employee.joinDate,
+      changes: [
+        { field: 'empType', label: 'Employment type', from: null, to: EMP_TYPE_LABEL[employee.empType] },
+        { field: 'designation', label: 'Designation', from: null, to: designation.title },
+        { field: 'department', label: 'Department', from: null, to: department.name },
+        {
+          field: 'compensation', label: 'Monthly pay', from: null, sensitive: true,
+          to: employee.hasStipend && employee.stipendAmount ? `₹${employee.stipendAmount.toLocaleString('en-IN')}/month` : 'Unpaid',
+        },
+      ],
+      actor: viewer,
+    });
+
     // Deliberately outside the transaction and never allowed to throw: a slow
     // mail server or a PDF rendering hiccup must not undo an employee HR
     // already successfully created. HR sees the outcome in the response and
@@ -833,6 +855,7 @@ export class HrmService {
       this.logger.error(`Offer letter pipeline threw for ${employee.id}: ${err.message}`);
       return { documentId: null, fileUrl: null, emailed: false, error: err.message as string };
     });
+    await this.recordOfferLetterEvent(employee.id, offerLetter, viewer);
 
     // No password to echo back here — HR/Admin typed it themselves, it was
     // never a secret this response needed to reveal. It's still readable
@@ -857,7 +880,7 @@ export class HrmService {
    * departure having a real date. Defaults to today only if HR doesn't
    * supply one; never left null.
    */
-  async removeEmployee(id: string, lastWorkingDay?: string) {
+  async removeEmployee(id: string, lastWorkingDay?: string, actor?: RequestUser) {
     const employee = await this.prisma.employee.findUnique({
       where: { id },
       include: { user: true },
@@ -884,6 +907,15 @@ export class HrmService {
         ? [this.prisma.user.update({ where: { id: employee.userId }, data: { isActive: false } })]
         : []),
     ]);
+
+    await this.history.record({
+      employeeId: id,
+      type: 'EXITED',
+      title: 'Left the company — ERP access revoked',
+      effectiveDate: departureDate,
+      changes: [{ field: 'status', label: 'Status', from: employee.status, to: 'Former employee' }],
+      actor,
+    });
 
     this.logger.log(`Removed employee ${employee.empCode} and revoked their ERP access`);
     return { message: 'Employee removed and ERP access revoked.' };
@@ -1049,7 +1081,7 @@ export class HrmService {
    * the raw request body straight to Prisma, so a crafted request could rewrite
    * id, userId or createdAt.
    */
-  async updateEmployee(id: string, data: Record<string, any>) {
+  async updateEmployee(id: string, data: Record<string, any>, actor?: RequestUser) {
     const exists = await this.prisma.employee.findUnique({ where: { id }, select: { id: true, status: true } });
     if (!exists) throw new NotFoundException('Employee not found');
 
@@ -1063,10 +1095,11 @@ export class HrmService {
       );
     }
 
-    const updated = await this.prisma.employee.update({
-      where: { id },
-      data: sanitiseEmployeeInput(data),
-    });
+    const clean = sanitiseEmployeeInput(data);
+    const before = await this.history.snapshot(id);
+    const updated = await this.prisma.employee.update({ where: { id }, data: clean });
+    const after = await this.history.snapshot(id);
+    if (before && after) await this.history.recordEdit(id, this.history.diff(before, after), actor);
 
     // These hold ciphertext at this point — never echo that back. The
     // frontend re-fetches via getEmployeeById after a save anyway, which is
@@ -1106,6 +1139,11 @@ export class HrmService {
       throw new BadRequestException('Effective-from date is not a valid date.');
     }
 
+    const previous = await this.prisma.salaryStructure.findFirst({
+      where: { employeeId, effectiveTo: null },
+      orderBy: { effectiveFrom: 'desc' },
+    });
+
     const [, created] = await this.prisma.$transaction([
       this.prisma.salaryStructure.updateMany({
         where: { employeeId, effectiveTo: null },
@@ -1124,7 +1162,23 @@ export class HrmService {
       }),
     ]);
 
-    return { ...created, gross: created.basic + created.hra + created.specialAllowance };
+    const gross = created.basic + created.hra + created.specialAllowance;
+    const prevGross = previous ? previous.basic + previous.hra + previous.specialAllowance : null;
+    const inr = (n: number) => `₹${n.toLocaleString('en-IN')}`;
+    await this.history.record({
+      employeeId,
+      type: 'COMPENSATION_CHANGED',
+      title: previous ? 'Salary structure revised' : 'Salary structure recorded',
+      effectiveDate: effectiveFrom,
+      changes: [
+        { field: 'grossMonthly', label: 'Gross monthly pay', from: prevGross != null ? inr(prevGross) : null, to: inr(gross), sensitive: true },
+        { field: 'salarySplit', label: 'Pay split', from: previous ? `Basic ${inr(previous.basic)} · HRA ${inr(previous.hra)} · Special ${inr(previous.specialAllowance)}` : null, to: `Basic ${inr(created.basic)} · HRA ${inr(created.hra)} · Special ${inr(created.specialAllowance)}`, sensitive: true },
+      ],
+      actor: actorId ? ({ id: actorId } as RequestUser) : null,
+      note: created.note,
+    });
+
+    return { ...created, gross };
   }
 
   async deleteEmployee(id: string) {
@@ -1464,7 +1518,10 @@ export class HrmService {
       throw new ForbiddenException('Only HR, Finance and administrators can view payroll records.');
     }
     return this.prisma.payroll.findMany({
-      include: { employee: { select: { firstName: true, lastName: true, designation: { select: { title: true } } } } },
+      include: {
+        employee: { select: { firstName: true, lastName: true, designation: { select: { title: true } } } },
+        payslipDocument: { select: { id: true, storagePath: true, fileName: true } },
+      },
       orderBy: { createdAt: 'desc' },
     });
   }
@@ -1815,8 +1872,54 @@ export class HrmService {
     return this.prisma.performanceReview.findMany({
       include: {
         employee: { select: { firstName: true, lastName: true, department: true } },
+        reviewer: { select: { firstName: true, lastName: true } },
       },
       orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  /**
+   * The reviewer is always the signed-in HR/admin user's own employee record —
+   * never a value the client picks — so a review can't be attributed to
+   * someone else. An administrator with no linked employee profile can't
+   * file one, since there'd be no real reviewer to record.
+   */
+  async createPerformanceReview(
+    data: { employeeId?: string; quarter?: string; rating?: number; review?: string; goals?: string },
+    viewer?: RequestUser,
+  ) {
+    if (!canViewFullProfile(viewer)) {
+      throw new ForbiddenException('Only HR and administrators can write performance reviews.');
+    }
+    const quarter = data.quarter?.trim();
+    const review = data.review?.trim();
+    const rating = Number(data.rating);
+    if (!data.employeeId) throw new BadRequestException('Choose which employee this review is for.');
+    if (!quarter) throw new BadRequestException('A review period (e.g. Q3 2026) is required.');
+    if (!review) throw new BadRequestException('A written review is required.');
+    if (!Number.isFinite(rating) || rating < 1 || rating > 5) {
+      throw new BadRequestException('Rating must be a number between 1 and 5.');
+    }
+
+    const reviewer = await this.prisma.employee.findUnique({ where: { userId: viewer!.id }, select: { id: true } });
+    if (!reviewer) {
+      throw new BadRequestException('Your login is not linked to an employee profile, so a reviewer cannot be recorded. Ask HR to link it first.');
+    }
+    if (reviewer.id === data.employeeId) {
+      throw new BadRequestException('You cannot write a performance review for yourself.');
+    }
+    const employee = await this.prisma.employee.findUnique({ where: { id: data.employeeId }, select: { id: true } });
+    if (!employee) throw new NotFoundException('That employee no longer exists.');
+
+    return this.prisma.performanceReview.create({
+      data: {
+        employeeId: employee.id,
+        reviewerId: reviewer.id,
+        quarter,
+        rating,
+        review,
+        goals: data.goals?.trim() || null,
+      },
     });
   }
 
@@ -1906,8 +2009,26 @@ export class HrmService {
     return { year, totalEmployees: totalActive, data: results };
   }
 
-  async sendOfferLetter(employeeId: string) {
-    return this.offerLetterService.issueAndSend(employeeId);
+  async sendOfferLetter(employeeId: string, actor?: RequestUser) {
+    const result = await this.offerLetterService.issueAndSend(employeeId);
+    await this.recordOfferLetterEvent(employeeId, result, actor);
+    return result;
+  }
+
+  private async recordOfferLetterEvent(
+    employeeId: string,
+    result: { documentId: string | null; emailed: boolean; error?: string },
+    actor?: RequestUser,
+  ) {
+    if (!result.documentId) return;
+    await this.history.record({
+      employeeId,
+      type: 'OFFER_LETTER_ISSUED',
+      title: result.emailed ? 'Offer letter issued and emailed' : 'Offer letter generated — email failed',
+      documentId: result.documentId,
+      actor,
+      note: result.emailed ? null : result.error ?? null,
+    });
   }
 
   async sendPayslip(payrollId: string) {

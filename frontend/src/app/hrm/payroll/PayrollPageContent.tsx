@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { FileText, Clock, IndianRupee, Plus, Check, ChevronLeft, ChevronRight, Users, Edit2, Trash2, Undo2 } from 'lucide-react';
+import { FileText, Clock, IndianRupee, Plus, Check, ChevronLeft, ChevronRight, Users, Edit2, Trash2, Undo2, Download } from 'lucide-react';
 import { hrmApi, exportApi } from '../../../services/api';
 import ExportButton from '../../../components/ExportButton';
 import Modal, { FormField } from '../../../components/Modal';
@@ -18,7 +18,7 @@ const STATUS_LABEL: Record<string, string> = { DRAFT: 'Draft', PAID: 'Paid', REJ
 // Admin, so the two sides of the workflow never blur together in the UI
 // even for someone who technically has full access to both.
 export default function PayrollPageContent({ mode }: { mode: 'hr' | 'finance' }) {
-  const { user } = useAuth();
+  const { user, hasPermission } = useAuth();
   const canCreatePayroll = mode === 'hr' && (user?.role === 'SUPER_ADMIN' || user?.role === 'HR_MANAGER');
   const canMarkPaid = mode === 'finance' && (user?.role === 'SUPER_ADMIN' || user?.role === 'FINANCE_MANAGER');
   const [payrolls, setPayrolls] = useState<any[]>([]);
@@ -287,7 +287,7 @@ export default function PayrollPageContent({ mode }: { mode: 'hr' | 'finance' })
             <p>Select an employee to view or {mode === 'hr' ? 'run' : 'release'} their payroll.</p>
           </div>
           <div className="page-header-actions">
-            <ExportButton onExport={(format) => exportApi.exportEmployees(format)} label="Export CSV" />
+            {hasPermission('HR', 'WRITE') && <ExportButton onExport={(format) => exportApi.exportEmployees(format)} label="Export Employees" />}
           </div>
         </div>
 
@@ -375,10 +375,10 @@ export default function PayrollPageContent({ mode }: { mode: 'hr' | 'finance' })
       <div className="card">
         <h3 style={{ fontSize: '16px', fontWeight: 700, marginBottom: '16px' }}>Payroll Records ({selectedPayrolls.length})</h3>
         <table className="data-table">
-          <thead><tr><th>Pay Period</th><th>Base Salary</th><th>Bonus</th><th>Deductions</th><th>Net Pay</th><th>Status</th><th>Action</th></tr></thead>
+          <thead><tr><th>Pay Period</th><th>Base Salary</th><th>Bonus</th><th>Deductions</th><th>Net Pay</th><th>Status</th><th>Payslip</th><th>Action</th></tr></thead>
           <tbody>
             {selectedPayrolls.length === 0 ? (
-              <tr><td colSpan={7} style={{ textAlign: 'center', padding: '20px' }}>
+              <tr><td colSpan={8} style={{ textAlign: 'center', padding: '20px' }}>
                 {mode === 'hr' && selectedIsActive
                   ? (canCreatePayroll ? 'No payroll records yet. Click "Add Payroll" to create one.' : 'No payroll records yet.')
                   : 'No payroll records for this person.'}
@@ -396,6 +396,21 @@ export default function PayrollPageContent({ mode }: { mode: 'hr' | 'finance' })
                 <td style={{ color: '#dc2626' }}>-{formatINR(p.deductions || 0)}</td>
                 <td style={{ fontWeight: 700 }}>{formatINR(p.netPay || 0)}</td>
                 <td><span className={badgeClass(p.status)}>{STATUS_LABEL[p.status] || p.status}</span></td>
+                <td>
+                  {p.status === 'PAID' && p.payslipDocument ? (
+                    <button
+                      className="btn btn-secondary btn-sm"
+                      style={{ gap: '4px' }}
+                      onClick={() => hrmApi.downloadOfferLetter(p.payslipDocument.id, p.payslipDocument.fileName).catch((e: any) => alert(e.message || 'Download failed.'))}
+                    >
+                      <Download size={13} /> Download
+                    </button>
+                  ) : p.status === 'PAID' ? (
+                    <span style={{ fontSize: '12px', color: 'var(--color-text-muted)' }}>Not generated</span>
+                  ) : (
+                    <span style={{ fontSize: '12px', color: 'var(--color-text-muted)' }}>—</span>
+                  )}
+                </td>
                 <td>
                   {mode === 'finance' && p.status === 'DRAFT' && canMarkPaid && (
                     <div style={{ display: 'flex', gap: '6px' }}>

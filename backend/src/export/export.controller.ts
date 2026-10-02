@@ -8,8 +8,10 @@ import type { RequestUser } from '../hrm/hrm.service';
 export class ExportController {
   constructor(private readonly exportService: ExportService) {}
 
+  // HR:WRITE, not READ — the file carries every employee's phone number, which
+  // the directory API itself hides from read-only roles.
   @Get('employees')
-  @RequirePermission('HR', 'READ')
+  @RequirePermission('HR', 'WRITE')
   async exportEmployees(@Query('format') format: string, @Res() res: Response) {
     if (format === 'pdf') {
       const buffer = await this.exportService.exportEmployeesPdf();

@@ -141,6 +141,38 @@ const allNavItems: NavItem[] = [
   { name: 'Settings', path: '/settings', icon: Settings },
 ];
 
+/**
+ * Whether `role` may open `pathname`, by the same rules that decide which
+ * sidebar links render — so typing a URL can't reach a page the menu hides.
+ * Routes with no nav entry of their own inherit their nearest parent's rule.
+ */
+export function canAccessPath(
+  pathname: string,
+  role: string | undefined,
+  hasPermission: (module: string, action?: string) => boolean,
+): boolean {
+  let bestLen = -1;
+  let allowed = true;
+  const consider = (path: string, ok: boolean) => {
+    if (path === '/' || !(pathname === path || pathname.startsWith(`${path}/`))) return;
+    if (path.length >= bestLen) { bestLen = path.length; allowed = ok; }
+  };
+  for (const item of allNavItems) {
+    const itemOk = item.requiredRoles
+      ? !!role && item.requiredRoles.includes(role)
+      : !(item.hiddenForRoles && role && item.hiddenForRoles.includes(role)) &&
+        (!item.requiredModule || hasPermission(item.requiredModule));
+    consider(item.path, itemOk);
+    for (const sub of item.subItems ?? []) {
+      const subOk = sub.requiredRoles
+        ? !!role && sub.requiredRoles.includes(role)
+        : itemOk && (!item.requiredModule || hasPermission(item.requiredModule, sub.requiredAction ?? 'READ'));
+      consider(sub.path, subOk);
+    }
+  }
+  return allowed;
+}
+
 export default function Sidebar({ isOpen, toggleSidebar }: SidebarProps) {
   const pathname = usePathname();
   const { user, hasPermission, logout } = useAuth();

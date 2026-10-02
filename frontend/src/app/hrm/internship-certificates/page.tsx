@@ -1,11 +1,12 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Award, CheckCircle2, XCircle, Clock, Mail, AlertCircle, FileText, Hourglass, Pencil, Download } from 'lucide-react';
+import { Award, CheckCircle2, XCircle, Clock, Mail, AlertCircle, FileText, Hourglass, Pencil, Download, Briefcase, BadgeCheck } from 'lucide-react';
 import { hrmApi } from '../../../services/api';
 import { useAuth } from '../../../context/AuthContext';
 import Modal, { FormField } from '../../../components/Modal';
 import PageGuard from '../../../components/PageGuard';
+import InternConversionModal from '../../../components/modals/InternConversionModal';
 
 interface InternCert {
   id: string;
@@ -23,6 +24,16 @@ interface InternCert {
   certSentAt: string | null;
   certDocumentId: string | null;
   hasEmail: boolean;
+  status: string;
+  canConvert: boolean;
+  conversion: {
+    effectiveDate: string;
+    empType: string;
+    empTypeLabel: string;
+    designation: string | null;
+    offerLetterSentAt: string | null;
+    offerLetterDocumentId: string | null;
+  } | null;
 }
 
 function fmtDate(iso: string | null): string {
@@ -56,7 +67,8 @@ function InternshipCertificatesPage() {
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
-  const [filterStatus, setFilterStatus] = useState<'ALL' | 'IN_PROGRESS' | 'PENDING' | 'APPROVED' | 'REJECTED'>('ALL');
+  const [filterStatus, setFilterStatus] = useState<'ALL' | 'IN_PROGRESS' | 'PENDING' | 'APPROVED' | 'REJECTED' | 'CONVERTED'>('ALL');
+  const [convertTarget, setConvertTarget] = useState<string | null>(null);
 
   // Editing an intern's join/end date right from this page — no need to
   // leave and go find them in the Employee Directory just to fix a date.
@@ -180,6 +192,7 @@ function InternshipCertificatesPage() {
 
   const filtered = filterStatus === 'ALL' ? interns
     : filterStatus === 'IN_PROGRESS' ? interns.filter((i) => !i.isDurationComplete)
+    : filterStatus === 'CONVERTED' ? interns.filter((i) => !!i.conversion)
     : interns.filter((i) => i.isDurationComplete && i.certStatus === filterStatus);
 
   const counts = {
@@ -188,7 +201,19 @@ function InternshipCertificatesPage() {
     pending: interns.filter((i) => i.isDurationComplete && i.certStatus === 'PENDING').length,
     approved: interns.filter((i) => i.isDurationComplete && i.certStatus === 'APPROVED').length,
     rejected: interns.filter((i) => i.isDurationComplete && i.certStatus === 'REJECTED').length,
+    converted: interns.filter((i) => !!i.conversion).length,
   };
+
+  async function handleDownloadOfferLetter(intern: InternCert) {
+    const docId = intern.conversion?.offerLetterDocumentId;
+    if (!docId) return;
+    const base = intern.fullName.trim().split(/\s+/).join('_');
+    try {
+      await hrmApi.downloadOfferLetter(docId, `${base}_${intern.conversion!.empTypeLabel.split(' ').join('_')}_Offer_Letter.pdf`);
+    } catch (e: any) {
+      showToast(e.message || 'Failed to download the offer letter.', 'error');
+    }
+  }
 
   if (!authorised) {
     return (
@@ -229,7 +254,7 @@ function InternshipCertificatesPage() {
           Internship Completion Certificates
         </h1>
         <p style={{ color: 'var(--color-text-secondary)', fontSize: 14, marginTop: 4 }}>
-          Every intern in the company — approve or reject their completion certificate once their internship period has actually ended.
+          Every intern in the company — approve or reject their completion certificate once their internship has ended, then offer a part-time or full-time role to the ones you want to keep.
         </p>
       </div>
 
@@ -241,6 +266,7 @@ function InternshipCertificatesPage() {
           { label: 'Pending Review', value: counts.pending, icon: Clock, color: '#f59e0b', bg: '#fffbeb' },
           { label: 'Approved & Sent', value: counts.approved, icon: CheckCircle2, color: '#10b981', bg: '#ecfdf5' },
           { label: 'Rejected', value: counts.rejected, icon: XCircle, color: '#ef4444', bg: '#fef2f2' },
+          { label: 'Hired as Employees', value: counts.converted, icon: Briefcase, color: '#7c3aed', bg: '#f5f3ff' },
         ].map((card) => (
           <div
             key={card.label}
@@ -274,6 +300,7 @@ function InternshipCertificatesPage() {
           { key: 'PENDING', label: 'Pending', count: counts.pending },
           { key: 'APPROVED', label: 'Approved', count: counts.approved },
           { key: 'REJECTED', label: 'Rejected', count: counts.rejected },
+          { key: 'CONVERTED', label: 'Hired', count: counts.converted },
         ] as const).map(({ key, label, count }) => (
           <button
             key={key}
@@ -312,6 +339,8 @@ function InternshipCertificatesPage() {
               ? 'No interns in the company yet.'
               : filterStatus === 'IN_PROGRESS'
               ? 'No interns currently mid-internship.'
+              : filterStatus === 'CONVERTED'
+              ? 'No interns have been offered a role yet.'
               : `No completed interns with "${filterStatus.toLowerCase()}" status.`}
           </p>
         </div>
@@ -371,7 +400,15 @@ function InternshipCertificatesPage() {
 
                       {/* Status Badge — "In Progress" overrides certStatus entirely until the duration actually ends */}
                       <td style={{ padding: '14px 16px' }}>
-                        {!intern.isDurationComplete ? (
+                        {intern.conversion ? (
+                          <span style={{
+                            display: 'inline-flex', alignItems: 'center', gap: 5,
+                            padding: '4px 12px', borderRadius: 20, fontSize: 11, fontWeight: 600,
+                            background: '#f5f3ff', color: '#6d28d9', border: '1px solid #ddd6fe', whiteSpace: 'nowrap',
+                          }}>
+                            <BadgeCheck size={12} /> Hired · {intern.conversion.empTypeLabel}
+                          </span>
+                        ) : !intern.isDurationComplete ? (
                           <span style={{
                             display: 'inline-flex', alignItems: 'center', gap: 5,
                             padding: '4px 12px', borderRadius: 20, fontSize: 11, fontWeight: 600,
@@ -437,6 +474,33 @@ function InternshipCertificatesPage() {
                           </div>
                         ) : intern.certStatus === 'APPROVED' ? (
                           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                            {intern.conversion ? (
+                              <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', lineHeight: 1.4 }}>
+                                <div style={{ fontWeight: 600, color: 'var(--color-text-primary)' }}>
+                                  {intern.conversion.designation} · from {fmtDate(intern.conversion.effectiveDate)}
+                                </div>
+                                {intern.conversion.offerLetterDocumentId && (
+                                  <button
+                                    onClick={() => handleDownloadOfferLetter(intern)}
+                                    style={{ marginTop: 3, padding: 0, border: 'none', background: 'none', color: '#6d28d9', fontWeight: 600, fontSize: 12, cursor: 'pointer', display: 'inline-flex', gap: 4, alignItems: 'center' }}
+                                  >
+                                    <Download size={12} /> Offer letter{intern.conversion.offerLetterSentAt ? ` · emailed ${fmtDate(intern.conversion.offerLetterSentAt)}` : ' · not emailed'}
+                                  </button>
+                                )}
+                              </div>
+                            ) : intern.canConvert ? (
+                              <button
+                                onClick={() => setConvertTarget(intern.id)}
+                                title={`Offer ${intern.fullName} a part-time or full-time role`}
+                                style={{
+                                  padding: '5px 12px', borderRadius: 6, fontSize: 12, fontWeight: 600,
+                                  background: '#7c3aed', color: '#fff', border: 'none', cursor: 'pointer',
+                                  display: 'inline-flex', alignItems: 'center', gap: 5,
+                                }}
+                              >
+                                <Briefcase size={13} /> Offer Job
+                              </button>
+                            ) : null}
                             <span style={{
                               display: 'inline-flex',
                               alignItems: 'center',
@@ -501,6 +565,12 @@ function InternshipCertificatesPage() {
           </div>
         </div>
       )}
+
+      <InternConversionModal
+        employeeId={convertTarget}
+        onClose={() => setConvertTarget(null)}
+        onConverted={() => { load(); }}
+      />
 
       {/* EDIT DATES MODAL */}
       <Modal isOpen={!!editTarget} onClose={() => setEditTarget(null)} title={`Edit Dates — ${editTarget?.fullName ?? ''}`} width="420px">

@@ -42,6 +42,8 @@ interface LetterData {
   hasStipend: boolean;
   stipendAmount: number | null;
   mode: string;
+  /** Set when this letter follows a completed internship (intern → employee conversion). */
+  conversion: { internStart: Date; internEnd: Date } | null;
 }
 
 /**
@@ -62,7 +64,7 @@ export class OfferLetterService {
     fs.mkdirSync(this.outDir, { recursive: true });
   }
 
-  async issueAndSend(employeeId: string): Promise<{
+  async issueAndSend(employeeId: string, options: { sendEmail?: boolean } = {}): Promise<{
     documentId: string | null;
     fileUrl: string | null;
     emailed: boolean;
@@ -89,12 +91,16 @@ export class OfferLetterService {
       candidateName: [employee.firstName, employee.lastName].filter(Boolean).join(' ').trim(),
       roleTitle: employee.designation?.title ?? 'Employee',
       department: employee.department?.name ?? '',
-      startDate: employee.joinDate,
+      // A converted intern's new role starts on its own date, not the day they first joined as an intern.
+      startDate: employee.convertedFromInternAt ?? employee.joinDate,
       engagementEndDate: employee.engagementEndDate,
       grossMonthly: stipendAmount,
       hasStipend,
       stipendAmount,
       mode: (employee as any).workMode ?? 'Remote',
+      conversion: employee.convertedFromInternAt && employee.internshipEndDate && employee.empType !== 'INTERN'
+        ? { internStart: employee.joinDate, internEnd: employee.internshipEndDate }
+        : null,
     };
 
     let pdfBuffer: Buffer;
@@ -137,6 +143,11 @@ export class OfferLetterService {
     const letterWord = 'offer letter';
     const bodyHtml = this.buildOfferLetterEmailHtml(employee.empType, data, employee.firstName, contact);
 
+    if (options.sendEmail === false) {
+      this.logger.log(`Offer letter generated without emailing (${document.fileName}) for ${employee.empCode}`);
+      return { documentId: document.id, fileUrl, emailed: false };
+    }
+
     const result = await this.mailer.send({
       to: employee.personalEmail,
       subject: `Your ${letterWord} from Shuroq — ${data.roleTitle}`,
@@ -175,13 +186,22 @@ export class OfferLetterService {
       empType === 'INTERN' ? 'internship offer letter'
       : empType === 'PART_TIME' ? 'part-time offer letter'
       : 'offer letter';
+    const opening = d.conversion
+      ? `Congratulations on successfully completing your internship with ${escapeHtml(COMPANY.name)}! We are pleased to offer you the position of`
+      : 'We are pleased to offer you the position of';
     return coverNoteHtml([
       `Hi ${escapeHtml(firstName)},`,
-      `We are pleased to offer you the position of <strong>${escapeHtml(d.roleTitle)}</strong> at ${escapeHtml(COMPANY.name)}. Your ${kind} is attached to this email as a PDF.`,
+      `${opening} <strong>${escapeHtml(d.roleTitle)}</strong>${d.conversion ? '' : ` at ${escapeHtml(COMPANY.name)}`}. Your ${kind} is attached to this email as a PDF.`,
       'Please review it, and return a signed copy to confirm your acceptance.',
       escapeHtml(contact),
       'Warm regards,<br />HR Team, Shuroq',
     ]);
+  }
+
+  private openingLine(d: LetterData): string {
+    return d.conversion
+      ? `Following the successful completion of your internship with ${COMPANY.name} (${fmtDateFull(d.conversion.internStart)} to ${fmtDateFull(d.conversion.internEnd)}), we are pleased to offer you the position of `
+      : 'We are pleased to offer you the position of ';
   }
 
   private async getSupportContactLine(): Promise<string> {
@@ -221,7 +241,7 @@ export class OfferLetterService {
       doc.moveDown(0.5);
 
       doc.fontSize(10.5).font('Helvetica').fillColor(BRAND.black).text(
-        'We are pleased to offer you the position of ',
+        this.openingLine(d),
         M, doc.y, { continued: true, width: textW, align: 'left', lineGap: 1.5 },
       );
       doc.font('Helvetica-Bold').text(`${d.roleTitle} (Part Time) `, { continued: true });
@@ -231,23 +251,23 @@ export class OfferLetterService {
       );
       doc.moveDown(1);
 
-      const stipendLine = d.hasStipend && d.stipendAmount
-        ? `Stipend: Rs. ${d.stipendAmount.toLocaleString('en-IN')} per month`
-        : 'Stipend: Unpaid';
+      const salaryLine = d.hasStipend && d.stipendAmount
+        ? `Salary: Rs. ${d.stipendAmount.toLocaleString('en-IN')} per month`
+        : 'Salary: Unpaid';
 
       const detailsBody =
         `Start Date: ${fmtDateFull(d.startDate)}\n` +
         `Mode: ${d.mode || 'Hybrid'}\n` +
-        `${stipendLine}`;
+        `${salaryLine}`;
 
       const statutoryClause = d.hasStipend && d.stipendAmount
         ? {
             heading: '4. Statutory Benefits & Deductions',
-            body: 'This part-time engagement is on a consolidated stipend/fee basis. Regular statutory benefits including Provident Fund (PF), Employees\u2019 State Insurance (ESI), bonus, gratuity, and paid leave accruals are not applicable. Applicable statutory deductions, including Tax Deducted at Source (TDS) and Professional Tax, will be deducted from the monthly stipend in accordance with prevailing statutory laws.',
+            body: 'This part-time engagement is on a consolidated salary basis. Regular statutory benefits including Provident Fund (PF), Employees\u2019 State Insurance (ESI), bonus, gratuity, and paid leave accruals are not applicable. Applicable statutory deductions, including Tax Deducted at Source (TDS) and Professional Tax, will be deducted from the monthly salary in accordance with prevailing statutory laws.',
           }
         : {
             heading: '4. Statutory Benefits & Deductions',
-            body: 'This part-time engagement is strictly voluntary and unpaid. Statutory employee benefits including Provident Fund (PF), Employees\u2019 State Insurance (ESI), leave encashment, bonus, gratuity, and insurance are not applicable. Since no remuneration or stipend is payable, no statutory payroll deductions or tax withholdings shall apply.',
+            body: 'This part-time engagement is strictly voluntary and unpaid. Statutory employee benefits including Provident Fund (PF), Employees\u2019 State Insurance (ESI), leave encashment, bonus, gratuity, and insurance are not applicable. Since no salary or remuneration is payable, no statutory payroll deductions or tax withholdings shall apply.',
           };
 
       const page1Clauses = [
@@ -313,7 +333,7 @@ export class OfferLetterService {
       doc.moveDown(0.5);
 
       doc.fontSize(10.5).font('Helvetica').fillColor(BRAND.black).text(
-        'We are pleased to offer you the position of ',
+        this.openingLine(d),
         M, doc.y, { continued: true, width: textW, align: 'left', lineGap: 1.5 },
       );
       doc.font('Helvetica-Bold').text(`${d.roleTitle} `, { continued: true });
@@ -323,14 +343,14 @@ export class OfferLetterService {
       );
       doc.moveDown(1);
 
-      const stipendLine = d.hasStipend && d.stipendAmount
-        ? `Stipend: Rs. ${d.stipendAmount.toLocaleString('en-IN')} per month`
-        : 'Stipend: Unpaid';
+      const salaryLine = d.hasStipend && d.stipendAmount
+        ? `Salary: Rs. ${d.stipendAmount.toLocaleString('en-IN')} per month`
+        : 'Salary: Unpaid';
 
       const detailsBody =
         `Start Date: ${fmtDateFull(d.startDate)}\n` +
         `Mode: ${d.mode || 'On-site'}\n` +
-        `${stipendLine}`;
+        `${salaryLine}`;
 
       const natureClauseBody = 'This is a full-time, permanent role. You are expected to devote your full working time and attention to the company during working hours.';
       const roleClauseBody = `You will join the ${d.department} department as ${d.roleTitle}, reporting to your assigned manager.`;
