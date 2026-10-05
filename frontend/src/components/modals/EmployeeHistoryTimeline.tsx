@@ -22,6 +22,8 @@ const EVENT_META: Record<string, { icon: any; color: string; label: string }> = 
   INTERNSHIP_CERTIFICATE_ISSUED: { icon: Award, color: '#059669', label: 'Certificate' },
   INTERNSHIP_CERTIFICATE_REJECTED: { icon: XCircle, color: '#dc2626', label: 'Certificate' },
   EXITED: { icon: LogOut, color: '#dc2626', label: 'Exit' },
+  REHIRED: { icon: UserPlus, color: '#16a34a', label: 'Re-hired' },
+  TEAM_CHANGED: { icon: Users, color: '#2563eb', label: 'Team' },
 };
 
 const TYPE_LABEL: Record<string, string> = { FULL_TIME: 'Full Time', PART_TIME: 'Part Time', CONTRACT: 'Contract', INTERN: 'Intern' };
@@ -69,7 +71,7 @@ export default function EmployeeHistoryTimeline({ employeeId, refreshKey, self =
 
   const events = data.events.filter((e: any) =>
     filter === 'all' ? true
-      : filter === 'role' ? ['JOINED', 'ROLE_CONVERTED', 'EMPLOYMENT_TYPE_CHANGED', 'DESIGNATION_CHANGED', 'DEPARTMENT_CHANGED', 'EXITED'].includes(e.type)
+      : filter === 'role' ? ['JOINED', 'ROLE_CONVERTED', 'EMPLOYMENT_TYPE_CHANGED', 'DESIGNATION_CHANGED', 'DEPARTMENT_CHANGED', 'EXITED', 'REHIRED', 'TEAM_CHANGED'].includes(e.type)
       : filter === 'pay' ? (e.changes ?? []).some((c: any) => c.sensitive)
       : !!e.document,
   );

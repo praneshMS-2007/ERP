@@ -123,6 +123,13 @@ export class HrmController {
     return this.hrmService.removeEmployee(id, lastWorkingDay, user);
   }
 
+  /** Re-hire a former employee. ?preview=true only validates and lists the changes. */
+  @Post('employees/:id/rehire')
+  @RequirePermission('HR', 'WRITE')
+  rehireEmployee(@Param('id') id: string, @Body() body: Record<string, any>, @Query('preview') preview: string, @CurrentUser() user: RequestUser) {
+    return this.hrmService.rehireEmployee(id, body ?? {}, user, preview === 'true');
+  }
+
   @Post('employees/:id/avatar')
   @RequirePermission('HR', 'WRITE')
   @UseInterceptors(FileInterceptor('file', { storage: memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } }))

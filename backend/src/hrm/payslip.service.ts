@@ -105,6 +105,7 @@ export class PayslipService {
     pending?: boolean;
     letterId?: string;
     error?: string;
+    noEmail?: boolean;
   }> {
     const payroll = await this.prisma.payroll.findUnique({
       where: { id: payrollId },
@@ -113,27 +114,30 @@ export class PayslipService {
     if (!payroll) return { documentId: null, fileUrl: null, emailed: false, error: 'Payroll record not found' };
 
     const employee = payroll.employee;
-    if (!employee.personalEmail) {
-      return { documentId: null, fileUrl: null, emailed: false, error: 'No email address on file for this employee' };
-    }
-    if (!employee.pan || !employee.bankAccountNo) {
-      return {
-        documentId: null,
-        fileUrl: null,
-        emailed: false,
-        error: 'PAN and bank account number must be on file before a payslip can be generated',
-      };
+    // No email on file no longer blocks the payslip: it is still generated and
+    // downloadable, and waits in the Letter Outbox until an address is added.
+    const toEmail = employee.personalEmail?.trim() || '';
+    // Missing details never block a payslip — they print as "Not Provided", so
+    // HR can still pay and send it while the employee's record is completed.
+    const given = (v: string | null | undefined) => (v && v.trim() ? v.trim() : NOT_PROVIDED);
+    let pan: string | null = null;
+    if (employee.pan) {
+      try {
+        pan = decryptField(employee.pan);
+      } catch {
+        this.logger.warn(`PAN for ${employee.empCode ?? employee.id} could not be decrypted (ENCRYPTION_KEY mismatch) — shown as Not Provided`);
+      }
     }
 
     const data: PayslipData = {
-      employeeName: [employee.firstName, employee.lastName].filter(Boolean).join(' ').trim().toUpperCase(),
-      empCode: employee.empCode ?? '\u2014',
-      designation: employee.designation?.title ?? '\u2014',
-      department: employee.department?.name ?? '\u2014',
-      joinDate: fmtDate(employee.joinDate),
-      pan: decryptField(employee.pan),
-      bankAccountNo: employee.bankAccountNo,
-      bankIfsc: employee.bankIfsc ?? '\u2014',
+      employeeName: [employee.firstName, employee.lastName].filter(Boolean).join(' ').trim().toUpperCase() || NOT_PROVIDED,
+      empCode: given(employee.empCode),
+      designation: given(employee.designation?.title),
+      department: given(employee.department?.name),
+      joinDate: employee.joinDate ? fmtDate(employee.joinDate) : NOT_PROVIDED,
+      pan: given(pan),
+      bankAccountNo: given(employee.bankAccountNo),
+      bankIfsc: given(employee.bankIfsc),
       payPeriod: payroll.payPeriod,
       paymentDate: payroll.paymentDate ?? new Date(),
       baseSalary: payroll.baseSalary,
@@ -190,7 +194,7 @@ export class PayslipService {
         payrollId,
         employeeId: employee.id,
         documentId: document.id,
-        to: employee.personalEmail,
+        to: toEmail,
         subject: `Your payslip for ${data.payPeriod} \u2014 ${COMPANY.name}`,
         html: this.buildEmailHtml(employee.firstName, data),
         attachmentName: `Payslip - ${data.employeeName} - ${data.payPeriod}.pdf`,
@@ -199,7 +203,7 @@ export class PayslipService {
       { forceDraft: options.forceDraft },
     );
     this.logger.log(
-      `Payslip generated (${document.fileName}) for payroll ${payrollId} — ${queued.pending ? 'waiting in the outbox for review' : queued.emailed ? 'emailed' : 'email failed'}`,
+      `Payslip generated (${document.fileName}) for payroll ${payrollId} — ${!toEmail ? 'no email on file, kept in the outbox' : queued.pending ? 'waiting in the outbox for review' : queued.emailed ? 'emailed' : 'email failed'}`,
     );
 
     return {
@@ -209,6 +213,7 @@ export class PayslipService {
       pending: queued.pending,
       letterId: queued.letterId,
       error: queued.error,
+      noEmail: !toEmail,
     };
   }
 
@@ -484,6 +489,9 @@ function fmtMoneyOrDash(amount: number): string {
   if (!amount || amount === 0) return '-';
   return String(amount);
 }
+
+/** Printed in place of any employee detail that isn't on file. */
+const NOT_PROVIDED = 'Not Provided';
 
 function fmtDate(d: Date | null): string {
   if (!d) return '\u2014';

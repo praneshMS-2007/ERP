@@ -277,7 +277,8 @@ export class AuditInterceptor implements NestInterceptor {
     const method = request.method as string;
     const rawPath: string = request.route?.path || request.path || request.url;
 
-    if (!MUTATING_METHODS.has(method) || NON_MUTATING_PATHS.has(rawPath)) {
+    // ?preview=true is a dry run (e.g. the re-hire review screen) — nothing changes, so nothing to audit.
+    if (!MUTATING_METHODS.has(method) || NON_MUTATING_PATHS.has(rawPath) || request.query?.preview === 'true') {
       return next.handle();
     }
 

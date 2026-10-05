@@ -11,8 +11,9 @@ import { OfferLetterService } from './offer-letter.service';
 import { PayslipService } from './payslip.service';
 import { AnnouncementsService } from '../announcements/announcements.service';
 import { formatDateDMY } from '../common/date-format';
-import { EmployeeHistoryService, EMP_TYPE_LABEL } from './employee-history.service';
+import { EmployeeHistoryService, EMP_TYPE_LABEL, WORK_MODE_LABEL } from './employee-history.service';
 import { TeamsService } from './teams.service';
+import { tempPassword } from '../common/temp-password';
 import type { MembershipInput } from './teams.service';
 
 /** Team shares sent with an employee form; refuses a share pay type with no share in it. */
@@ -796,9 +797,30 @@ export class HrmService {
     if (!/^[a-zA-Z0-9._-]+$/.test(username)) {
       throw new BadRequestException('Username can only contain letters, numbers, dots, hyphens and underscores.');
     }
-    const clashingUser = await this.prisma.user.findUnique({ where: { username } });
+    const clashingUser = await this.prisma.user.findUnique({
+      where: { username },
+      select: { employee: { select: { firstName: true, lastName: true, empCode: true, status: true } } },
+    });
     if (clashingUser) {
-      throw new BadRequestException(`"${username}" is already taken — choose a different username.`);
+      // Say who holds it and what to do — a removed employee keeps their login
+      // (switched off) with their history, so their username stays taken.
+      let free = '';
+      for (let n = 2; n < 100 && !free; n++) {
+        if (!(await this.prisma.user.findUnique({ where: { username: `${username}${n}` }, select: { id: true } }))) free = `${username}${n}`;
+      }
+      const suggestion = free ? ` "${free}" is free.` : '';
+      const e = clashingUser.employee;
+      const who = e ? `${`${e.firstName} ${e.lastName}`.trim()}${e.empCode ? ` (${e.empCode})` : ''}` : '';
+      if (e && e.status === 'INACTIVE') {
+        throw new BadRequestException(
+          `"${username}" still belongs to ${who}, a former employee — a removed employee keeps their login (switched off) with their history. ` +
+          `Choose a different username, or erase ${who} permanently from Former Employees to free it.${suggestion}`,
+        );
+      }
+      if (e) {
+        throw new BadRequestException(`"${username}" is already the username of ${who}, a current employee. Choose a different username.${suggestion}`);
+      }
+      throw new BadRequestException(`"${username}" is already used by another login account (see User Management). Choose a different username.${suggestion}`);
     }
     const password = typeof data.password === 'string' ? data.password : '';
     if (!password || password.length < 8) {
@@ -884,6 +906,192 @@ export class HrmService {
     // directly here, even though the onboarding form doesn't collect these yet.
     const { pan, aadhaarNumber, uanNumber, pfNumber, esicNumber, ...safeEmployee } = employee;
     return { ...safeEmployee, username, offerLetter };
+  }
+
+  /**
+   * Brings a former employee back: same record, employee code, username and
+   * history, with a new joining date and whatever role / type / work mode /
+   * pay HR sets now. With dryRun it only validates and returns the list of
+   * changes, so the screen can show a preview before HR confirms.
+   *
+   * joinDate moves to the new start so attendance, leave and tenure count the
+   * new stint; the earlier stint stays in the history (REHIRED event). A new
+   * offer letter for the new terms is generated and waits in the Letter Outbox.
+   * The login is switched back on, by default with a new temporary password
+   * the person must change at first sign-in.
+   */
+  async rehireEmployee(id: string, data: Record<string, any>, actor?: RequestUser, dryRun = false) {
+    const emp = await this.prisma.employee.findUnique({
+      where: { id },
+      include: {
+        department: true, designation: true,
+        user: { select: { id: true, username: true } },
+        teamMemberships: { include: { team: { select: { name: true } } } },
+      },
+    });
+    if (!emp) throw new NotFoundException('Employee not found');
+    if (emp.status !== 'INACTIVE') throw new BadRequestException('Only former employees can be re-hired.');
+
+    const joinRaw = String(data.joinDate ?? '').trim();
+    if (!joinRaw) throw new BadRequestException('Choose the new joining date.');
+    const joinDate = new Date(joinRaw);
+    if (Number.isNaN(joinDate.getTime())) throw new BadRequestException('The new joining date is not a valid date.');
+    if (emp.lastWorkingDay && joinDate <= emp.lastWorkingDay) {
+      throw new BadRequestException(`The new joining date must be after their last working day (${formatDateDMY(emp.lastWorkingDay)}).`);
+    }
+
+    const empType = String(data.empType ?? emp.empType);
+    if (!EMP_TYPE_LABEL[empType]) throw new BadRequestException('Choose an employment type.');
+    const workMode = String(data.workMode ?? emp.workMode ?? 'ONSITE').toUpperCase();
+    if (!['ONSITE', 'REMOTE', 'HYBRID'].includes(workMode)) throw new BadRequestException('Choose a work mode.');
+
+    let engagementEndDate: Date | null = null;
+    if (empType === 'INTERN' || empType === 'CONTRACT') {
+      const raw = String(data.engagementEndDate ?? '').trim();
+      if (!raw && empType === 'INTERN') throw new BadRequestException('Internship end date is required for interns.');
+      if (raw) {
+        engagementEndDate = new Date(raw);
+        if (Number.isNaN(engagementEndDate.getTime())) throw new BadRequestException('The end date is not a valid date.');
+        if (engagementEndDate <= joinDate) throw new BadRequestException('The end date must be after the new joining date.');
+      }
+    }
+
+    const departmentName = typeof data.department === 'string' ? data.department.trim().replace(/\s+/g, ' ') : '';
+    const designationName = typeof data.designation === 'string' ? data.designation.trim().replace(/\s+/g, ' ') : '';
+    if (!departmentName) throw new BadRequestException('Department is required.');
+    if (!designationName) throw new BadRequestException('Designation is required.');
+
+    const emailRaw = String(data.personalEmail ?? emp.personalEmail ?? '').trim();
+    if (!emailRaw) throw new BadRequestException('An email address is required — the new offer letter is sent there.');
+    const personalEmail = normaliseEmail(emailRaw);
+    const contact = data.contact !== undefined ? (String(data.contact).trim() || null) : emp.contact;
+
+    const hasStipend = data.hasStipend === true || data.hasStipend === 'true';
+    const amount = hasStipend ? Number(data.stipendAmount) : null;
+    if (hasStipend && (!Number.isFinite(amount) || (amount as number) <= 0)) {
+      throw new BadRequestException(`Enter the monthly ${empType === 'INTERN' ? 'stipend' : 'salary'} amount.`);
+    }
+    const teamShares = readTeamShares(data) ?? [];
+    await this.teams.validateEmployeeTeams(id, teamShares);
+
+    // Login: switched back on. A new temporary password unless HR chose to keep the old one.
+    const resetPassword = data.resetPassword !== false;
+    let newUsername: string | null = null;
+    if (!emp.user) {
+      newUsername = typeof data.username === 'string' ? data.username.trim() : '';
+      if (!newUsername) throw new BadRequestException('This person has no login yet — choose a username for them.');
+      if (!/^[a-zA-Z0-9._-]+$/.test(newUsername)) throw new BadRequestException('Username can only contain letters, numbers, dots, hyphens and underscores.');
+      if (await this.prisma.user.findUnique({ where: { username: newUsername }, select: { id: true } })) {
+        throw new BadRequestException(`"${newUsername}" is already taken — choose a different username.`);
+      }
+    }
+
+    // ---- what changes (shown in the preview, and stored on the history entry)
+    const inr = (n: number) => `₹${Math.round(n).toLocaleString('en-IN')}`;
+    const teamNames = new Map((await this.prisma.team.findMany({ where: { id: { in: teamShares.map((s) => String(s.teamId)) } }, select: { id: true, name: true } })).map((t) => [t.id, t.name]));
+    const payText = (fixed: number | null, shares: { name: string; pct: number }[], type: string) => {
+      const parts = [fixed ? `${inr(fixed)}/month` : '', ...shares.filter((s) => s.pct > 0).map((s) => `${+s.pct.toFixed(2)}% of ${s.name} revenue`)].filter(Boolean);
+      return parts.length ? parts.join(' + ') : `Unpaid (no ${type === 'INTERN' ? 'stipend' : 'salary'})`;
+    };
+    const teamsText = (rows: { name: string; role: string }[]) => (rows.length ? rows.map((r) => `${r.name} (${r.role === 'HEAD' ? 'Head' : 'Member'})`).join(', ') : 'None');
+    const prevShares = emp.teamMemberships.map((m) => ({ name: m.team.name, pct: m.revenueSharePct ?? 0, role: m.role }));
+    const nextShares = teamShares.map((s) => ({ name: teamNames.get(String(s.teamId)) ?? 'Team', pct: Number(s.revenueSharePct) || 0, role: String(s.role ?? 'MEMBER').toUpperCase() }));
+    const d = (x: Date | null | undefined) => (x ? formatDateDMY(x) : '—');
+    const all = [
+      { field: 'joinDate', label: 'Joining date', from: d(emp.joinDate), to: d(joinDate) },
+      { field: 'empType', label: 'Employment type', from: EMP_TYPE_LABEL[emp.empType], to: EMP_TYPE_LABEL[empType] },
+      { field: 'designation', label: 'Designation', from: emp.designation?.title ?? '—', to: designationName },
+      { field: 'department', label: 'Department', from: emp.department?.name ?? '—', to: departmentName },
+      { field: 'workMode', label: 'Work mode', from: emp.workMode ? WORK_MODE_LABEL[emp.workMode] ?? emp.workMode : '—', to: WORK_MODE_LABEL[workMode] ?? workMode },
+      { field: 'engagementEndDate', label: empType === 'INTERN' ? 'Internship end date' : 'End date', from: d(emp.engagementEndDate), to: d(engagementEndDate) },
+      { field: 'personalEmail', label: 'Email', from: emp.personalEmail ?? '—', to: personalEmail },
+      { field: 'contact', label: 'Phone', from: emp.contact ?? '—', to: contact ?? '—' },
+      { field: 'compensation', label: empType === 'INTERN' ? 'Stipend' : 'Salary', sensitive: true,
+        from: payText(emp.hasStipend ? emp.stipendAmount : null, prevShares, emp.empType), to: payText(amount, nextShares, empType) },
+      { field: 'teams', label: 'Teams', from: teamsText(prevShares), to: teamsText(nextShares) },
+    ];
+    const changes = all.filter((c) => c.from !== c.to || c.field === 'joinDate');
+    const previousStint = `${d(emp.joinDate)} – ${d(emp.lastWorkingDay)}`;
+    const username = emp.user?.username ?? newUsername;
+
+    if (dryRun) {
+      return {
+        name: `${emp.firstName} ${emp.lastName}`.trim(), empCode: emp.empCode, previousStint,
+        changes, unchanged: all.filter((c) => !changes.includes(c)).map((c) => c.label),
+        username, hasLogin: !!emp.user, resetPassword, offerLetterTo: personalEmail,
+      };
+    }
+
+    // ---- apply
+    const department = await this.resolveDepartment(departmentName);
+    const designation = await this.resolveDesignation(designationName);
+    const password = resetPassword || !emp.user ? tempPassword() : null;
+    const employeeRole = !emp.user ? await this.prisma.role.findUnique({ where: { name: 'EMPLOYEE' } }) : null;
+
+    await this.prisma.$transaction(async (tx) => {
+      let userId = emp.user?.id ?? null;
+      if (emp.user) {
+        await tx.user.update({
+          where: { id: emp.user.id },
+          data: {
+            isActive: true,
+            ...(password ? { passwordHash: await bcrypt.hash(password, 10), passwordPlain: encryptField(password), mustChangePassword: true } : {}),
+          },
+        });
+        await tx.authentication.deleteMany({ where: { userId: emp.user.id } }); // no stale sessions from the old stint
+      } else {
+        if (!employeeRole) throw new BadRequestException('The EMPLOYEE role is missing from this database. Run the seed first.');
+        const u = await tx.user.create({
+          data: { username: newUsername!, passwordHash: await bcrypt.hash(password!, 10), passwordPlain: encryptField(password!), roleId: employeeRole.id, isActive: true, mustChangePassword: true },
+        });
+        userId = u.id;
+      }
+
+      await tx.employee.update({
+        where: { id },
+        data: {
+          status: 'ACTIVE', lastWorkingDay: null, rehiredAt: new Date(),
+          joinDate, empType: empType as any, workMode: workMode as any, engagementEndDate,
+          departmentId: department.id, designationId: designation.id,
+          personalEmail, contact,
+          hasStipend: !!amount, stipendAmount: amount,
+          // the intern-conversion letter wording belongs to the earlier stint
+          convertedFromInternAt: null, internshipEndDate: null,
+          userId,
+        },
+      });
+
+      // Pay record for the new stint: close whatever was open, start fresh from the new joining date.
+      await tx.salaryStructure.updateMany({ where: { employeeId: id, effectiveTo: null }, data: { effectiveTo: joinDate } });
+      if (amount) {
+        await tx.salaryStructure.create({
+          data: { employeeId: id, basic: amount, hra: 0, specialAllowance: 0, effectiveFrom: joinDate, note: 'Re-hired', createdById: actor?.id ?? null },
+        });
+      }
+
+      await this.teams.setEmployeeTeams(id, teamShares, actor, tx);
+
+      await this.history.record({
+        employeeId: id, type: 'REHIRED',
+        title: `Re-hired as ${designation.title} (${EMP_TYPE_LABEL[empType]})`,
+        effectiveDate: joinDate,
+        changes: changes as any,
+        note: [`Previous stint: ${previousStint}.`, typeof data.note === 'string' ? data.note.trim() : ''].filter(Boolean).join(' '),
+        actor,
+      }, tx);
+    }, { timeout: 30000 });
+
+    const offerLetter = await this.offerLetterService.issueAndSend(id, { actor }).catch((err) => {
+      this.logger.error(`Offer letter pipeline threw for re-hire ${id}: ${err.message}`);
+      return { documentId: null, fileUrl: null, emailed: false, pending: false, error: err.message as string };
+    });
+
+    this.logger.log(`Re-hired ${emp.empCode} from ${formatDateDMY(joinDate)}`);
+    return {
+      employeeId: id, empCode: emp.empCode, name: `${emp.firstName} ${emp.lastName}`.trim(),
+      username, tempPassword: password, joinDate,
+      offerLetter: { pending: !!offerLetter.pending, emailed: offerLetter.emailed, error: offerLetter.error ?? null },
+    };
   }
 
   /**

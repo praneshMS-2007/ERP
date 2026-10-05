@@ -248,6 +248,9 @@ model Employee {
   // FIXED: stipendAmount only. REVENUE_SHARE: a % of team revenue only.
   // FIXED_AND_SHARE: both. The % per team lives on TeamMember.revenueSharePct.
   payType         PayType      @default(FIXED) @map("pay_type")
+  // Set when a former employee is brought back; their current stint began then
+  // (joinDate moves to the new start). Earlier stints live in the history.
+  rehiredAt       DateTime?    @map("rehired_at")
   teamMemberships TeamMember[]
 
   offerLetterDocumentId String?   @unique @map("offer_letter_document_id")
@@ -399,6 +402,7 @@ enum EmployeeEventType {
   INTERNSHIP_CERTIFICATE_REJECTED
   EXITED
   TEAM_CHANGED
+  REHIRED
 }
 
 enum PayType {

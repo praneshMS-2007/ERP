@@ -143,13 +143,15 @@ export class TeamsService {
   async validateEmployeeTeams(employeeId: string | null, input: MembershipInput[]) {
     const wanted = this.parseRows((input ?? []).map((r) => ({ ...r, employeeId: employeeId ?? '__new__' })), 'teamId') as unknown as (Row & { teamId: string })[];
     const teamIds = Array.from(new Set(wanted.map((w) => w.teamId)));
-    const teams = await this.prisma.team.findMany({ where: { id: { in: teamIds } }, include: { members: true } });
+    // Former employees' old rows don't count towards a team's Head or 100% limits.
+    const membersInclude = { members: { include: { employee: { select: { status: true } } } } } as const;
+    const teams = await this.prisma.team.findMany({ where: { id: { in: teamIds } }, include: membersInclude });
     const touched = new Set([...teamIds, ...(employeeId ? (await this.prisma.teamMember.findMany({ where: { employeeId }, select: { teamId: true } })).map((m) => m.teamId) : [])]);
     const plans: { team: { id: string; name: string }; rows: Row[] }[] = [];
     for (const teamId of touched) {
-      const team = teams.find((t) => t.id === teamId) ?? (await this.prisma.team.findUnique({ where: { id: teamId }, include: { members: true } }));
+      const team = teams.find((t) => t.id === teamId) ?? (await this.prisma.team.findUnique({ where: { id: teamId }, include: membersInclude }));
       if (!team) throw new BadRequestException('One of the chosen teams no longer exists.');
-      const others: Row[] = team.members.filter((m) => m.employeeId !== employeeId).map((m) => ({ employeeId: m.employeeId, role: m.role, revenueSharePct: m.revenueSharePct }));
+      const others: Row[] = team.members.filter((m) => m.employeeId !== employeeId && m.employee.status !== 'INACTIVE').map((m) => ({ employeeId: m.employeeId, role: m.role, revenueSharePct: m.revenueSharePct }));
       const mine = wanted.find((w) => w.teamId === teamId);
       const rows = mine ? [...others, { employeeId: mine.employeeId, role: mine.role, revenueSharePct: mine.revenueSharePct }] : others;
       this.validateTeam(team.name, rows);

@@ -1,3 +1,4 @@
+import { tempPassword } from '../common/temp-password';
 import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import * as crypto from 'crypto';
 import * as fs from 'fs';
@@ -160,18 +161,6 @@ function driveId(value: string): string | null {
 
 function slug(v: string): string {
   return v.toLowerCase().replace(/[^a-z0-9]+/g, '');
-}
-
-function tempPassword(): string {
-  // No look-alike characters (0/O, 1/l/I) — it is read off a printed list.
-  const letters = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKMNPQRSTUVWXYZ';
-  const digits = '23456789';
-  const all = letters + digits;
-  const pick = (set: string) => set[crypto.randomInt(set.length)];
-  const chars = [pick(letters), pick(letters), pick(digits), pick(digits)];
-  while (chars.length < 12) chars.push(pick(all));
-  for (let i = chars.length - 1; i > 0; i--) { const j = crypto.randomInt(i + 1); [chars[i], chars[j]] = [chars[j], chars[i]]; }
-  return chars.join('');
 }
 
 function parseCsv(text: string): string[][] {

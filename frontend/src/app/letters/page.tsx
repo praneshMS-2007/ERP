@@ -187,7 +187,7 @@ export default function LetterOutboxPage() {
                       <td><span className="lo-kind" style={{ color: m.color }}><Icon size={15} /> {m.label}</span></td>
                       <td>
                         <div className="lo-name">{l.employee ? `${l.employee.firstName} ${l.employee.lastName}`.trim() : '—'}</div>
-                        <div className="lo-sub">{l.toEmail}</div>
+                        <div className="lo-sub">{l.toEmail || <span className="lo-err">No email address — add one, or download the PDF</span>}</div>
                       </td>
                       <td className="lo-subject">{l.subject}{l.status === 'FAILED' && l.error && <div className="lo-err">Failed: {l.error}</div>}</td>
                       <td className="lo-sub">{stamp(tab === 'SENT' && l.sentAt ? l.sentAt : l.createdAt)}{l.createdByName && tab !== 'SENT' ? <><br />by {l.createdByName}</> : null}{tab === 'SENT' && l.sentByName ? <><br />by {l.sentByName}</> : null}</td>
@@ -331,8 +331,11 @@ function LetterReview({ id, remaining, onClose, onDone, onReplaced, setNotice }:
           </section>
           <section className="lr-side">
             <label>To
-              <input type="email" value={toEmail} onChange={(e) => setToEmail(e.target.value)} disabled={!open} />
+              <input type="email" value={toEmail} onChange={(e) => setToEmail(e.target.value)} disabled={!open} placeholder="name@example.com" />
             </label>
+            {open && !toEmail.trim() && (
+              <p className="lr-noemail">No email address on file. Type one above to send it from here, or download the PDF and send it by hand.</p>
+            )}
             <label>Subject
               <input value={subject} onChange={(e) => setSubject(e.target.value)} disabled={!open} />
             </label>
@@ -340,6 +343,7 @@ function LetterReview({ id, remaining, onClose, onDone, onReplaced, setNotice }:
             <div className="lr-mail-label"><Mail size={14} /> Email text</div>
             {letter && <iframe className="lr-mail" title="Email text" sandbox="" srcDoc={letter.htmlBody} />}
             {pdf && <a className="lr-open" href={pdf} target="_blank" rel="noreferrer">Open the PDF in a new tab</a>}
+            {pdf && <a className="lr-open" href={pdf} download={letter?.attachmentName || 'letter.pdf'}>Download the PDF</a>}
             <p className="lr-dim">The PDF above is attached as <b>{letter?.attachmentName}</b>. Something wrong in it? Fix the record first, then press Re-generate.</p>
           </section>
         </div>
@@ -379,6 +383,7 @@ function LetterReview({ id, remaining, onClose, onDone, onReplaced, setNotice }:
 .lr-mail{flex:1;min-height:200px;width:100%;border:1px solid var(--color-border,#e5e7eb);border-radius:8px;background:#fff;}
 .lr-dim{font-size:12px;color:var(--color-text-muted);margin:0;}
 .lr-open{font-size:12.5px;font-weight:600;color:#2563eb;}
+.lr-noemail{font-size:12.5px;color:#92400e;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:8px 10px;margin:0;}
 .lr-foot{display:flex;justify-content:flex-end;gap:10px;padding:12px 20px;border-top:1px solid var(--color-border,#e5e7eb);flex-wrap:wrap;}
 .lr-danger{margin-right:auto;color:#b91c1c;}
 `}</style>

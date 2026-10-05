@@ -204,7 +204,9 @@ export default function PayrollPageContent({ mode }: { mode: 'hr' | 'finance' })
     const result = await hrmApi.updatePayrollStatus(id, 'PAID');
     fetchAll();
     const payslip = result?.payslip;
-    if (payslip?.pending) {
+    if (payslip?.noEmail) {
+      alert('Payroll marked paid. The payslip was created, but there is no email address for this person — download it from the Payslip column to send it by hand, or add their email to it in Letter Outbox and send it from there.');
+    } else if (payslip?.pending) {
       alert('Payroll marked paid. The payslip is waiting in Letter Outbox for you to review before it is emailed.');
     } else if (payslip && !payslip.emailed) {
       alert(`Payroll marked paid, but the payslip email did not go out: ${payslip.error || 'unknown error'}. The record is still paid — you can address this separately.`);

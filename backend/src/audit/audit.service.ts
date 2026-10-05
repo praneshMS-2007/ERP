@@ -257,6 +257,9 @@ export function buildPlainEnglishDescription(d: {
     if (route.includes('/documents')) {
       return `${actor} uploaded verification documents for employee ${target ? `'${target}'` : ''}.`;
     }
+    if (route.includes('/rehire')) {
+      return `${actor} re-hired former employee ${target ? `'${target}'` : ''}${body.designation ? ` as ${body.designation}` : ''}${body.joinDate ? `, starting ${String(body.joinDate).slice(0, 10).split('-').reverse().join('/')}` : ''}.`;
+    }
     if (actType === 'CREATE') {
       const deptStr = body.department ? ` in the ${body.department} department` : '';
       const desigStr = body.designation ? ` as ${body.designation}` : '';

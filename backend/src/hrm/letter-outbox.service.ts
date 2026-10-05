@@ -44,6 +44,8 @@ export interface QueueResult {
   /** True when the letter is waiting in the outbox for someone to review it. */
   pending: boolean;
   error?: string;
+  /** No email address on file — kept as a draft for HR to add one or download. */
+  noEmail?: boolean;
 }
 
 const policyKey = (kind: LetterKind) => `letter_preview_${kind}`;
@@ -131,6 +133,9 @@ export class LetterOutboxService {
       },
     });
 
+    // Without an address it can't be mailed — keep it as a draft (downloadable)
+    // until someone adds the email in the Outbox.
+    if (!input.to?.trim()) return { letterId: letter.id, emailed: false, pending: true, noEmail: true };
     const previewOn = (await this.getSettings())[input.kind];
     if (previewOn || options.forceDraft) return { letterId: letter.id, emailed: false, pending: true };
 
@@ -199,6 +204,9 @@ export class LetterOutboxService {
   async send(id: string, viewer?: RequestUser) {
     const letter = await this.get(id, viewer);
     this.assertOpen(letter.status);
+    if (!letter.toEmail?.trim()) {
+      throw new BadRequestException('There is no email address for this letter. Type one in the "To" box and save, or download the PDF and send it by hand.');
+    }
     const result = await this.dispatch(id, viewer ?? null);
     return { id, status: result.status, error: result.error };
   }

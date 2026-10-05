@@ -3,10 +3,11 @@
 import { useEffect, useState } from 'react';
 import {
   Users, UserPlus, MoreVertical, ChevronLeft, ChevronRight,
-  Trash2, Edit, Search, Eye, EyeOff, Mail, Download, CheckCircle2, XCircle, AlertTriangle,
+  Trash2, Edit, Search, Eye, EyeOff, Mail, Download, CheckCircle2, XCircle, AlertTriangle, RotateCcw,
 } from 'lucide-react';
 import { hrmApi, exportApi, API_ORIGIN, teamsApi } from '../../../services/api';
 import PaySetup, { payPayload, payProblem, type PayValue } from '../../../components/PaySetup';
+import RehireModal from '../../../components/modals/RehireModal';
 import ExportButton from '../../../components/ExportButton';
 import Modal, { FormField } from '../../../components/Modal';
 import EmployeeDetailModal from '../../../components/modals/EmployeeDetailModal';
@@ -88,6 +89,8 @@ export default function EmployeeDirectory() {
 
   // Permanent erase - Admin and HR Manager, and only from the Former Employees tab.
   const canErase = user?.role === 'SUPER_ADMIN' || user?.role === 'HR_MANAGER';
+  const canRehire = hasPermission('HR', 'WRITE');
+  const [rehireId, setRehireId] = useState<string | null>(null);
   const [eraseTarget, setEraseTarget] = useState<{ id: string; name: string } | null>(null);
   const [erasePreview, setErasePreview] = useState<any | null>(null);
   const [eraseTyped, setEraseTyped] = useState('');
@@ -494,6 +497,11 @@ export default function EmployeeDirectory() {
                                 <Trash2 size={14} /> Remove
                               </button>
                             )}
+                            {activeTab === 'FORMER' && canRehire && (
+                              <button onClick={() => { setActionMenuId(null); setRehireId(emp.id); }} style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%', padding: '8px 12px', border: 'none', background: 'transparent', cursor: 'pointer', borderRadius: '6px', fontSize: '13px', color: '#16a34a', fontWeight: 600 }}>
+                                <RotateCcw size={14} /> Re-hire
+                              </button>
+                            )}
                             {activeTab === 'FORMER' && canErase && (
                               <button onClick={() => handleErase(emp.id, `${emp.firstName} ${emp.lastName}`.trim())} style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%', padding: '8px 12px', border: 'none', background: 'transparent', cursor: 'pointer', borderRadius: '6px', fontSize: '13px', color: '#dc2626', fontWeight: 600 }}>
                                 <Trash2 size={14} /> Erase permanently
@@ -649,6 +657,15 @@ export default function EmployeeDirectory() {
           </button>
         </div>
       </Modal>
+
+      {/* RE-HIRE - former employees only: edit -> preview -> confirm */}
+      <RehireModal
+        employeeId={rehireId}
+        onClose={() => setRehireId(null)}
+        onDone={fetchAll}
+        departments={departments}
+        designations={designations}
+      />
 
       {/* ERASE PERMANENTLY - former employees only, Admin and HR Manager */}
       <Modal isOpen={!!eraseTarget} onClose={() => { if (!erasing) setEraseTarget(null); }} title={`Erase ${eraseTarget?.name ?? ''} permanently`} width="520px">

@@ -749,8 +749,8 @@ export default function EmployeeDetailModal({
                     <div className="edm-warn">
                       <AlertCircle size={15} />
                       <span>
-                        Payslips cannot be generated for this employee until the PAN and bank account
-                        number are filled in.
+                        PAN or bank account number is missing — payslips will show &ldquo;Not Provided&rdquo; for it
+                        until it&apos;s filled in, and salary can&apos;t be paid into the bank without the account number.
                       </span>
                     </div>
                   )}

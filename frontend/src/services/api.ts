@@ -135,6 +135,12 @@ export const hrmApi = {
     mutateApi(`/hrm/employees/${id}/salary`, { method: 'PUT', body: JSON.stringify(data) }),
   removeEmployee: (id: string, lastWorkingDay?: string) =>
     mutateApi(`/hrm/employees/${id}/remove`, { method: 'PUT', body: JSON.stringify({ lastWorkingDay }) }),
+  /** Validates a re-hire and lists what would change, without saving anything. */
+  rehirePreview: (id: string, data: any) =>
+    mutateApi(`/hrm/employees/${id}/rehire?preview=true`, { method: 'POST', body: JSON.stringify(data) }),
+  /** Brings a former employee back (same record and history, new joining date and terms). */
+  rehireEmployee: (id: string, data: any) =>
+    mutateApi(`/hrm/employees/${id}/rehire`, { method: 'POST', body: JSON.stringify(data) }),
   /** What a permanent erase would delete (Admin and HR Manager, former employees only). */
   erasePreview: (id: string) => mutateApi(`/hrm/employees/${id}/erase-preview`),
   /** Permanently erases a former employee. confirmCode must repeat their employee code. */
