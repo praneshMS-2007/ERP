@@ -332,12 +332,12 @@ export class HrmController {
     return this.hrmService.deletePayroll(id);
   }
 
-  /** Admin only — removes the payslip PDF and its email copies; the payroll record stays. */
-  @Delete('payrolls/:id/payslip')
+  /** Admin only — erases a payroll record completely, including a paid one, with its payslip and expense entry. */
+  @Delete('payrolls/:id/permanent')
   @RequireRole('SUPER_ADMIN')
   @RequirePermission('HR', 'DELETE')
-  deletePayslip(@Param('id') id: string, @CurrentUser() user: RequestUser) {
-    return this.hrmService.deletePayslip(id, user);
+  deletePayrollRecord(@Param('id') id: string, @CurrentUser() user: RequestUser) {
+    return this.hrmService.deletePayrollRecord(id, user);
   }
 
   // ========== PERFORMANCE REVIEWS ==========

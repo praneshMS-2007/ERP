@@ -2176,31 +2176,45 @@ export class HrmService {
   }
 
   /**
-   * Admin-only: deletes a payroll record's payslip — the PDF on disk, its
-   * download entry, and every email copy of it in the Letter Outbox (sent
-   * or not). The payroll figures and the Finance expense stay, so the books
-   * are untouched; the record just reads "Not generated" and a new payslip
-   * can be created later.
+   * Admin-only: erases a payroll record completely — paid or not. The payslip
+   * PDF, its download entry, every email copy in the Letter Outbox, the
+   * payroll row itself and the Finance expense that marking it paid created
+   * all go, so nothing about that month's pay remains in the application.
+   *
+   * (The expense is matched by the description the pay step wrote, because
+   * the two aren't linked by id; at most one matching entry is removed.)
    */
-  async deletePayslip(payrollId: string, actor?: RequestUser) {
-    if (actor?.role !== 'SUPER_ADMIN') throw new ForbiddenException('Only an administrator can delete a payslip.');
+  async deletePayrollRecord(payrollId: string, actor?: RequestUser) {
+    if (actor?.role !== 'SUPER_ADMIN') throw new ForbiddenException('Only an administrator can delete a payroll record.');
     const payroll = await this.prisma.payroll.findUnique({
       where: { id: payrollId },
-      select: { id: true, payPeriod: true, payslipDocumentId: true, employee: { select: { firstName: true, lastName: true, empCode: true } } },
+      include: { employee: { select: { firstName: true, lastName: true, empCode: true } } },
     });
     if (!payroll) throw new NotFoundException('Payroll record not found');
-    if (!payroll.payslipDocumentId) throw new BadRequestException('This payroll record has no payslip to delete.');
 
-    const doc = await this.prisma.document.findUnique({ where: { id: payroll.payslipDocumentId }, select: { id: true, storagePath: true } });
-    // Any older version of the same payslip kept in Documents for this payroll.
+    const doc = payroll.payslipDocumentId
+      ? await this.prisma.document.findUnique({ where: { id: payroll.payslipDocumentId }, select: { id: true, storagePath: true } })
+      : null;
     const letters = await this.prisma.outgoingLetter.count({ where: { payrollId } });
+    let expenseRemoved = false;
 
     await this.prisma.$transaction(async (tx) => {
       await tx.outgoingLetter.deleteMany({ where: { OR: [{ payrollId }, ...(doc ? [{ documentId: doc.id }] : [])] } });
-      await tx.payroll.update({ where: { id: payrollId }, data: { payslipDocumentId: null, payslipSentAt: null, payslipSendError: null } });
+      await tx.payroll.delete({ where: { id: payrollId } });
       if (doc) {
         await tx.document.updateMany({ where: { supersedesId: doc.id }, data: { supersedesId: null } });
         await tx.document.delete({ where: { id: doc.id } });
+      }
+      if (payroll.status === 'PAID') {
+        const expense = await tx.expense.findFirst({
+          where: {
+            category: 'PAYROLL', amount: payroll.netPay,
+            description: `Payroll: ${payroll.employee.firstName} ${payroll.employee.lastName} - ${payroll.payPeriod}`,
+          },
+          orderBy: { createdAt: 'desc' },
+          select: { id: true },
+        });
+        if (expense) { await tx.expense.delete({ where: { id: expense.id } }); expenseRemoved = true; }
       }
     });
 
@@ -2214,8 +2228,8 @@ export class HrmService {
     }
 
     const who = `${payroll.employee.firstName} ${payroll.employee.lastName}`.trim();
-    this.logger.log(`Payslip deleted for ${payroll.employee.empCode ?? who} — ${payroll.payPeriod}`);
-    return { message: `Payslip for ${payroll.payPeriod} deleted.`, emailCopiesRemoved: letters };
+    this.logger.log(`Payroll record deleted for ${payroll.employee.empCode ?? who} — ${payroll.payPeriod} (${payroll.status})`);
+    return { message: `Payroll record for ${payroll.payPeriod} deleted.`, payslipRemoved: !!doc, emailCopiesRemoved: letters, expenseRemoved };
   }
 
   // ========== PERFORMANCE REVIEWS ==========

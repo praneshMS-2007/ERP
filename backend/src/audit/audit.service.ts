@@ -281,8 +281,8 @@ export function buildPlainEnglishDescription(d: {
       const st = body.status || 'UPDATED';
       return `${actor} changed the status of payroll${periodStr} to '${st}'.`;
     }
-    if (route.includes('/payslip') && actType === 'DELETE') {
-      return `${actor} deleted a payslip${target ? ` (payroll '${target}')` : ''}.`;
+    if (route.includes('/permanent') && actType === 'DELETE') {
+      return `${actor} permanently deleted a payroll record and its payslip${target ? ` ('${target}')` : ''}.`;
     }
     if (route.includes('/payslip') || route.includes('/email')) {
       return `${actor} generated and emailed salary payslips${periodStr} to employees.`;

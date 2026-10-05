@@ -239,14 +239,15 @@ export default function PayrollPageContent({ mode }: { mode: 'hr' | 'finance' })
     }
   }
 
-  async function handleDeletePayslip(p: any) {
-    if (!confirm(`Delete the payslip for ${p.payPeriod}?\n\nThe PDF and any emailed or waiting copies are removed for good. The payroll figures and Finance's record stay, and the employee will no longer see this payslip.`)) return;
+  async function handleDeleteRecord(p: any) {
+    const paid = p.status === 'PAID';
+    if (!confirm(`Delete the payroll record for ${p.payPeriod}?\n\nIt is erased completely: the payroll figures, the payslip PDF and any emailed or waiting copies${paid ? ", and the expense entry Finance made when it was paid" : ''}. The employee will no longer see it anywhere.\n\nThis cannot be undone.`)) return;
     try {
-      const r = await hrmApi.deletePayslip(p.id);
-      alert(r?.message || 'Payslip deleted.');
+      const r = await hrmApi.deletePayrollRecord(p.id);
+      alert(r?.message || 'Payroll record deleted.');
       fetchAll();
     } catch (e: any) {
-      alert(e.message || 'Could not delete the payslip.');
+      alert(e.message || 'Could not delete the payroll record.');
     }
   }
 
@@ -421,16 +422,6 @@ export default function PayrollPageContent({ mode }: { mode: 'hr' | 'finance' })
                 <td style={{ fontWeight: 700 }}>{formatINR(p.netPay || 0)}</td>
                 <td><span className={badgeClass(p.status)}>{STATUS_LABEL[p.status] || p.status}</span></td>
                 <td>
-                  {p.payslipDocument && canDeletePayslip && (
-                    <button
-                      className="btn btn-secondary btn-sm"
-                      style={{ gap: '4px', marginRight: '6px', color: '#dc2626' }}
-                      onClick={() => handleDeletePayslip(p)}
-                      title="Delete this payslip (administrators only)"
-                    >
-                      <Trash2 size={13} /> Delete
-                    </button>
-                  )}
                   {p.status === 'PAID' && p.payslipDocument ? (
                     <button
                       className="btn btn-secondary btn-sm"
@@ -471,6 +462,12 @@ export default function PayrollPageContent({ mode }: { mode: 'hr' | 'finance' })
                         <Trash2 size={15} />
                       </button>
                     </div>
+                  )}
+                  {canDeletePayslip && (mode === 'finance' || p.status === 'PAID' || !canCreatePayroll) && (
+                    <button onClick={() => handleDeleteRecord(p)} title="Delete this payroll record and its payslip (administrators only)"
+                      style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#dc2626', display: 'inline-flex', alignItems: 'center', gap: 4, padding: '4px', fontSize: 12.5, fontWeight: 600 }}>
+                      <Trash2 size={14} /> Delete
+                    </button>
                   )}
                   {mode === 'hr' && p.status === 'DRAFT' && !canCreatePayroll && (
                     <span style={{ fontSize: '12px', color: 'var(--color-text-muted)' }}>Awaiting Finance</span>

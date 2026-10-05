@@ -234,8 +234,8 @@ export const hrmApi = {
     }
     return mutateApi(`/hrm/payrolls/preview?${params.toString()}`);
   },
-  /** Admin only: deletes the payslip PDF (and its email copies) but keeps the payroll record. */
-  deletePayslip: (payrollId: string) => mutateApi(`/hrm/payrolls/${payrollId}/payslip`, { method: 'DELETE' }),
+  /** Admin only: erases a payroll record completely (paid or not), with its payslip and expense entry. */
+  deletePayrollRecord: (payrollId: string) => mutateApi(`/hrm/payrolls/${payrollId}/permanent`, { method: 'DELETE' }),
   deletePayroll: (id: string) => mutateApi(`/hrm/payrolls/${id}`, { method: 'DELETE' }),
   updatePayrollStatus: (id: string, status: string, reason?: string) =>
     mutateApi(`/hrm/payrolls/${id}/status`, { method: 'PUT', body: JSON.stringify({ status, reason }) }),
