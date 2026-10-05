@@ -332,6 +332,14 @@ export class HrmController {
     return this.hrmService.deletePayroll(id);
   }
 
+  /** Admin only — removes the payslip PDF and its email copies; the payroll record stays. */
+  @Delete('payrolls/:id/payslip')
+  @RequireRole('SUPER_ADMIN')
+  @RequirePermission('HR', 'DELETE')
+  deletePayslip(@Param('id') id: string, @CurrentUser() user: RequestUser) {
+    return this.hrmService.deletePayslip(id, user);
+  }
+
   // ========== PERFORMANCE REVIEWS ==========
   // Controller gate is broad (HR:READ); the HR-only narrowing (ratings,
   // written reviews, goals) lives in the service.

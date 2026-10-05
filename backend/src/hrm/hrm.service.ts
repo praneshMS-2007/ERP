@@ -2175,6 +2175,49 @@ export class HrmService {
     return { message: 'Payroll record deleted' };
   }
 
+  /**
+   * Admin-only: deletes a payroll record's payslip — the PDF on disk, its
+   * download entry, and every email copy of it in the Letter Outbox (sent
+   * or not). The payroll figures and the Finance expense stay, so the books
+   * are untouched; the record just reads "Not generated" and a new payslip
+   * can be created later.
+   */
+  async deletePayslip(payrollId: string, actor?: RequestUser) {
+    if (actor?.role !== 'SUPER_ADMIN') throw new ForbiddenException('Only an administrator can delete a payslip.');
+    const payroll = await this.prisma.payroll.findUnique({
+      where: { id: payrollId },
+      select: { id: true, payPeriod: true, payslipDocumentId: true, employee: { select: { firstName: true, lastName: true, empCode: true } } },
+    });
+    if (!payroll) throw new NotFoundException('Payroll record not found');
+    if (!payroll.payslipDocumentId) throw new BadRequestException('This payroll record has no payslip to delete.');
+
+    const doc = await this.prisma.document.findUnique({ where: { id: payroll.payslipDocumentId }, select: { id: true, storagePath: true } });
+    // Any older version of the same payslip kept in Documents for this payroll.
+    const letters = await this.prisma.outgoingLetter.count({ where: { payrollId } });
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.outgoingLetter.deleteMany({ where: { OR: [{ payrollId }, ...(doc ? [{ documentId: doc.id }] : [])] } });
+      await tx.payroll.update({ where: { id: payrollId }, data: { payslipDocumentId: null, payslipSentAt: null, payslipSendError: null } });
+      if (doc) {
+        await tx.document.updateMany({ where: { supersedesId: doc.id }, data: { supersedesId: null } });
+        await tx.document.delete({ where: { id: doc.id } });
+      }
+    });
+
+    // File goes only after the database commit succeeded, and never outside the payslips folder.
+    if (doc) {
+      const root = path.resolve(process.cwd(), 'private-uploads', 'payslips') + path.sep;
+      const full = path.resolve(process.cwd(), 'private-uploads', doc.storagePath);
+      if (full.startsWith(root)) {
+        try { fs.rmSync(full, { force: true }); } catch (e: any) { this.logger.warn(`Could not delete payslip file ${full}: ${e.message}`); }
+      }
+    }
+
+    const who = `${payroll.employee.firstName} ${payroll.employee.lastName}`.trim();
+    this.logger.log(`Payslip deleted for ${payroll.employee.empCode ?? who} — ${payroll.payPeriod}`);
+    return { message: `Payslip for ${payroll.payPeriod} deleted.`, emailCopiesRemoved: letters };
+  }
+
   // ========== PERFORMANCE REVIEWS ==========
   /**
    * Ratings, written reviews and goals for every employee — part of a

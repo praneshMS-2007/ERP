@@ -21,6 +21,7 @@ const STATUS_LABEL: Record<string, string> = { DRAFT: 'Draft', PAID: 'Paid', REJ
 export default function PayrollPageContent({ mode }: { mode: 'hr' | 'finance' }) {
   const { user, hasPermission } = useAuth();
   const canCreatePayroll = mode === 'hr' && (user?.role === 'SUPER_ADMIN' || user?.role === 'HR_MANAGER');
+  const canDeletePayslip = user?.role === 'SUPER_ADMIN';
   const canMarkPaid = mode === 'finance' && (user?.role === 'SUPER_ADMIN' || user?.role === 'FINANCE_MANAGER');
   const [payrolls, setPayrolls] = useState<any[]>([]);
   const [employees, setEmployees] = useState<any[]>([]);
@@ -238,6 +239,17 @@ export default function PayrollPageContent({ mode }: { mode: 'hr' | 'finance' })
     }
   }
 
+  async function handleDeletePayslip(p: any) {
+    if (!confirm(`Delete the payslip for ${p.payPeriod}?\n\nThe PDF and any emailed or waiting copies are removed for good. The payroll figures and Finance's record stay, and the employee will no longer see this payslip.`)) return;
+    try {
+      const r = await hrmApi.deletePayslip(p.id);
+      alert(r?.message || 'Payslip deleted.');
+      fetchAll();
+    } catch (e: any) {
+      alert(e.message || 'Could not delete the payslip.');
+    }
+  }
+
   async function handleDeletePayroll(id: string) {
     if (!confirm('Delete this payroll record? This cannot be undone.')) return;
     try {
@@ -409,6 +421,16 @@ export default function PayrollPageContent({ mode }: { mode: 'hr' | 'finance' })
                 <td style={{ fontWeight: 700 }}>{formatINR(p.netPay || 0)}</td>
                 <td><span className={badgeClass(p.status)}>{STATUS_LABEL[p.status] || p.status}</span></td>
                 <td>
+                  {p.payslipDocument && canDeletePayslip && (
+                    <button
+                      className="btn btn-secondary btn-sm"
+                      style={{ gap: '4px', marginRight: '6px', color: '#dc2626' }}
+                      onClick={() => handleDeletePayslip(p)}
+                      title="Delete this payslip (administrators only)"
+                    >
+                      <Trash2 size={13} /> Delete
+                    </button>
+                  )}
                   {p.status === 'PAID' && p.payslipDocument ? (
                     <button
                       className="btn btn-secondary btn-sm"
