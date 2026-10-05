@@ -1941,6 +1941,8 @@ export class HrmService {
     payPeriod: string;
     periodStart: string;
     periodEnd: string;
+    /** false = leave the Employee ID blank on the payslip (default true). */
+    showEmployeeId?: boolean;
   } & Partial<PayrollManualInput>, viewer?: RequestUser) {
     const employee = await this.prisma.employee.findUnique({
       where: { id: data.employeeId },
@@ -1987,6 +1989,7 @@ export class HrmService {
         periodStart,
         periodEnd,
         preparedById: viewer?.id,
+        showEmployeeId: data.showEmployeeId !== false && String(data.showEmployeeId) !== 'false',
         ...stored,
       },
     });
@@ -2104,7 +2107,7 @@ export class HrmService {
    */
   async updatePayroll(
     id: string,
-    data: { payPeriod?: string } & Partial<PayrollManualInput>,
+    data: { payPeriod?: string; showEmployeeId?: boolean } & Partial<PayrollManualInput>,
   ) {
     const payroll = await this.prisma.payroll.findUnique({
       where: { id },
@@ -2154,7 +2157,10 @@ export class HrmService {
 
     return this.prisma.payroll.update({
       where: { id },
-      data: { payPeriod, ...stored, status: 'DRAFT', rejectedReason: null },
+      data: {
+        payPeriod, ...stored, status: 'DRAFT', rejectedReason: null,
+        ...(data.showEmployeeId === undefined ? {} : { showEmployeeId: data.showEmployeeId !== false && String(data.showEmployeeId) !== 'false' }),
+      },
     });
   }
 

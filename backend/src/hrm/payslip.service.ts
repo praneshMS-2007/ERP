@@ -131,7 +131,8 @@ export class PayslipService {
 
     const data: PayslipData = {
       employeeName: [employee.firstName, employee.lastName].filter(Boolean).join(' ').trim().toUpperCase() || NOT_PROVIDED,
-      empCode: given(employee.empCode),
+      // Left blank (not "Not Provided") when HR chose to leave the ID off this payslip.
+      empCode: payroll.showEmployeeId ? given(employee.empCode) : '',
       designation: given(employee.designation?.title),
       department: given(employee.department?.name),
       joinDate: employee.joinDate ? fmtDate(employee.joinDate) : NOT_PROVIDED,

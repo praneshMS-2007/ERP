@@ -48,6 +48,7 @@ export default function PayrollPageContent({ mode }: { mode: 'hr' | 'finance' })
     periodStart: firstOfMonth, periodEnd: lastOfMonth,
     baseSalary: '', hra: '', specialAllowance: '', bonus: '',
     tds: '', providentFund: '', professionalTax: '', lossOfPay: '',
+    showEmployeeId: true,
   };
   const [form, setForm] = useState(defaultForm);
 
@@ -128,6 +129,7 @@ export default function PayrollPageContent({ mode }: { mode: 'hr' | 'finance' })
       providentFund: String(p.providentFund ?? ''),
       professionalTax: String(p.professionalTax ?? ''),
       lossOfPay: String(p.lossOfPay ?? ''),
+      showEmployeeId: p.showEmployeeId !== false,
     });
     setRunError(null);
     setPreview(null);
@@ -175,7 +177,7 @@ export default function PayrollPageContent({ mode }: { mode: 'hr' | 'finance' })
     setRunError(null);
     try {
       if (editingPayroll) {
-        await hrmApi.updatePayroll(editingPayroll.id, manualPayrollFields());
+        await hrmApi.updatePayroll(editingPayroll.id, { ...manualPayrollFields(), showEmployeeId: form.showEmployeeId });
       } else {
         if (!selectedEmployeeId || !form.periodStart || !form.periodEnd) return;
         if (new Date(form.periodEnd) < new Date(form.periodStart)) {
@@ -187,6 +189,7 @@ export default function PayrollPageContent({ mode }: { mode: 'hr' | 'finance' })
           payPeriod: formatPeriodLabel(form.periodStart, form.periodEnd),
           periodStart: form.periodStart,
           periodEnd: form.periodEnd,
+          showEmployeeId: form.showEmployeeId,
           ...manualPayrollFields(),
         });
       }
@@ -509,6 +512,16 @@ export default function PayrollPageContent({ mode }: { mode: 'hr' | 'finance' })
           <div style={{ flex: 1 }}><FormField label="Professional Tax" type="number" value={form.professionalTax} onChange={(v) => setForm({ ...form, professionalTax: v })} placeholder="0" /></div>
           <div style={{ flex: 1 }}><FormField label="Loss of Pay (LOP)" type="number" value={form.lossOfPay} onChange={(v) => setForm({ ...form, lossOfPay: v })} placeholder="0" /></div>
         </div>
+
+        <label style={{ display: 'flex', gap: 8, alignItems: 'flex-start', margin: '0 0 14px', fontSize: 13, cursor: 'pointer' }}>
+          <input type="checkbox" checked={form.showEmployeeId} onChange={(e) => setForm({ ...form, showEmployeeId: e.target.checked })} style={{ marginTop: 3 }} />
+          <span>
+            <b>Show the employee ID on the payslip</b>
+            <span style={{ display: 'block', color: 'var(--color-text-muted)', fontSize: 12 }}>
+              Untick to leave the Employee ID box on the payslip blank. Decide this before the payslip is created.
+            </span>
+          </span>
+        </label>
 
         {previewLoading && (
           <p style={{ fontSize: '12.5px', color: 'var(--color-text-muted)', margin: '4px 0 16px' }}>Computing…</p>

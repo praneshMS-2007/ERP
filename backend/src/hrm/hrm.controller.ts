@@ -260,7 +260,7 @@ export class HrmController {
   @Post('payrolls')
   @RequirePermission('HR', 'WRITE')
   createPayroll(
-    @Body() data: { employeeId: string; payPeriod: string; periodStart: string; periodEnd: string } & Partial<PayrollManualInput>,
+    @Body() data: { employeeId: string; payPeriod: string; periodStart: string; periodEnd: string; showEmployeeId?: boolean } & Partial<PayrollManualInput>,
     @CurrentUser() user: RequestUser,
   ) {
     return this.hrmService.createPayroll(data, user);
@@ -319,7 +319,7 @@ export class HrmController {
   @RequirePermission('HR', 'WRITE')
   updatePayroll(
     @Param('id') id: string,
-    @Body() data: { payPeriod?: string } & Partial<PayrollManualInput>,
+    @Body() data: { payPeriod?: string; showEmployeeId?: boolean } & Partial<PayrollManualInput>,
   ) {
     return this.hrmService.updatePayroll(id, data);
   }

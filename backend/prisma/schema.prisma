@@ -1057,6 +1057,9 @@ model Payroll {
 
   payslipDocumentId String?   @unique @map("payslip_document_id")
   payslipDocument   Document? @relation(fields: [payslipDocumentId], references: [id])
+  // Whether the payslip prints the employee ID. Chosen when the payroll record is made;
+  // when off, the Employee ID row is left blank.
+  showEmployeeId    Boolean   @default(true) @map("show_employee_id")
   payslipSentAt     DateTime? @map("payslip_sent_at")
   payslipSendError  String?   @map("payslip_send_error")
 
