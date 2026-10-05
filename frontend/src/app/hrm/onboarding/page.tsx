@@ -337,9 +337,10 @@ function HrFields({ hr, set, cfg, issues, suggestedUsername }: { hr: any; set: (
       </div>
       <div className="ob-pay">
         <div className="ob-switch">
-          <button type="button" className={hr.isPaid ? 'is-on' : ''} onClick={() => set('isPaid', true)} aria-pressed={hr.isPaid}>Paid</button>
+          <button type="button" className={hr.isPaid ? 'is-on' : ''} onClick={() => set('isPaid', true)} aria-pressed={hr.isPaid}>Paid {hr.empType === 'INTERN' ? 'stipend' : 'salary'}</button>
           <button type="button" className={!hr.isPaid ? 'is-on' : ''} onClick={() => set('isPaid', false)} aria-pressed={!hr.isPaid}>Unpaid</button>
         </div>
+        <p className="ob-sub" style={{ margin: '6px 0 0' }}>A share of a team&apos;s revenue can be added after they&apos;re added, from their profile (Employment → Edit).</p>
         {hr.isPaid && (
           <>
             <div className="fgrid" style={{ gridTemplateColumns: '1fr 1fr 1fr', marginTop: 10 }}>
@@ -347,7 +348,7 @@ function HrFields({ hr, set, cfg, issues, suggestedUsername }: { hr: any; set: (
               <label className="fld"><span>HRA</span><input inputMode="decimal" value={hr.hra} onChange={(e) => set('hra', e.target.value)} /></label>
               <label className="fld"><span>Special allowance</span><input inputMode="decimal" value={hr.specialAllowance} onChange={(e) => set('specialAllowance', e.target.value)} /></label>
             </div>
-            {issues['hr.basic'] ? <p className="ob-err">{issues['hr.basic'].message}</p> : <p className="ob-sub" style={{ margin: '6px 0 0' }}>Gross monthly pay: <b>{inr(gross)}</b></p>}
+            {issues['hr.basic'] ? <p className="ob-err">{issues['hr.basic'].message}</p> : <p className="ob-sub" style={{ margin: '6px 0 0' }}>Gross monthly {hr.empType === 'INTERN' ? 'stipend' : 'salary'}: <b>{inr(gross)}</b></p>}
           </>
         )}
       </div>

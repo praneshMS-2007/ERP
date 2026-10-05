@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Fragment } from 'react';
 import { FileText, Clock, IndianRupee, Plus, Check, ChevronLeft, ChevronRight, Users, Edit2, Trash2, Undo2, Download } from 'lucide-react';
 import { hrmApi, exportApi } from '../../../services/api';
 import ExportButton from '../../../components/ExportButton';
@@ -55,7 +55,7 @@ export default function PayrollPageContent({ mode }: { mode: 'hr' | 'finance' })
   // attendance, shown before HR commits — see hrmApi.previewPayroll. Every
   // money figure (Basic Salary, HRA, Special Allowance, Bonus, TDS,
   // Provident Fund, Professional Tax, Loss of Pay) is typed in by hand;
-  // only attendance is computed automatically from real records.
+  // only attendance and team revenue share are computed automatically.
   const [preview, setPreview] = useState<any | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState<string | null>(null);
@@ -396,7 +396,10 @@ export default function PayrollPageContent({ mode }: { mode: 'hr' | 'finance' })
                   )}
                 </td>
                 <td>{formatINR(p.baseSalary || 0)}</td>
-                <td style={{ color: '#16a34a' }}>+{formatINR(p.bonus || 0)}</td>
+                <td style={{ color: '#16a34a' }}>
+                  +{formatINR(p.bonus || 0)}
+                  {p.revenueShare > 0 && <div style={{ fontSize: '11px', marginTop: 2 }}>+{formatINR(p.revenueShare)} revenue share</div>}
+                </td>
                 <td style={{ color: '#dc2626' }}>-{formatINR(p.deductions || 0)}</td>
                 <td style={{ fontWeight: 700 }}>{formatINR(p.netPay || 0)}</td>
                 <td><span className={badgeClass(p.status)}>{STATUS_LABEL[p.status] || p.status}</span></td>
@@ -485,8 +488,8 @@ export default function PayrollPageContent({ mode }: { mode: 'hr' | 'finance' })
         )}
 
         <p style={{ fontSize: '12px', color: 'var(--color-text-muted)', margin: '0 0 14px' }}>
-          Every figure below is typed in by hand, same as the payslip's own fields — only attendance for this
-          period is pulled automatically from real records.
+          Type the figures below by hand, same as the payslip&apos;s own fields. Two things are filled in for you:
+          attendance for this period, and any revenue share from the person&apos;s teams (share % × the team&apos;s revenue for the month).
         </p>
         <div style={{ display: 'flex', gap: '14px' }}>
           <div style={{ flex: 1 }}><FormField label="Basic Salary" type="number" value={form.baseSalary} onChange={(v) => setForm({ ...form, baseSalary: v })} placeholder="50000" /></div>
@@ -511,6 +514,12 @@ export default function PayrollPageContent({ mode }: { mode: 'hr' | 'finance' })
         {previewError && (
           <div style={{ padding: '10px 14px', marginBottom: 16, background: '#fef2f2', border: '1px solid #fecaca', color: '#dc2626', borderRadius: 8, fontSize: 13, fontWeight: 600 }}>{previewError}</div>
         )}
+        {preview && !previewLoading && (preview.revenueShareMissing ?? []).length > 0 && (
+          <div style={{ padding: '10px 14px', marginBottom: 12, background: '#fffbeb', border: '1px solid #fde68a', color: '#92400e', borderRadius: 8, fontSize: 13, fontWeight: 600 }}>
+            This person gets a share of {preview.revenueShareMissing.join(', ')}&apos;s revenue, but that revenue isn&apos;t entered for this month yet.
+            Enter it on the <a href="/hrm/teams" style={{ color: '#92400e', textDecoration: 'underline' }}>Teams page</a> before saving this payroll.
+          </div>
+        )}
         {preview && !previewLoading && (
           <div style={{ background: 'var(--color-background)', padding: '14px 16px', borderRadius: '10px', marginBottom: '16px' }}>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px 16px', fontSize: '12.5px', marginBottom: '10px' }}>
@@ -518,8 +527,14 @@ export default function PayrollPageContent({ mode }: { mode: 'hr' | 'finance' })
               <div>HRA</div><div style={{ textAlign: 'right' }}>{formatINR(preview.hra)}</div>
               <div>Special Allowance</div><div style={{ textAlign: 'right' }}>{formatINR(preview.specialAllowance)}</div>
               <div>Bonus / Incentives</div><div style={{ textAlign: 'right' }}>{formatINR(preview.bonus)}</div>
+              {(preview.revenueShareLines ?? []).map((l: any) => (
+                <Fragment key={l.teamId}>
+                  <div title={`${l.pct}% of ${formatINR(l.revenue)} revenue`}>Revenue share · {l.teamName} ({l.pct}% of {formatINR(l.revenue)})</div>
+                  <div style={{ textAlign: 'right' }}>{formatINR(l.amount)}</div>
+                </Fragment>
+              ))}
               <div style={{ fontWeight: 700, borderTop: '1px solid var(--color-border)', paddingTop: 4 }}>Gross Total (A)</div>
-              <div style={{ fontWeight: 700, textAlign: 'right', borderTop: '1px solid var(--color-border)', paddingTop: 4 }}>{formatINR(preview.baseSalary + preview.hra + preview.specialAllowance + preview.bonus)}</div>
+              <div style={{ fontWeight: 700, textAlign: 'right', borderTop: '1px solid var(--color-border)', paddingTop: 4 }}>{formatINR(preview.baseSalary + preview.hra + preview.specialAllowance + preview.bonus + (preview.revenueShare || 0))}</div>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px 16px', fontSize: '12.5px', marginBottom: '10px' }}>
               <div>Income Tax (TDS)</div><div style={{ textAlign: 'right', color: '#dc2626' }}>-{formatINR(preview.tds)}</div>

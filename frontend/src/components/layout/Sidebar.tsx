@@ -87,6 +87,8 @@ const allNavItems: NavItem[] = [
     { name: 'User Management', path: '/hrm/user-management', requiredAction: 'WRITE' },
     { name: 'Internship Certificates', path: '/hrm/internship-certificates', requiredAction: 'WRITE' },
     { name: 'Bulk Onboarding', path: '/hrm/onboarding', requiredAction: 'WRITE' },
+    // HR/Admin manage teams; Finance comes here to enter each team's monthly revenue.
+    { name: 'Teams', path: '/hrm/teams', requiredRoles: ['SUPER_ADMIN', 'HR_MANAGER', 'FINANCE_MANAGER'] },
   ]},
   // The next three are an Employee's own dedicated sections — deliberately
   // NOT nested under HR Management (which Employees no longer see at all),

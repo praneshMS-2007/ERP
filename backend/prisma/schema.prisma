@@ -242,8 +242,13 @@ model Employee {
   engagementEndDate DateTime? @map("engagement_end_date")
 
   // Stipend / Compensation configuration for offer letter & payroll
-  hasStipend    Boolean @default(true) @map("has_stipend")
-  stipendAmount Float?  @map("stipend_amount")
+  // (called "stipend" for interns, "salary" for part-time and full-time).
+  hasStipend      Boolean      @default(true) @map("has_stipend")
+  stipendAmount   Float?       @map("stipend_amount")
+  // FIXED: stipendAmount only. REVENUE_SHARE: a % of team revenue only.
+  // FIXED_AND_SHARE: both. The % per team lives on TeamMember.revenueSharePct.
+  payType         PayType      @default(FIXED) @map("pay_type")
+  teamMemberships TeamMember[]
 
   offerLetterDocumentId String?   @unique @map("offer_letter_document_id")
   offerLetterDocument   Document? @relation(name: "EmployeeOfferLetter", fields: [offerLetterDocumentId], references: [id])
@@ -358,21 +363,21 @@ enum SubmissionStatus {
 /// employee. Aadhaar, PAN and bank numbers live only inside `payloadEnc`
 /// (AES-256-GCM, same key as the employee record) — never in plain columns.
 model OnboardingSubmission {
-  id               String           @id @default(uuid())
-  sourceKey        String           @unique @map("source_key")
-  source           String // GOOGLE_SHEET | UPLOAD
-  status           SubmissionStatus @default(PENDING)
-  fullName         String           @map("full_name")
-  email            String?
-  submittedAt      DateTime?        @map("submitted_at")
-  payloadEnc       String           @map("payload_enc")
-  files            Json?
-  employeeId       String?          @map("employee_id")
-  importedAt       DateTime?        @map("imported_at")
-  importedByName   String?          @map("imported_by_name")
-  dismissedReason  String?          @map("dismissed_reason")
-  createdAt        DateTime         @default(now()) @map("created_at")
-  updatedAt        DateTime         @updatedAt @map("updated_at")
+  id              String           @id @default(uuid())
+  sourceKey       String           @unique @map("source_key")
+  source          String // GOOGLE_SHEET | UPLOAD
+  status          SubmissionStatus @default(PENDING)
+  fullName        String           @map("full_name")
+  email           String?
+  submittedAt     DateTime?        @map("submitted_at")
+  payloadEnc      String           @map("payload_enc")
+  files           Json?
+  employeeId      String?          @map("employee_id")
+  importedAt      DateTime?        @map("imported_at")
+  importedByName  String?          @map("imported_by_name")
+  dismissedReason String?          @map("dismissed_reason")
+  createdAt       DateTime         @default(now()) @map("created_at")
+  updatedAt       DateTime         @updatedAt @map("updated_at")
 
   @@index([status])
   @@map("onboarding_submissions")
@@ -393,6 +398,68 @@ enum EmployeeEventType {
   INTERNSHIP_CERTIFICATE_ISSUED
   INTERNSHIP_CERTIFICATE_REJECTED
   EXITED
+  TEAM_CHANGED
+}
+
+enum PayType {
+  FIXED
+  REVENUE_SHARE
+  FIXED_AND_SHARE
+}
+
+enum TeamRole {
+  HEAD
+  MEMBER
+}
+
+/// A group of people who share in what they earn together (e.g. "Sunrisers").
+model Team {
+  id          String        @id @default(uuid())
+  name        String        @unique
+  description String?
+  isActive    Boolean       @default(true) @map("is_active")
+  members     TeamMember[]
+  revenues    TeamRevenue[]
+  createdAt   DateTime      @default(now()) @map("created_at")
+  updatedAt   DateTime      @updatedAt @map("updated_at")
+
+  @@map("teams")
+}
+
+/// One person's place in one team. A person may be in several teams.
+model TeamMember {
+  id              String   @id @default(uuid())
+  teamId          String   @map("team_id")
+  team            Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  employeeId      String   @map("employee_id")
+  employee        Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  role            TeamRole @default(MEMBER)
+  /// Share of the team's monthly revenue paid to this person, 0-100. Null = no share.
+  revenueSharePct Float?   @map("revenue_share_pct")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@unique([teamId, employeeId])
+  @@index([employeeId])
+  @@map("team_members")
+}
+
+/// A team's revenue for one month, typed in by HR/Finance; payroll reads it.
+model TeamRevenue {
+  id            String   @id @default(uuid())
+  teamId        String   @map("team_id")
+  team          Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  /// "YYYY-MM"
+  period        String
+  amount        Float
+  note          String?
+  enteredById   String?  @map("entered_by_id")
+  enteredByName String?  @map("entered_by_name")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  @@unique([teamId, period])
+  @@map("team_revenues")
 }
 
 /// One entry in an employee's career history — written by the code paths that
@@ -955,9 +1022,13 @@ model Payroll {
   paymentDate DateTime?     @map("payment_date")
 
   // ---- Earnings (payslip section A) ----
-  hra              Float @default(0) @map("hra")
-  specialAllowance Float @default(0) @map("special_allowance")
-  // grossTotal = baseSalary + hra + specialAllowance + bonus  — computed, never stored
+  hra                Float @default(0) @map("hra")
+  specialAllowance   Float @default(0) @map("special_allowance")
+  // Worked out by the ERP from TeamMember.revenueSharePct x TeamRevenue for the
+  // period's month; the lines behind it are snapshotted so a paid slip never changes.
+  revenueShare       Float @default(0) @map("revenue_share")
+  revenueShareDetail Json? @map("revenue_share_detail")
+  // grossTotal = baseSalary + hra + specialAllowance + bonus + revenueShare  — computed, never stored
 
   // ---- Deductions (payslip section B) ----
   tds             Float @default(0) @map("tds")
@@ -1034,8 +1105,8 @@ model Document {
   employee   Employee? @relation(name: "EmployeeIdentityDocuments", fields: [employeeId], references: [id])
 
   payroll           Payroll?
-  offerLetterFor    Employee? @relation(name: "EmployeeOfferLetter")
-  internshipCertFor Employee? @relation(name: "EmployeeInternshipCert")
+  offerLetterFor    Employee?        @relation(name: "EmployeeOfferLetter")
+  internshipCertFor Employee?        @relation(name: "EmployeeInternshipCert")
   employeeEvents    EmployeeEvent[]
   outgoingLetters   OutgoingLetter[]
 

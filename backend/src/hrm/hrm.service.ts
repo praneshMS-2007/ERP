@@ -12,6 +12,20 @@ import { PayslipService } from './payslip.service';
 import { AnnouncementsService } from '../announcements/announcements.service';
 import { formatDateDMY } from '../common/date-format';
 import { EmployeeHistoryService, EMP_TYPE_LABEL } from './employee-history.service';
+import { TeamsService } from './teams.service';
+import type { MembershipInput } from './teams.service';
+
+/** Team shares sent with an employee form; refuses a share pay type with no share in it. */
+function readTeamShares(data: Record<string, any>): MembershipInput[] | undefined {
+  if (!('teamShares' in data)) return undefined;
+  const rows: MembershipInput[] = Array.isArray(data.teamShares) ? data.teamShares : [];
+  const wantsShare = data.payType === 'REVENUE_SHARE' || data.payType === 'FIXED_AND_SHARE';
+  if (wantsShare && !rows.some((r) => Number(r.revenueSharePct) > 0)) {
+    throw new BadRequestException('Add at least one team with a revenue share % for this pay type.');
+  }
+  if (data.payType === 'FIXED') return rows.map((r) => ({ ...r, revenueSharePct: null }));
+  return rows;
+}
 
 export interface RequestUser {
   id: string;
@@ -223,6 +237,7 @@ export class HrmService {
     private payslipService: PayslipService,
     private announcementsService: AnnouncementsService,
     private history: EmployeeHistoryService,
+    private teams: TeamsService,
   ) {
     fs.mkdirSync(this.avatarDir, { recursive: true });
   }
@@ -377,6 +392,7 @@ export class HrmService {
           select: { id: true, firstName: true, lastName: true, empCode: true },
         },
         user: { select: { email: true, username: true, role: { select: { name: true } } } },
+        teamMemberships: { include: { team: { select: { id: true, name: true, isActive: true } } }, orderBy: { createdAt: 'asc' } },
         attendances: { take: 10, orderBy: { date: 'desc' } },
         leaves: { take: 10, orderBy: { startDate: 'desc' } },
       },
@@ -751,10 +767,11 @@ export class HrmService {
     if (!departmentName) throw new BadRequestException('Department is required.');
     if (!designationName) throw new BadRequestException('Designation is required.');
 
-    const [department, designation] = await Promise.all([
-      this.prisma.department.upsert({ where: { name: departmentName }, update: {}, create: { name: departmentName } }),
-      this.prisma.designation.upsert({ where: { title: designationName }, update: {}, create: { title: designationName } }),
-    ]);
+    const teamShares = readTeamShares(data) ?? [];
+    if (teamShares.length) await this.teams.validateEmployeeTeams(null, teamShares);
+
+    const department = await this.resolveDepartment(departmentName);
+    const designation = await this.resolveDesignation(designationName);
 
     const empCode = await this.nextEmpCode(
       clean.joinDate instanceof Date ? clean.joinDate : new Date(),
@@ -824,6 +841,9 @@ export class HrmService {
           },
         });
       }
+
+      if (teamShares.length) await this.teams.setEmployeeTeams(emp.id, teamShares, viewer, tx);
+      else await this.teams.syncPayType(emp.id, tx);
 
       return emp;
     });
@@ -1097,6 +1117,24 @@ export class HrmService {
    * the raw request body straight to Prisma, so a crafted request could rewrite
    * id, userId or createdAt.
    */
+  /**
+   * A typed department / designation name -> its row, creating it the first
+   * time it is used. Matching ignores capital letters and extra spaces, so
+   * "software" and "Software " reuse the existing "Software" instead of
+   * creating a near-duplicate.
+   */
+  private async resolveDepartment(name: string, db: Prisma.TransactionClient | PrismaService = this.prisma) {
+    const clean = name.trim().replace(/\s+/g, ' ');
+    const found = await db.department.findFirst({ where: { name: { equals: clean, mode: 'insensitive' } } });
+    return found ?? db.department.create({ data: { name: clean } });
+  }
+
+  private async resolveDesignation(title: string, db: Prisma.TransactionClient | PrismaService = this.prisma) {
+    const clean = title.trim().replace(/\s+/g, ' ');
+    const found = await db.designation.findFirst({ where: { title: { equals: clean, mode: 'insensitive' } } });
+    return found ?? db.designation.create({ data: { title: clean } });
+  }
+
   async updateEmployee(id: string, data: Record<string, any>, actor?: RequestUser) {
     const exists = await this.prisma.employee.findUnique({ where: { id }, select: { id: true, status: true } });
     if (!exists) throw new NotFoundException('Employee not found');
@@ -1112,10 +1150,28 @@ export class HrmService {
     }
 
     const clean = sanitiseEmployeeInput(data);
+
+    // The edit screen sends typed names (like Add Employee does), not ids.
+    if ('department' in data) {
+      const name = typeof data.department === 'string' ? data.department.trim() : '';
+      if (!name) throw new BadRequestException('Department is required.');
+      clean.departmentId = (await this.resolveDepartment(name)).id;
+    }
+    if ('designation' in data) {
+      const title = typeof data.designation === 'string' ? data.designation.trim() : '';
+      if (!title) throw new BadRequestException('Designation is required.');
+      clean.designationId = (await this.resolveDesignation(title)).id;
+    }
+
+    const teamShares = readTeamShares(data);
+    if (teamShares) await this.teams.validateEmployeeTeams(id, teamShares);
+
     const before = await this.history.snapshot(id);
     const updated = await this.prisma.employee.update({ where: { id }, data: clean });
     const after = await this.history.snapshot(id);
     if (before && after) await this.history.recordEdit(id, this.history.diff(before, after), actor);
+    if (teamShares) await this.teams.setEmployeeTeams(id, teamShares, actor);
+    else await this.teams.syncPayType(id);
 
     // These hold ciphertext at this point — never echo that back. The
     // frontend re-fetches via getEmployeeById after a save anyway, which is
@@ -1180,6 +1236,14 @@ export class HrmService {
 
     const gross = created.basic + created.hra + created.specialAllowance;
     const prevGross = previous ? previous.basic + previous.hra + previous.specialAllowance : null;
+
+    // Offer letters read the monthly amount on the employee record; keep it in
+    // step with the salary just recorded so a resent letter shows the new pay.
+    await this.prisma.employee.update({
+      where: { id: employeeId },
+      data: { hasStipend: gross > 0, stipendAmount: gross > 0 ? gross : null },
+    });
+    await this.teams.syncPayType(employeeId);
     const inr = (n: number) => `₹${n.toLocaleString('en-IN')}`;
     await this.history.record({
       employeeId,
@@ -1195,11 +1259,6 @@ export class HrmService {
     });
 
     return { ...created, gross };
-  }
-
-  async deleteEmployee(id: string) {
-    await this.prisma.employee.delete({ where: { id } });
-    return { message: 'Employee deleted successfully' };
   }
 
   // ========== ATTENDANCE ==========
@@ -1619,17 +1678,26 @@ export class HrmService {
     },
   ) {
     const attendance = await this.computeAttendanceMetrics(employeeId, joinDate, periodStart, periodEnd);
+    // Revenue share is the one earning the ERP works out itself: share % x the
+    // team's revenue entered for the month this period starts in.
+    const share = await this.teams.computeShare(employeeId, periodStart);
 
     const { baseSalary, hra, specialAllowance, bonus, tds, providentFund, professionalTax, lossOfPay } = manual;
-    const grossTotal = baseSalary + hra + specialAllowance + bonus;
+    const revenueShare = share.total;
+    const grossTotal = baseSalary + hra + specialAllowance + bonus + revenueShare;
     const deductions = tds + providentFund + professionalTax + lossOfPay;
-    const netPay = grossTotal - deductions;
+    const netPay = Math.round((grossTotal - deductions) * 100) / 100;
 
     return {
       baseSalary, hra, specialAllowance, bonus,
+      revenueShare,
+      revenueShareLines: share.lines,
       tds, providentFund, professionalTax, lossOfPay, deductions,
       netPay,
       ...attendance,
+      // not stored — tells the screen which teams still need this month's revenue
+      revenueSharePeriod: share.period,
+      revenueShareMissing: share.missing,
     };
   }
 
@@ -1700,6 +1768,10 @@ export class HrmService {
       lossOfPay: data.lossOfPay ?? 0,
     });
 
+    const { revenueShareMissing, revenueSharePeriod, revenueShareLines, ...rest } = breakdown;
+    this.assertRevenueEntered(revenueShareMissing, revenueSharePeriod);
+    const stored = { ...rest, revenueShareDetail: revenueShareLines.length ? (revenueShareLines as unknown as Prisma.InputJsonValue) : Prisma.JsonNull };
+
     return this.prisma.payroll.create({
       data: {
         employeeId: data.employeeId,
@@ -1707,9 +1779,19 @@ export class HrmService {
         periodStart,
         periodEnd,
         preparedById: viewer?.id,
-        ...breakdown,
+        ...stored,
       },
     });
+  }
+
+  /** Never pay a revenue share of 0 just because the month's revenue wasn't typed in yet. */
+  private assertRevenueEntered(missing: string[], period: string) {
+    if (!missing.length) return;
+    const [y, m] = period.split('-').map(Number);
+    const month = new Date(y, m - 1, 1).toLocaleString('en-IN', { month: 'long', year: 'numeric' });
+    throw new BadRequestException(
+      `Enter ${missing.join(', ')}'s revenue for ${month} on the Teams page first — this person's pay includes a share of it.`,
+    );
   }
 
   /**
@@ -1858,9 +1940,13 @@ export class HrmService {
       },
     );
 
+    const { revenueShareMissing, revenueSharePeriod, revenueShareLines, ...rest } = breakdown;
+    this.assertRevenueEntered(revenueShareMissing, revenueSharePeriod);
+    const stored = { ...rest, revenueShareDetail: revenueShareLines.length ? (revenueShareLines as unknown as Prisma.InputJsonValue) : Prisma.JsonNull };
+
     return this.prisma.payroll.update({
       where: { id },
-      data: { payPeriod, ...breakdown, status: 'DRAFT', rejectedReason: null },
+      data: { payPeriod, ...stored, status: 'DRAFT', rejectedReason: null },
     });
   }
 

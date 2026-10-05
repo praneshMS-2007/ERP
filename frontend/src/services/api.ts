@@ -135,6 +135,11 @@ export const hrmApi = {
     mutateApi(`/hrm/employees/${id}/salary`, { method: 'PUT', body: JSON.stringify(data) }),
   removeEmployee: (id: string, lastWorkingDay?: string) =>
     mutateApi(`/hrm/employees/${id}/remove`, { method: 'PUT', body: JSON.stringify({ lastWorkingDay }) }),
+  /** What a permanent erase would delete (Admin and HR Manager, former employees only). */
+  erasePreview: (id: string) => mutateApi(`/hrm/employees/${id}/erase-preview`),
+  /** Permanently erases a former employee. confirmCode must repeat their employee code. */
+  eraseEmployee: (id: string, confirmCode: string) =>
+    mutateApi(`/hrm/employees/${id}`, { method: 'DELETE', body: JSON.stringify({ confirmCode }) }),
   getUsers: () => mutateApi('/hrm/users'),
   resetUserPassword: (id: string, newPassword: string) =>
     mutateApi(`/hrm/users/${id}/reset-password`, { method: 'PUT', body: JSON.stringify({ newPassword }) }),
@@ -599,6 +604,19 @@ export const settingsApi = {
   // password reset flow (hrmApi.resetUserPassword + the /portal inbox).
   getSessions: () => fetchApi('/auth/sessions'),
   revokeSession: (id: string) => mutateApi(`/auth/sessions/${id}`, { method: 'DELETE' }),
+};
+
+export const teamsApi = {
+  list: () => mutateApi('/hrm/teams'),
+  create: (data: { name: string; description?: string }) => mutateApi('/hrm/teams', { method: 'POST', body: JSON.stringify(data) }),
+  update: (id: string, data: { name?: string; description?: string; isActive?: boolean }) =>
+    mutateApi(`/hrm/teams/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  remove: (id: string) => mutateApi(`/hrm/teams/${id}`, { method: 'DELETE' }),
+  setMembers: (id: string, members: { employeeId: string; role: string; revenueSharePct: number | null }[]) =>
+    mutateApi(`/hrm/teams/${id}/members`, { method: 'PUT', body: JSON.stringify({ members }) }),
+  getRevenue: (period: string) => mutateApi(`/hrm/teams/revenue?period=${encodeURIComponent(period)}`),
+  setRevenue: (period: string, entries: { teamId: string; amount: number | null; note?: string }[]) =>
+    mutateApi('/hrm/teams/revenue', { method: 'PUT', body: JSON.stringify({ period, entries }) }),
 };
 
 export const lettersApi = {

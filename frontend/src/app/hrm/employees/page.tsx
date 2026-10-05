@@ -3,9 +3,10 @@
 import { useEffect, useState } from 'react';
 import {
   Users, UserPlus, MoreVertical, ChevronLeft, ChevronRight,
-  Trash2, Edit, Search, Eye, EyeOff, Mail, Download, CheckCircle2, XCircle,
+  Trash2, Edit, Search, Eye, EyeOff, Mail, Download, CheckCircle2, XCircle, AlertTriangle,
 } from 'lucide-react';
-import { hrmApi, exportApi, API_ORIGIN } from '../../../services/api';
+import { hrmApi, exportApi, API_ORIGIN, teamsApi } from '../../../services/api';
+import PaySetup, { payPayload, payProblem, type PayValue } from '../../../components/PaySetup';
 import ExportButton from '../../../components/ExportButton';
 import Modal, { FormField } from '../../../components/Modal';
 import EmployeeDetailModal from '../../../components/modals/EmployeeDetailModal';
@@ -56,10 +57,17 @@ export default function EmployeeDirectory() {
   const initialForm = {
     firstName: '', lastName: '', personalEmail: '', contact: '',
     department: '', designation: '', empType: 'FULL_TIME', workMode: 'ONSITE', joinDate: '', engagementEndDate: '', roleName: '',
-    hasStipend: true, stipendAmount: '',
+
     username: '', password: '',
   };
   const [form, setForm] = useState(initialForm);
+  const initialPay: PayValue = { mode: 'FIXED', amount: '', shares: [] };
+  const [pay, setPay] = useState<PayValue>(initialPay);
+  const [teams, setTeams] = useState<{ id: string; name: string; isActive?: boolean }[]>([]);
+  function openAddModal() {
+    setShowAddModal(true);
+    teamsApi.list().then((t) => setTeams(Array.isArray(t) ? t : [])).catch(() => setTeams([]));
+  }
   const [showPassword, setShowPassword] = useState(false);
   const MANAGEMENT_ROLES = [
     { label: 'Super Admin', value: 'SUPER_ADMIN' },
@@ -77,6 +85,16 @@ export default function EmployeeDirectory() {
   const [lastWorkingDay, setLastWorkingDay] = useState('');
   const [removing, setRemoving] = useState(false);
   const [removeError, setRemoveError] = useState<string | null>(null);
+
+  // Permanent erase - Admin and HR Manager, and only from the Former Employees tab.
+  const canErase = user?.role === 'SUPER_ADMIN' || user?.role === 'HR_MANAGER';
+  const [eraseTarget, setEraseTarget] = useState<{ id: string; name: string } | null>(null);
+  const [erasePreview, setErasePreview] = useState<any | null>(null);
+  const [eraseTyped, setEraseTyped] = useState('');
+  const [eraseAck, setEraseAck] = useState(false);
+  const [erasing, setErasing] = useState(false);
+  const [eraseError, setEraseError] = useState<string | null>(null);
+  const normaliseTyped = (s: string) => s.trim().replace(/\s+/g, ' ').toUpperCase();
 
   async function fetchAll() {
     try {
@@ -176,12 +194,9 @@ export default function EmployeeDirectory() {
       setAddError('Internship end date is required for interns — it drives the Duration line on their offer letter.');
       return;
     }
-    if (form.hasStipend && form.stipendAmount && (isNaN(Number(form.stipendAmount)) || Number(form.stipendAmount) < 0)) {
-      setAddError('Please enter a valid monthly stipend amount.');
-      return;
-    }
-    if (form.hasStipend && !form.stipendAmount) {
-      setAddError('Please enter a monthly stipend amount, or select "No Stipend (Unpaid)".');
+    const payIssue = payProblem(pay, form.empType);
+    if (payIssue) {
+      setAddError(payIssue);
       return;
     }
     if (!form.username.trim()) {
@@ -197,14 +212,14 @@ export default function EmployeeDirectory() {
     try {
       const created = await hrmApi.createEmployee({
         ...form,
-        hasStipend: form.hasStipend,
-        stipendAmount: form.hasStipend ? Number(form.stipendAmount) : null,
+        ...payPayload(pay),
         username: form.username.trim(),
         roleName: accountKind === 'MANAGEMENT' ? form.roleName : undefined,
       });
       setShowAddModal(false);
       setAccountKind('EMPLOYEE');
       setForm(initialForm);
+      setPay(initialPay);
       fetchAll();
 
       if (created?.offerLetter?.pending) {
@@ -244,6 +259,36 @@ export default function EmployeeDirectory() {
       setRemoveError(e.message || 'Could not remove this employee.');
     } finally {
       setRemoving(false);
+    }
+  }
+
+  async function handleErase(id: string, name: string) {
+    setActionMenuId(null);
+    setEraseTarget({ id, name });
+    setErasePreview(null);
+    setEraseTyped('');
+    setEraseAck(false);
+    setEraseError(null);
+    try {
+      setErasePreview(await hrmApi.erasePreview(id));
+    } catch (e: any) {
+      setEraseError(e.message || 'Could not check what would be erased.');
+    }
+  }
+
+  async function confirmErase() {
+    if (!eraseTarget || !erasePreview) return;
+    setErasing(true);
+    setEraseError(null);
+    try {
+      await hrmApi.eraseEmployee(eraseTarget.id, eraseTyped);
+      setEraseTarget(null);
+      showToast(`${eraseTarget.name} has been permanently erased.`, 'success');
+      fetchAll();
+    } catch (e: any) {
+      setEraseError(e.message || 'Could not erase this employee.');
+    } finally {
+      setErasing(false);
     }
   }
 
@@ -287,7 +332,7 @@ export default function EmployeeDirectory() {
         <div className="page-header-actions">
           <ExportButton onExport={(format) => exportApi.exportEmployees(format)} label="Export" />
           {canManageEmployees && (
-            <button className="btn btn-primary" onClick={() => setShowAddModal(true)}>
+            <button className="btn btn-primary" onClick={openAddModal}>
               <UserPlus size={16} /> Add Employee
             </button>
           )}
@@ -449,6 +494,11 @@ export default function EmployeeDirectory() {
                                 <Trash2 size={14} /> Remove
                               </button>
                             )}
+                            {activeTab === 'FORMER' && canErase && (
+                              <button onClick={() => handleErase(emp.id, `${emp.firstName} ${emp.lastName}`.trim())} style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%', padding: '8px 12px', border: 'none', background: 'transparent', cursor: 'pointer', borderRadius: '6px', fontSize: '13px', color: '#dc2626', fontWeight: 600 }}>
+                                <Trash2 size={14} /> Erase permanently
+                              </button>
+                            )}
                           </div>
                         )}
                       </>
@@ -541,54 +591,8 @@ export default function EmployeeDirectory() {
           <FormField label="Internship End Date" type="date" value={form.engagementEndDate} onChange={(v) => setForm({ ...form, engagementEndDate: v })} required />
         )}
 
-        {/* Stipend Configuration */}
-        <div style={{ marginBottom: '16px' }}>
-          <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px', color: 'var(--color-text-secondary)' }}>
-            Stipend / Monthly Compensation <span style={{ color: '#dc2626' }}>*</span>
-          </label>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '10px' }}>
-            <button
-              type="button"
-              onClick={() => setForm({ ...form, hasStipend: true })}
-              style={{
-                padding: '9px 12px', borderRadius: '8px', cursor: 'pointer', fontSize: '13px', fontWeight: 600,
-                border: form.hasStipend ? '2px solid #2563eb' : '1px solid var(--color-border)',
-                background: form.hasStipend ? '#eff6ff' : 'var(--color-background)',
-                color: form.hasStipend ? '#2563eb' : 'var(--color-text)',
-                textAlign: 'center', transition: 'all 0.15s ease',
-              }}
-            >
-              With Stipend (Paid)
-            </button>
-            <button
-              type="button"
-              onClick={() => setForm({ ...form, hasStipend: false, stipendAmount: '' })}
-              style={{
-                padding: '9px 12px', borderRadius: '8px', cursor: 'pointer', fontSize: '13px', fontWeight: 600,
-                border: !form.hasStipend ? '2px solid #2563eb' : '1px solid var(--color-border)',
-                background: !form.hasStipend ? '#eff6ff' : 'var(--color-background)',
-                color: !form.hasStipend ? '#2563eb' : 'var(--color-text)',
-                textAlign: 'center', transition: 'all 0.15s ease',
-              }}
-            >
-              No Stipend (Unpaid)
-            </button>
-          </div>
-          {form.hasStipend ? (
-            <FormField
-              label="Monthly Stipend Amount (₹/month)"
-              type="number"
-              value={form.stipendAmount}
-              onChange={(v) => setForm({ ...form, stipendAmount: v })}
-              required
-              placeholder="e.g. 15000"
-            />
-          ) : (
-            <div style={{ fontSize: '12px', color: 'var(--color-text-muted)', background: 'var(--color-bg-secondary)', padding: '8px 12px', borderRadius: '8px', border: '1px solid var(--color-border)' }}>
-              Offer letter will reflect <strong>Stipend: Unpaid</strong> and Clause 4 will specify statutory non-applicability without salary deductions.
-            </div>
-          )}
-        </div>
+        {/* Pay — "stipend" for interns, "salary" for part-time / full-time; fixed, % of team revenue, or both */}
+        <PaySetup empType={form.empType} value={pay} onChange={setPay} teams={teams} />
 
         <div style={{ borderTop: '1px solid var(--color-border)', margin: '16px 0', paddingTop: '16px' }}>
           <p style={{ fontSize: 12.5, color: 'var(--color-text-muted)', margin: '0 0 12px' }}>
@@ -642,6 +646,83 @@ export default function EmployeeDirectory() {
           <button className="btn btn-primary" onClick={confirmRemove} disabled={removing || !lastWorkingDay}
                   style={{ background: '#dc2626', borderColor: '#dc2626' }}>
             {removing ? 'Removing…' : 'Remove employee'}
+          </button>
+        </div>
+      </Modal>
+
+      {/* ERASE PERMANENTLY - former employees only, Admin and HR Manager */}
+      <Modal isOpen={!!eraseTarget} onClose={() => { if (!erasing) setEraseTarget(null); }} title={`Erase ${eraseTarget?.name ?? ''} permanently`} width="520px">
+        {eraseError && (
+          <div style={{ padding: '10px 14px', marginBottom: 14, background: '#fef2f2', border: '1px solid #fecaca', color: '#dc2626', borderRadius: 8, fontSize: 13, fontWeight: 600 }}>
+            {eraseError}
+          </div>
+        )}
+        {!erasePreview && !eraseError && <p style={{ fontSize: 13.5, color: 'var(--color-text-muted)' }}>Checking what would be erased…</p>}
+        {erasePreview && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14, fontSize: 13.5, lineHeight: 1.5 }}>
+            <div style={{ display: 'flex', gap: 10, padding: '12px 14px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, color: '#991b1b' }}>
+              <AlertTriangle size={18} style={{ flexShrink: 0, marginTop: 2 }} />
+              <div>
+                <b>This cannot be undone.</b> {erasePreview.name} ({erasePreview.empCode || 'no code'}) will be deleted from the ERP
+                completely{erasePreview.hasLogin ? ', together with their login account' : ''}, and will not appear anywhere: not in Former Employees, payroll, attendance or reports.
+                Their uploaded documents and generated PDFs are deleted from the server too.
+              </div>
+            </div>
+
+            <div>
+              <div style={{ fontWeight: 700, marginBottom: 4 }}>Their records that will be deleted</div>
+              {erasePreview.own.length === 0
+                ? <div style={{ color: 'var(--color-text-muted)' }}>Only the employee record itself. No history was found.</div>
+                : <ul style={{ margin: 0, paddingLeft: 18 }}>{erasePreview.own.map((x: any) => <li key={x.label}>{x.label}: <b>{x.count}</b></li>)}</ul>}
+            </div>
+
+            {erasePreview.createdForOthers.length > 0 && (
+              <div>
+                <div style={{ fontWeight: 700, marginBottom: 4 }}>Things they created that other people can see (also deleted)</div>
+                <ul style={{ margin: 0, paddingLeft: 18 }}>{erasePreview.createdForOthers.map((x: any) => <li key={x.label}>{x.label}: <b>{x.count}</b></li>)}</ul>
+              </div>
+            )}
+
+            {erasePreview.unlinked.length > 0 && (
+              <div>
+                <div style={{ fontWeight: 700, marginBottom: 4 }}>Kept, but no longer linked to them</div>
+                <ul style={{ margin: 0, paddingLeft: 18 }}>{erasePreview.unlinked.map((x: any) => <li key={x.label}>{x.label}: <b>{x.count}</b></li>)}</ul>
+              </div>
+            )}
+
+            <div style={{ color: 'var(--color-text-muted)', fontSize: 12.5 }}>
+              Payroll and salary records are often legally required to be kept for several years. Download anything you must keep (payslips, documents) before erasing.
+              The audit log keeps a line saying this erase happened.
+            </div>
+
+            {erasePreview.createdForOthers.length > 0 && (
+              <label style={{ display: 'flex', gap: 8, alignItems: 'flex-start', cursor: 'pointer' }}>
+                <input type="checkbox" checked={eraseAck} onChange={(e) => setEraseAck(e.target.checked)} style={{ marginTop: 3 }} />
+                <span>I understand the items they created for other people will be deleted as well.</span>
+              </label>
+            )}
+
+            <FormField
+              label={`Type ${erasePreview.empCode ? 'the employee code' : 'their full name'} "${erasePreview.confirmWord}" to confirm`}
+              value={eraseTyped}
+              onChange={setEraseTyped}
+              placeholder={erasePreview.confirmWord}
+            />
+          </div>
+        )}
+        <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', marginTop: '8px' }}>
+          <button className="btn btn-secondary" onClick={() => setEraseTarget(null)} disabled={erasing}>Cancel</button>
+          <button
+            className="btn btn-primary"
+            onClick={confirmErase}
+            disabled={
+              erasing || !erasePreview ||
+              normaliseTyped(eraseTyped) !== normaliseTyped(String(erasePreview?.confirmWord || '')) ||
+              (erasePreview?.createdForOthers?.length > 0 && !eraseAck)
+            }
+            style={{ background: '#dc2626', borderColor: '#dc2626' }}
+          >
+            {erasing ? 'Erasing…' : 'Erase permanently'}
           </button>
         </div>
       </Modal>

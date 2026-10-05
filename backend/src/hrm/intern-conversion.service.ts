@@ -4,6 +4,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { normaliseEmail } from '../common/validators';
 import { formatDateDMY } from '../common/date-format';
+import { TeamsService } from './teams.service';
 import { OfferLetterService } from './offer-letter.service';
 import { EmployeeHistoryService, EMP_TYPE_LABEL, HistoryChange, STATUS_LABEL, WORK_MODE_LABEL } from './employee-history.service';
 import type { RequestUser } from './hrm.service';
@@ -82,6 +83,7 @@ export class InternConversionService {
     private offerLetters: OfferLetterService,
     private history: EmployeeHistoryService,
     private audit: AuditService,
+    private teams: TeamsService,
   ) {}
 
   private async loadIntern(employeeId: string) {
@@ -351,6 +353,7 @@ export class InternConversionService {
     });
 
     // ---- after commit: letter, notification, audit — never undo the conversion ----
+    await this.teams.syncPayType(employeeId); // fixed pay just changed
     const offerLetter = await this.offerLetters
       .issueAndSend(employeeId, { sendEmail: input.sendOfferLetter !== false, actor })
       .catch((err) => {

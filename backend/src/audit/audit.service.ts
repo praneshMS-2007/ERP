@@ -264,7 +264,8 @@ export function buildPlainEnglishDescription(d: {
       return `${actor} added a new employee: '${target || 'New Employee'}'${desigStr}${deptStr}${typeStr}.`;
     }
     if (actType === 'DELETE') {
-      return `${actor} removed the employee record for '${target || 'employee'}'.`;
+      // DELETE /hrm/employees/:id is the permanent erase; "Remove" is a PUT.
+      return `${actor} permanently erased the former employee '${target || 'employee'}' and all of their records.`;
     }
     return `${actor} updated the profile and details of employee '${target || 'employee'}'.`;
   }

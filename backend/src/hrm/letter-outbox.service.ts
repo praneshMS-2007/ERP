@@ -103,6 +103,19 @@ export class LetterOutboxService {
   /** Stores the letter as a draft, or mails it straight away when preview is off for its kind. */
   async queue(input: QueueInput, options: { forceDraft?: boolean } = {}): Promise<QueueResult> {
     const actorName = input.actor ? await this.actorName(input.actor.id) : null;
+
+    // A freshly generated letter replaces any older unsent copy of the same
+    // letter (same person + type, or same payroll for payslips), so the Outbox
+    // never offers an outdated version to send after details were edited.
+    const sameLetter = input.payrollId
+      ? { payrollId: input.payrollId }
+      : input.employeeId ? { employeeId: input.employeeId } : null;
+    if (sameLetter) {
+      await this.prisma.outgoingLetter.updateMany({
+        where: { ...sameLetter, kind: input.kind, status: { in: ['DRAFT', 'FAILED'] } },
+        data: { status: 'DISCARDED', error: 'Replaced by a newer version of this letter.' },
+      });
+    }
     const letter = await this.prisma.outgoingLetter.create({
       data: {
         kind: input.kind,

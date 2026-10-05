@@ -9,7 +9,8 @@ import { InternConversionService } from './intern-conversion.service';
 import type { ConversionInput } from './intern-conversion.service';
 import { EmployeeHistoryService } from './employee-history.service';
 import { Prisma } from '@prisma/client';
-import { RequirePermission, CurrentUser } from '../auth/decorators';
+import { RequirePermission, RequireRole, CurrentUser } from '../auth/decorators';
+import { EmployeeEraseService } from './employee-erase.service';
 
 @Controller('hrm')
 export class HrmController {
@@ -18,6 +19,7 @@ export class HrmController {
     private readonly internshipCertService: InternshipCertificateService,
     private readonly conversionService: InternConversionService,
     private readonly historyService: EmployeeHistoryService,
+    private readonly eraseService: EmployeeEraseService,
   ) {}
 
   // Gated at HR:READ so every role can reach it (including EMPLOYEE, who
@@ -91,10 +93,23 @@ export class HrmController {
     return this.hrmService.setSalaryStructure(id, body, user?.id);
   }
 
-  @Delete('employees/:id')
+  /**
+   * Permanent erase — the second step after "Remove". Admin and HR Manager, former
+   * employees only, and the body must repeat the employee code. See
+   * EmployeeEraseService for exactly what is deleted.
+   */
+  @Get('employees/:id/erase-preview')
+  @RequireRole('SUPER_ADMIN', 'HR_MANAGER')
   @RequirePermission('HR', 'DELETE')
-  deleteEmployee(@Param('id') id: string) {
-    return this.hrmService.deleteEmployee(id);
+  erasePreview(@Param('id') id: string) {
+    return this.eraseService.preview(id);
+  }
+
+  @Delete('employees/:id')
+  @RequireRole('SUPER_ADMIN', 'HR_MANAGER')
+  @RequirePermission('HR', 'DELETE')
+  eraseEmployee(@Param('id') id: string, @Body('confirmCode') confirmCode: string | undefined, @CurrentUser() user: RequestUser) {
+    return this.eraseService.erase(id, confirmCode, user);
   }
 
   /**

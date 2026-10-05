@@ -5,7 +5,8 @@ import {
   X, Pencil, Save, RotateCcw, Lock, AlertCircle, CheckCircle2,
   Eye, EyeOff, Upload, Download, Trash2, Laptop, Mail,
 } from 'lucide-react';
-import { hrmApi, API_ORIGIN } from '../../services/api';
+import { hrmApi, API_ORIGIN, teamsApi } from '../../services/api';
+import PaySetup, { payPayload, payProblem, paySummary, payValueFromEmployee, payWord, type PayValue } from '../PaySetup';
 import EmployeeHistoryTimeline from './EmployeeHistoryTimeline';
 
 interface Props {
@@ -92,6 +93,12 @@ export default function EmployeeDetailModal({
   const [toast, setToast] = useState<string | null>(null);
   const [section, setSection] = useState<Section>('personal');
   const [form, setForm] = useState<Record<string, any>>({});
+  const [pay, setPay] = useState<PayValue>({ mode: 'FIXED', amount: '', shares: [] });
+  const [teams, setTeams] = useState<{ id: string; name: string; isActive?: boolean }[]>([]);
+  useEffect(() => {
+    if (!employeeId) return;
+    teamsApi.list().then((t) => setTeams(Array.isArray(t) ? t : [])).catch(() => setTeams([]));
+  }, [employeeId]);
   const [salaryForm, setSalaryForm] = useState({ basic: '', hra: '', specialAllowance: '', effectiveFrom: '', note: '' });
 
   // PAN/Aadhaar: masked by default, revealed only on explicit action.
@@ -123,7 +130,7 @@ export default function EmployeeDetailModal({
         state: data.state ?? '', country: data.country ?? '',
         joinDate: toDateInput(data.joinDate), empType: data.empType ?? 'FULL_TIME',
         status: data.status ?? 'ACTIVE', workMode: data.workMode ?? 'ONSITE',
-        departmentId: data.departmentId ?? '', designationId: data.designationId ?? '',
+        department: data.department?.name ?? '', designation: data.designation?.title ?? '',
         engagementEndDate: toDateInput(data.engagementEndDate),
         pan: data.pan ?? '', aadhaarNumber: data.aadhaarNumber ?? '',
         bankAccountNo: data.bankAccountNo ?? '', bankIfsc: data.bankIfsc ?? '',
@@ -145,6 +152,7 @@ export default function EmployeeDetailModal({
         hasStipend: data.hasStipend ?? true,
         stipendAmount: data.stipendAmount != null ? String(data.stipendAmount) : '',
       });
+      setPay(payValueFromEmployee(data));
       setRevealed(new Set());
       const cur = data.compensation?.current;
       setSalaryForm({
@@ -283,11 +291,12 @@ export default function EmployeeDetailModal({
     setSaving(true);
     setError(null);
     try {
-      const payload = {
-        ...form,
-        hasStipend: form.hasStipend === true || form.hasStipend === 'true',
-        stipendAmount: form.hasStipend && form.stipendAmount ? Number(form.stipendAmount) : null,
-      };
+      const payIssue = payProblem(pay, form.empType);
+      if (payIssue) {
+        setError(payIssue);
+        return;
+      }
+      const payload = { ...form, ...payPayload(pay) };
       await hrmApi.updateEmployee(employeeId!, payload);
       setToast('Profile saved');
       setEditing(false);
@@ -598,16 +607,16 @@ export default function EmployeeDetailModal({
                          onChange={(v) => setForm({ ...form, status: v })} />
                   <Field label="Work mode" value={form.workMode} editing={editing} type="select" options={WORK_MODES}
                          onChange={(v) => setForm({ ...form, workMode: v })} />
-                  <Field label="Department" value={form.departmentId} editing={editing} type="select"
-                         options={departments.map((d) => d.id)}
-                         labels={Object.fromEntries(departments.map((d) => [d.id, d.name]))}
+                  <Field label="Department" value={form.department} editing={editing} required
+                         suggestions={departments.map((d) => d.name)}
+                         hint="Type a name, or pick an existing one. New names are added automatically."
                          display={emp.department?.name ?? '—'}
-                         onChange={(v) => setForm({ ...form, departmentId: v })} />
-                  <Field label="Designation" value={form.designationId} editing={editing} type="select"
-                         options={designations.map((d) => d.id)}
-                         labels={Object.fromEntries(designations.map((d) => [d.id, d.title]))}
+                         onChange={(v) => setForm({ ...form, department: v })} />
+                  <Field label="Designation" value={form.designation} editing={editing} required
+                         suggestions={designations.map((d) => d.title)}
+                         hint="Type a job title, or pick an existing one."
                          display={emp.designation?.title ?? '—'}
-                         onChange={(v) => setForm({ ...form, designationId: v })} />
+                         onChange={(v) => setForm({ ...form, designation: v })} />
                   <Field label="Reports to"
                          value={emp.reportingManager
                            ? `${emp.reportingManager.firstName} ${emp.reportingManager.lastName}`
@@ -619,16 +628,18 @@ export default function EmployeeDetailModal({
                            hint="Fixed-term engagements need an end date"
                            onChange={(v) => setForm({ ...form, engagementEndDate: v })} />
                   )}
-                  <Field label="Stipend arrangement" value={form.hasStipend ? 'PAID' : 'UNPAID'} editing={editing} type="select"
-                         options={['PAID', 'UNPAID']}
-                         labels={{ PAID: 'With Stipend (Paid)', UNPAID: 'No Stipend (Unpaid)' }}
-                         display={emp.hasStipend ? `Paid (${rupee(emp.stipendAmount || 0)} / mo)` : 'No Stipend (Unpaid)'}
-                         onChange={(v) => setForm({ ...form, hasStipend: v === 'PAID', stipendAmount: v === 'PAID' ? form.stipendAmount : '' })} />
-                  {form.hasStipend && (
-                    <Field label="Monthly stipend" value={form.stipendAmount}
-                           display={rupee(emp.stipendAmount || 0)} editing={editing} mono
-                           hint="Consolidated monthly stipend in INR"
-                           onChange={(v) => setForm({ ...form, stipendAmount: v })} />
+                  {editing ? (
+                    <div className="edm-field is-wide">
+                      <PaySetup empType={form.empType} value={pay} onChange={setPay} teams={teams} />
+                    </div>
+                  ) : (
+                    <>
+                      <Field label={`${payWord(emp.empType)} / pay`} value={paySummary(emp)} editing={false} wide />
+                      {(emp.teamMemberships ?? []).length > 0 && (
+                        <Field label="Teams" editing={false} wide
+                               value={(emp.teamMemberships ?? []).map((m: any) => `${m.team?.name} (${m.role === 'HEAD' ? 'Head' : 'Member'}${Number(m.revenueSharePct) > 0 ? `, ${+Number(m.revenueSharePct).toFixed(2)}% share` : ''})`).join(' · ')} />
+                      )}
+                    </>
                   )}
                 </div>
 
@@ -1061,13 +1072,16 @@ export default function EmployeeDetailModal({
 /* ---------------- field ---------------- */
 
 function Field({
-  label, value, onChange, editing, type = 'text', options, labels, hint, wide, mono, required, display,
+  label, value, onChange, editing, type = 'text', options, labels, hint, wide, mono, required, display, suggestions,
 }: {
   label: string; value: any; onChange?: (v: string) => void; editing: boolean;
   type?: 'text' | 'date' | 'select'; options?: string[]; labels?: Record<string, string>;
   hint?: string; wide?: boolean; mono?: boolean; required?: boolean; display?: string;
+  /** Free typing with these offered as you type (a text box, not a fixed list). */
+  suggestions?: string[];
 }) {
   const shown = display ?? (value === '' || value == null ? '—' : String(value));
+  const listId = suggestions ? `edm-list-${label.toLowerCase().replace(/[^a-z0-9]+/g, '-')}` : undefined;
 
   return (
     <div className={`edm-field ${wide ? 'is-wide' : ''}`}>
@@ -1083,12 +1097,21 @@ function Field({
             ))}
           </select>
         ) : (
-          <input
-            className={`edm-input ${mono ? 'is-mono' : ''}`}
-            type={type}
-            value={value ?? ''}
-            onChange={(e) => onChange(e.target.value)}
-          />
+          <>
+            <input
+              className={`edm-input ${mono ? 'is-mono' : ''}`}
+              type={type}
+              value={value ?? ''}
+              list={listId}
+              autoComplete={listId ? 'off' : undefined}
+              onChange={(e) => onChange(e.target.value)}
+            />
+            {listId && (
+              <datalist id={listId}>
+                {Array.from(new Set(suggestions)).map((s) => <option key={s} value={s} />)}
+              </datalist>
+            )}
+          </>
         )
       ) : (
         <span className={`edm-value ${mono ? 'is-mono' : ''}`}>

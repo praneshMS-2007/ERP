@@ -7,6 +7,9 @@ import { InternshipCertificateService } from './internship-certificate.service';
 import { EmployeeHistoryService } from './employee-history.service';
 import { InternConversionService } from './intern-conversion.service';
 import { LetterOutboxService } from './letter-outbox.service';
+import { EmployeeEraseService } from './employee-erase.service';
+import { TeamsService } from './teams.service';
+import { TeamsController } from './teams.controller';
 import { LettersController } from './letters.controller';
 import { GoogleSheetsService } from './google-sheets.service';
 import { OnboardingImportService } from './onboarding-import.service';
@@ -20,8 +23,8 @@ import { AuditModule } from '../audit/audit.module';
 
 @Module({
   imports: [AnnouncementsModule, AuditModule],
-  controllers: [HrmController, EmployeeDocumentsController, SelfController, LettersController, OnboardingController],
-  providers: [HrmService, OfferLetterService, PayslipService, InternshipCertificateService, MailerService, EmployeeDocumentsService, EmployeeHistoryService, InternConversionService, LetterOutboxService, GoogleSheetsService, OnboardingImportService],
+  controllers: [HrmController, EmployeeDocumentsController, SelfController, LettersController, OnboardingController, TeamsController],
+  providers: [HrmService, OfferLetterService, PayslipService, InternshipCertificateService, MailerService, EmployeeDocumentsService, EmployeeHistoryService, InternConversionService, LetterOutboxService, GoogleSheetsService, OnboardingImportService, EmployeeEraseService, TeamsService],
   exports: [HrmService],
 })
 export class HrmModule {}

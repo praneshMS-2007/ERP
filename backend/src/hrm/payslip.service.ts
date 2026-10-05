@@ -49,6 +49,8 @@ interface PayslipData {
   hra: number;
   specialAllowance: number;
   bonus: number;
+  /** One line per team the person shares revenue from (snapshotted on the payroll record). */
+  revenueShareLines: { teamName: string; pct: number; amount: number }[];
   tds: number;
   providentFund: number;
   professionalTax: number;
@@ -137,6 +139,9 @@ export class PayslipService {
       baseSalary: payroll.baseSalary,
       hra: payroll.hra,
       specialAllowance: payroll.specialAllowance,
+      revenueShareLines: Array.isArray(payroll.revenueShareDetail)
+        ? (payroll.revenueShareDetail as any[]).map((l) => ({ teamName: String(l.teamName), pct: Number(l.pct), amount: Number(l.amount) }))
+        : [],
       bonus: payroll.bonus,
       tds: payroll.tds,
       providentFund: payroll.providentFund,
@@ -329,6 +334,10 @@ export class PayslipService {
       ['HRA', d.hra],
       ['Special Allowance', d.specialAllowance],
       ['Bonus/Incentives', d.bonus],
+      ...d.revenueShareLines.map((l) => [
+        `Revenue share: ${l.teamName.length > 18 ? l.teamName.slice(0, 17) + '…' : l.teamName} (${+l.pct.toFixed(2)}%)`,
+        l.amount,
+      ]),
     ] as [string, number][];
 
     // Deductions data
@@ -339,7 +348,8 @@ export class PayslipService {
       ['Loss of Pay (LOP)', d.lossOfPay],
     ] as [string, number][];
 
-    const gross = d.baseSalary + d.hra + d.specialAllowance + d.bonus;
+    const revenueShare = d.revenueShareLines.reduce((s, l) => s + l.amount, 0);
+    const gross = Math.round((d.baseSalary + d.hra + d.specialAllowance + d.bonus + revenueShare) * 100) / 100;
     const totalDed = d.tds + d.providentFund + d.professionalTax + d.lossOfPay;
 
     // Data rows
