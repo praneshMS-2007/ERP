@@ -260,7 +260,7 @@ export class HrmController {
   @Post('payrolls')
   @RequirePermission('HR', 'WRITE')
   createPayroll(
-    @Body() data: { employeeId: string; payPeriod: string; periodStart: string; periodEnd: string; showEmployeeId?: boolean } & Partial<PayrollManualInput>,
+    @Body() data: { employeeId: string; payPeriod: string; periodStart: string; periodEnd: string; showEmployeeId?: boolean; attendance?: { totalDaysInMonth: number; workingDaysInMonth: number; leavesTaken: number } | null } & Partial<PayrollManualInput>,
     @CurrentUser() user: RequestUser,
   ) {
     return this.hrmService.createPayroll(data, user);
@@ -285,12 +285,19 @@ export class HrmController {
     @Query('providentFund') providentFund?: string,
     @Query('professionalTax') professionalTax?: string,
     @Query('lossOfPay') lossOfPay?: string,
+    @Query('attTotal') attTotal?: string,
+    @Query('attWorking') attWorking?: string,
+    @Query('attLeaves') attLeaves?: string,
   ) {
     const num = (v?: string) => (v !== undefined ? Number(v) : 0);
+    // Typed attendance is optional; all three come together or not at all.
+    const attendance = attTotal !== undefined || attWorking !== undefined || attLeaves !== undefined
+      ? { totalDaysInMonth: attTotal, workingDaysInMonth: attWorking, leavesTaken: attLeaves }
+      : undefined;
     return this.hrmService.previewPayroll(employeeId, periodStart, periodEnd, {
       baseSalary: num(baseSalary), hra: num(hra), specialAllowance: num(specialAllowance), bonus: num(bonus),
       tds: num(tds), providentFund: num(providentFund), professionalTax: num(professionalTax), lossOfPay: num(lossOfPay),
-    });
+    }, attendance);
   }
 
   // Gate deliberately broad (HR:READ) — the real "Finance/Admin only, never
@@ -319,7 +326,7 @@ export class HrmController {
   @RequirePermission('HR', 'WRITE')
   updatePayroll(
     @Param('id') id: string,
-    @Body() data: { payPeriod?: string; showEmployeeId?: boolean } & Partial<PayrollManualInput>,
+    @Body() data: { payPeriod?: string; showEmployeeId?: boolean; attendance?: { totalDaysInMonth: number; workingDaysInMonth: number; leavesTaken: number } | null } & Partial<PayrollManualInput>,
   ) {
     return this.hrmService.updatePayroll(id, data);
   }

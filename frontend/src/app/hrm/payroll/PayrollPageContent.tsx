@@ -50,6 +50,8 @@ export default function PayrollPageContent({ mode }: { mode: 'hr' | 'finance' })
     baseSalary: '', hra: '', specialAllowance: '', bonus: '',
     tds: '', providentFund: '', professionalTax: '', lossOfPay: '',
     showEmployeeId: true,
+    // Attendance typed by hand instead of worked out from attendance records.
+    attManual: false, attTotal: '', attWorking: '', attLeaves: '',
   };
   const [form, setForm] = useState(defaultForm);
 
@@ -131,11 +133,36 @@ export default function PayrollPageContent({ mode }: { mode: 'hr' | 'finance' })
       professionalTax: String(p.professionalTax ?? ''),
       lossOfPay: String(p.lossOfPay ?? ''),
       showEmployeeId: p.showEmployeeId !== false,
+      attManual: !!p.attendanceManual,
+      attTotal: p.attendanceManual ? String(p.totalDaysInMonth ?? '') : '',
+      attWorking: p.attendanceManual ? String(p.workingDaysInMonth ?? '') : '',
+      attLeaves: p.attendanceManual ? String(p.leavesTaken ?? '') : '',
     });
     setRunError(null);
     setPreview(null);
     setPreviewError(null);
     setShowRunModal(true);
+  }
+
+  /** The typed attendance, or null when the computed figures are being used. */
+  function manualAttendance() {
+    return form.attManual
+      ? { totalDaysInMonth: form.attTotal, workingDaysInMonth: form.attWorking, leavesTaken: form.attLeaves }
+      : null;
+  }
+
+  /** Plain-language check of the typed attendance; null when fine. */
+  function attendanceProblem(): string | null {
+    if (!form.attManual) return null;
+    const vals = [['Total days', form.attTotal], ['Working days', form.attWorking], ['Leaves taken', form.attLeaves]] as const;
+    for (const [label, v] of vals) {
+      if (v === '' || !/^\d+$/.test(v)) return `${label} must be a whole number, zero or more.`;
+    }
+    const total = Number(form.attTotal), working = Number(form.attWorking), leaves = Number(form.attLeaves);
+    if (total < 1 || total > 366) return 'Total days must be between 1 and 366.';
+    if (working > total) return 'Working days cannot be more than the total days.';
+    if (leaves > working) return 'Leaves taken cannot be more than the working days.';
+    return null;
   }
 
   function manualPayrollFields() {
@@ -161,7 +188,9 @@ export default function PayrollPageContent({ mode }: { mode: 'hr' | 'finance' })
       setPreviewLoading(true);
       setPreviewError(null);
       try {
-        const result = await hrmApi.previewPayroll(selectedEmployeeId, form.periodStart, form.periodEnd, manualPayrollFields());
+        if (attendanceProblem()) { setPreviewLoading(false); return; }
+        const att = manualAttendance();
+        const result = await hrmApi.previewPayroll(selectedEmployeeId, form.periodStart, form.periodEnd, manualPayrollFields(), att ?? undefined);
         setPreview(result);
       } catch (e: any) {
         setPreview(null);
@@ -171,14 +200,16 @@ export default function PayrollPageContent({ mode }: { mode: 'hr' | 'finance' })
       }
     }, 400);
     return () => clearTimeout(timer);
-  }, [showRunModal, selectedEmployeeId, form.periodStart, form.periodEnd, form.baseSalary, form.hra, form.specialAllowance, form.bonus, form.tds, form.providentFund, form.professionalTax, form.lossOfPay]);
+  }, [showRunModal, selectedEmployeeId, form.periodStart, form.periodEnd, form.baseSalary, form.hra, form.specialAllowance, form.bonus, form.tds, form.providentFund, form.professionalTax, form.lossOfPay, form.attManual, form.attTotal, form.attWorking, form.attLeaves]);
 
   async function handleSaveModal() {
     if (!preview) return;
     setRunError(null);
+    const attIssue = attendanceProblem();
+    if (attIssue) { setRunError(attIssue); return; }
     try {
       if (editingPayroll) {
-        await hrmApi.updatePayroll(editingPayroll.id, { ...manualPayrollFields(), showEmployeeId: form.showEmployeeId });
+        await hrmApi.updatePayroll(editingPayroll.id, { ...manualPayrollFields(), showEmployeeId: form.showEmployeeId, attendance: manualAttendance() });
       } else {
         if (!selectedEmployeeId || !form.periodStart || !form.periodEnd) return;
         if (new Date(form.periodEnd) < new Date(form.periodStart)) {
@@ -191,6 +222,7 @@ export default function PayrollPageContent({ mode }: { mode: 'hr' | 'finance' })
           periodStart: form.periodStart,
           periodEnd: form.periodEnd,
           showEmployeeId: form.showEmployeeId,
+          attendance: manualAttendance(),
           ...manualPayrollFields(),
         });
       }
@@ -542,6 +574,54 @@ export default function PayrollPageContent({ mode }: { mode: 'hr' | 'finance' })
           </span>
         </label>
 
+        <div style={{ border: '1px solid var(--color-border)', borderRadius: 10, padding: '12px 14px', margin: '0 0 14px' }}>
+          <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 6 }}>Attendance for this payslip</div>
+          <div style={{ display: 'inline-flex', border: '1px solid var(--color-border)', borderRadius: 9, overflow: 'hidden', marginBottom: 8 }} role="radiogroup" aria-label="Attendance source">
+            {[{ v: false, l: 'From attendance records' }, { v: true, l: 'Type it myself' }].map((o) => (
+              <button key={String(o.v)} type="button" role="radio" aria-checked={form.attManual === o.v}
+                onClick={() => {
+                  if (o.v && !form.attManual) {
+                    // start from the figures the ERP worked out, so only the differences need typing
+                    setForm({
+                      ...form, attManual: true,
+                      attTotal: String(preview?.totalDaysInMonth ?? ''), attWorking: String(preview?.workingDaysInMonth ?? ''), attLeaves: String(preview?.leavesTaken ?? ''),
+                    });
+                  } else if (!o.v) {
+                    setForm({ ...form, attManual: false, attTotal: '', attWorking: '', attLeaves: '' });
+                  }
+                }}
+                style={{ border: 'none', padding: '7px 14px', fontSize: 13, fontWeight: 600, cursor: 'pointer', background: form.attManual === o.v ? '#2563eb' : 'var(--color-background)', color: form.attManual === o.v ? '#fff' : 'var(--color-text-secondary)' }}>
+                {o.l}
+              </button>
+            ))}
+          </div>
+          {!form.attManual ? (
+            <p style={{ margin: 0, fontSize: 12, color: 'var(--color-text-muted)' }}>Worked out from the attendance marked for this period (weekends and holidays excluded). Choose &ldquo;Type it myself&rdquo; to enter the figures by hand instead.</p>
+          ) : (
+            <>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10 }}>
+                {([['Total days in month', 'attTotal'], ['Working days', 'attWorking'], ['Leaves taken', 'attLeaves']] as const).map(([label, key]) => (
+                  <label key={key} style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12, fontWeight: 600, color: 'var(--color-text-secondary)' }}>
+                    {label}
+                    <input type="number" min="0" step="1" inputMode="numeric" value={(form as any)[key]}
+                      onChange={(e) => setForm({ ...form, [key]: e.target.value })}
+                      style={{ padding: '8px 10px', borderRadius: 8, border: '1px solid var(--color-border)', background: 'var(--color-background)', color: 'var(--color-text)', fontSize: 13.5 }} />
+                  </label>
+                ))}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12, fontWeight: 600, color: 'var(--color-text-secondary)' }}>
+                  Effective work days
+                  <div style={{ padding: '8px 10px', borderRadius: 8, background: 'var(--color-bg-secondary)', fontSize: 13.5, color: 'var(--color-text)' }}>
+                    {/^\d+$/.test(form.attWorking) && /^\d+$/.test(form.attLeaves) ? Number(form.attWorking) - Number(form.attLeaves) : '—'}
+                  </div>
+                </div>
+              </div>
+              {attendanceProblem()
+                ? <p style={{ margin: '8px 0 0', fontSize: 12.5, color: '#b91c1c', fontWeight: 600 }}>{attendanceProblem()}</p>
+                : <p style={{ margin: '8px 0 0', fontSize: 12, color: 'var(--color-text-muted)' }}>These figures go on the payslip as typed. Effective work days = working days − leaves taken.</p>}
+            </>
+          )}
+        </div>
+
         {previewLoading && (
           <p style={{ fontSize: '12.5px', color: 'var(--color-text-muted)', margin: '4px 0 16px' }}>Computing…</p>
         )}
@@ -583,7 +663,7 @@ export default function PayrollPageContent({ mode }: { mode: 'hr' | 'finance' })
               <div style={{ fontSize: '24px', fontWeight: 800, color: '#16a34a' }}>{formatINR(preview.netPay)}</div>
             </div>
             <div style={{ borderTop: '1px solid var(--color-border)', paddingTop: '10px', fontSize: '12px', color: 'var(--color-text-muted)' }}>
-              {preview.totalDaysInMonth} days in period &middot; {preview.workingDaysInMonth} working days &middot; {preview.leavesTaken} leave{preview.leavesTaken === 1 ? '' : 's'} taken &middot; {preview.effectiveWorkDays} effective work days
+              {preview.attendanceManual && <b>Typed by you · </b>}{preview.totalDaysInMonth} days in period &middot; {preview.workingDaysInMonth} working days &middot; {preview.leavesTaken} leave{preview.leavesTaken === 1 ? '' : 's'} taken &middot; {preview.effectiveWorkDays} effective work days
             </div>
           </div>
         )}

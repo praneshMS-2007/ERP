@@ -227,10 +227,16 @@ export const hrmApi = {
   previewPayroll: (employeeId: string, periodStart: string, periodEnd: string, manual: {
     baseSalary?: number; hra?: number; specialAllowance?: number; bonus?: number;
     tds?: number; providentFund?: number; professionalTax?: number; lossOfPay?: number;
-  }) => {
+  }, attendance?: { totalDaysInMonth: string; workingDaysInMonth: string; leavesTaken: string }) => {
     const params = new URLSearchParams({ employeeId, periodStart, periodEnd });
     for (const [k, v] of Object.entries(manual)) {
       if (v !== undefined) params.set(k, String(v));
+    }
+    // Typed attendance replaces the figures worked out from attendance records.
+    if (attendance) {
+      params.set('attTotal', attendance.totalDaysInMonth);
+      params.set('attWorking', attendance.workingDaysInMonth);
+      params.set('attLeaves', attendance.leavesTaken);
     }
     return mutateApi(`/hrm/payrolls/preview?${params.toString()}`);
   },

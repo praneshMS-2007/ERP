@@ -1044,10 +1044,13 @@ model Payroll {
 
   // ---- Attendance record (payslip footer) ----
   // Snapshotted at generation time so a reprinted payslip never changes.
-  totalDaysInMonth   Int @default(0) @map("total_days_in_month") // calendar days
-  workingDaysInMonth Int @default(0) @map("working_days_in_month") // minus weekends & holidays
-  leavesTaken        Int @default(0) @map("leaves_taken")
-  effectiveWorkDays  Int @default(0) @map("effective_work_days") // workingDays - leavesTaken
+  totalDaysInMonth   Int     @default(0) @map("total_days_in_month") // calendar days
+  workingDaysInMonth Int     @default(0) @map("working_days_in_month") // minus weekends & holidays
+  leavesTaken        Int     @default(0) @map("leaves_taken")
+  effectiveWorkDays  Int     @default(0) @map("effective_work_days") // workingDays - leavesTaken
+  // True when HR typed the attendance figures instead of using the computed ones;
+  // later edits of the record keep them unless HR switches back to automatic.
+  attendanceManual   Boolean @default(false) @map("attendance_manual")
 
   // ---- Approval chain: HR prepares, Finance approves ----
   preparedById   String?   @map("prepared_by_id")

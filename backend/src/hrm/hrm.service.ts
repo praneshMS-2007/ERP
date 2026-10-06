@@ -36,6 +36,32 @@ export interface RequestUser {
 }
 
 /** Every money figure on a payslip — typed in by HR/Finance, never derived. */
+/** Attendance figures typed in by hand for one payroll record. */
+export interface ManualAttendance {
+  totalDaysInMonth: number;
+  workingDaysInMonth: number;
+  leavesTaken: number;
+}
+
+/** Checks hand-typed attendance and derives the effective work days. */
+function cleanManualAttendance(raw: any): (ManualAttendance & { effectiveWorkDays: number }) | null {
+  if (raw === null || raw === undefined) return null;
+  const read = (v: any, label: string) => {
+    const n = Number(v);
+    if (v === '' || v === null || v === undefined || !Number.isInteger(n) || n < 0) {
+      throw new BadRequestException(`${label} must be a whole number, zero or more.`);
+    }
+    return n;
+  };
+  const totalDaysInMonth = read(raw.totalDaysInMonth, 'Total days');
+  const workingDaysInMonth = read(raw.workingDaysInMonth, 'Working days');
+  const leavesTaken = read(raw.leavesTaken, 'Leaves taken');
+  if (totalDaysInMonth < 1 || totalDaysInMonth > 366) throw new BadRequestException('Total days must be between 1 and 366.');
+  if (workingDaysInMonth > totalDaysInMonth) throw new BadRequestException('Working days cannot be more than the total days.');
+  if (leavesTaken > workingDaysInMonth) throw new BadRequestException('Leaves taken cannot be more than the working days.');
+  return { totalDaysInMonth, workingDaysInMonth, leavesTaken, effectiveWorkDays: workingDaysInMonth - leavesTaken };
+}
+
 export interface PayrollManualInput {
   baseSalary: number;
   hra: number;
@@ -1884,8 +1910,9 @@ export class HrmService {
       baseSalary: number; hra: number; specialAllowance: number; bonus: number;
       tds: number; providentFund: number; professionalTax: number; lossOfPay: number;
     },
+    manualAttendance?: (ManualAttendance & { effectiveWorkDays: number }) | null,
   ) {
-    const attendance = await this.computeAttendanceMetrics(employeeId, joinDate, periodStart, periodEnd);
+    const attendance = manualAttendance ?? (await this.computeAttendanceMetrics(employeeId, joinDate, periodStart, periodEnd));
     // Revenue share is the one earning the ERP works out itself: share % x the
     // team's revenue entered for the month this period starts in.
     const share = await this.teams.computeShare(employeeId, periodStart);
@@ -1903,6 +1930,7 @@ export class HrmService {
       tds, providentFund, professionalTax, lossOfPay, deductions,
       netPay,
       ...attendance,
+      attendanceManual: !!manualAttendance,
       // not stored — tells the screen which teams still need this month's revenue
       revenueSharePeriod: share.period,
       revenueShareMissing: share.missing,
@@ -1919,6 +1947,7 @@ export class HrmService {
     periodStartRaw: string,
     periodEndRaw: string,
     manual: PayrollManualInput,
+    manualAttendance?: any,
   ) {
     const employee = await this.prisma.employee.findUnique({
       where: { id: employeeId },
@@ -1933,7 +1962,7 @@ export class HrmService {
     if (Number.isNaN(periodStart.getTime()) || Number.isNaN(periodEnd.getTime()) || periodStart > periodEnd) {
       throw new BadRequestException('A valid period start and end date are required.');
     }
-    return this.computePayrollBreakdown(employeeId, employee.joinDate, periodStart, periodEnd, manual);
+    return this.computePayrollBreakdown(employeeId, employee.joinDate, periodStart, periodEnd, manual, cleanManualAttendance(manualAttendance));
   }
 
   async createPayroll(data: {
@@ -1943,6 +1972,8 @@ export class HrmService {
     periodEnd: string;
     /** false = leave the Employee ID blank on the payslip (default true). */
     showEmployeeId?: boolean;
+    /** Attendance typed by hand; omit to have it worked out from real records. */
+    attendance?: ManualAttendance | null;
   } & Partial<PayrollManualInput>, viewer?: RequestUser) {
     const employee = await this.prisma.employee.findUnique({
       where: { id: data.employeeId },
@@ -1976,7 +2007,7 @@ export class HrmService {
       providentFund: data.providentFund ?? 0,
       professionalTax: data.professionalTax ?? 0,
       lossOfPay: data.lossOfPay ?? 0,
-    });
+    }, cleanManualAttendance(data.attendance));
 
     const { revenueShareMissing, revenueSharePeriod, revenueShareLines, ...rest } = breakdown;
     this.assertRevenueEntered(revenueShareMissing, revenueSharePeriod);
@@ -2107,7 +2138,7 @@ export class HrmService {
    */
   async updatePayroll(
     id: string,
-    data: { payPeriod?: string; showEmployeeId?: boolean } & Partial<PayrollManualInput>,
+    data: { payPeriod?: string; showEmployeeId?: boolean; attendance?: ManualAttendance | null } & Partial<PayrollManualInput>,
   ) {
     const payroll = await this.prisma.payroll.findUnique({
       where: { id },
@@ -2149,6 +2180,13 @@ export class HrmService {
         professionalTax: data.professionalTax ?? payroll.professionalTax,
         lossOfPay: data.lossOfPay ?? payroll.lossOfPay,
       },
+      // undefined = keep what the record already has (typed figures stay typed);
+      // null = switch back to automatic; an object = new typed figures.
+      data.attendance === undefined
+        ? (payroll.attendanceManual
+            ? cleanManualAttendance({ totalDaysInMonth: payroll.totalDaysInMonth, workingDaysInMonth: payroll.workingDaysInMonth, leavesTaken: payroll.leavesTaken })
+            : null)
+        : cleanManualAttendance(data.attendance),
     );
 
     const { revenueShareMissing, revenueSharePeriod, revenueShareLines, ...rest } = breakdown;
