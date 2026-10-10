@@ -1,9 +1,10 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import {
   X, Pencil, Save, RotateCcw, Lock, AlertCircle, CheckCircle2,
-  Eye, EyeOff, Upload, Download, Trash2, Laptop, Mail,
+  Eye, EyeOff, Upload, Download, Trash2, Laptop, Mail, FileText, ExternalLink,
 } from 'lucide-react';
 import { hrmApi, API_ORIGIN, teamsApi } from '../../services/api';
 import PaySetup, { payPayload, payProblem, paySummary, payValueFromEmployee, payWord, type PayValue } from '../PaySetup';
@@ -93,6 +94,10 @@ export default function EmployeeDetailModal({
   const [toast, setToast] = useState<string | null>(null);
   const [section, setSection] = useState<Section>('personal');
   const [form, setForm] = useState<Record<string, any>>({});
+  // Offer letter preview: a temporary URL for the PDF, shown in a viewer over this window.
+  const [preview, setPreview] = useState<{ url: string; fileName: string } | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  useEffect(() => () => { if (preview) window.URL.revokeObjectURL(preview.url); }, [preview]);
   const [pay, setPay] = useState<PayValue>({ mode: 'FIXED', amount: '', shares: [] });
   const [teams, setTeams] = useState<{ id: string; name: string; isActive?: boolean }[]>([]);
   useEffect(() => {
@@ -274,10 +279,14 @@ export default function EmployeeDetailModal({
 
   // Escape closes, matching every other dialog people use.
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      if (preview) setPreview(null); // closes the letter preview first, not the whole window
+      else onClose();
+    };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
+  }, [onClose, preview]);
 
   useEffect(() => {
     if (!toast) return;
@@ -433,6 +442,24 @@ export default function EmployeeDetailModal({
             </button>
           </div>
         </header>
+
+        {/* Rendered at page level so no transformed ancestor clips or offsets it. */}
+        {preview && typeof document !== "undefined" && createPortal(
+          <div className="edm-preview-back" role="presentation" onClick={() => setPreview(null)}>
+            <div className="edm-preview" role="dialog" aria-modal="true" aria-label="Offer letter preview" onClick={(e) => e.stopPropagation()}>
+              <div className="edm-preview-head">
+                <span className="edm-preview-title"><FileText size={16} /> Offer letter — {emp?.firstName} {emp?.lastName}</span>
+                <div className="edm-preview-actions">
+                  <a className="btn btn-secondary" href={preview.url} download={preview.fileName}><Download size={14} /> Download PDF</a>
+                  <a className="btn btn-secondary" href={preview.url} target="_blank" rel="noreferrer"><ExternalLink size={14} /> Open in new tab</a>
+                  <button type="button" className="edm-preview-x" onClick={() => setPreview(null)} aria-label="Close preview"><X size={18} /></button>
+                </div>
+              </div>
+              <iframe className="edm-preview-frame" src={preview.url} title="Offer letter preview" />
+            </div>
+          </div>,
+          document.body,
+        )}
 
         {/* ---------- messages ---------- */}
         {error && (
@@ -657,7 +684,29 @@ export default function EmployeeDetailModal({
                         )}
                       </div>
                     </div>
-                    <div style={{ display: 'flex', gap: '8px' }}>
+                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                      {emp.offerLetterDocumentId && (
+                        <button
+                          type="button"
+                          className="btn btn-secondary"
+                          style={{ padding: '6px 12px', fontSize: '12.5px', display: 'flex', alignItems: 'center', gap: '6px' }}
+                          disabled={previewLoading}
+                          onClick={async () => {
+                            setError(null);
+                            setPreviewLoading(true);
+                            try {
+                              const url = await hrmApi.documentPreviewUrl(emp.offerLetterDocumentId);
+                              setPreview({ url, fileName: `${emp.firstName} ${emp.lastName || ''} - Offer Letter.pdf`.replace(/\s+-/, ' -') });
+                            } catch (e: any) {
+                              setError(e.message || 'Could not open the offer letter preview');
+                            } finally {
+                              setPreviewLoading(false);
+                            }
+                          }}
+                        >
+                          <Eye size={14} /> {previewLoading ? 'Opening…' : 'Preview'}
+                        </button>
+                      )}
                       {emp.offerLetterDocumentId && (
                         <button
                           type="button"
@@ -1229,6 +1278,15 @@ const EDM_CSS = `
 .edm-hint{font-size:11.5px;color:var(--color-text-muted,#9ca3af);}
 .edm-note{font-size:13px;color:var(--color-text-muted,#6b7280);margin:0;line-height:1.55;}
 .edm-dim{color:var(--color-text-muted,#6b7280);font-size:13px;margin:0;}
+.edm-preview-back{position:fixed;inset:0;z-index:1100;background:rgba(15,23,42,.55);display:flex;align-items:center;justify-content:center;padding:16px;}
+.edm-preview{width:min(900px,100%);height:min(92vh,1100px);background:var(--color-card,#fff);border-radius:12px;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 20px 50px rgba(0,0,0,.3);}
+.edm-preview-head{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:10px 14px;border-bottom:1px solid var(--color-border,#e5e7eb);}
+.edm-preview-title{display:flex;align-items:center;gap:8px;font-weight:700;font-size:14px;color:var(--color-text,#111);}
+.edm-preview-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.edm-preview-actions .btn{padding:6px 12px;font-size:12.5px;display:inline-flex;align-items:center;gap:6px;text-decoration:none;}
+.edm-preview-x{border:none;background:none;cursor:pointer;color:var(--color-text-muted,#6b7280);padding:6px;border-radius:6px;display:flex;}
+.edm-preview-x:focus-visible{outline:2px solid #2563eb;}
+.edm-preview-frame{flex:1;width:100%;border:none;background:#525659;}
 .edm-warn{display:flex;gap:9px;align-items:flex-start;padding:11px 14px;border-radius:8px;
   background:#fffbeb;border:1px solid #fde68a;color:#92400e;font-size:13px;line-height:1.5;}
 .edm-locked{display:flex;flex-direction:column;align-items:center;gap:7px;text-align:center;

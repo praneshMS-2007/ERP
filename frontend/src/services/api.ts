@@ -215,6 +215,16 @@ export const hrmApi = {
     a.click();
     window.URL.revokeObjectURL(url);
   },
+  /** A generated document (offer letter, payslip…) as a temporary URL the browser can show in a viewer. */
+  documentPreviewUrl: async (documentId: string): Promise<string> => {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+    const res = await fetch(`${API_BASE}/hrm/documents/${documentId}/download`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    });
+    if (!res.ok) throw new Error('Could not load the preview.');
+    const blob = await res.blob();
+    return window.URL.createObjectURL(blob.type === 'application/pdf' ? blob : new Blob([blob], { type: 'application/pdf' }));
+  },
   sendOfferLetter: (employeeId: string) =>
     mutateApi(`/hrm/employees/${employeeId}/offer-letter`, { method: 'POST' }),
   getAttendance: () => fetchApi('/hrm/attendance'),

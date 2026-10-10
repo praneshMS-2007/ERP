@@ -7,7 +7,7 @@ import { Prisma } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 import { normalisePan, normaliseAadhaar, normaliseUan, normaliseEsic, normaliseBankAccount, normaliseIfsc, normaliseEmail } from '../common/validators';
 import { encryptField, decryptField } from '../common/field-encryption';
-import { OfferLetterService } from './offer-letter.service';
+import { OfferLetterService, OFFER_LETTER_TEMPLATE_UPDATED_AT } from './offer-letter.service';
 import { PayslipService } from './payslip.service';
 import { AnnouncementsService } from '../announcements/announcements.service';
 import { formatDateDMY } from '../common/date-format';
@@ -277,7 +277,7 @@ export class HrmService {
   private static readonly DOWNLOADABLE_DOCUMENT_KINDS = new Set(['PAYSLIP', 'OFFER_LETTER', 'CONFIRMATION_LETTER', 'COMPLETION_CERTIFICATE']);
 
   async resolveGeneratedDocumentForDownload(documentId: string, viewer?: RequestUser) {
-    const doc = await this.prisma.document.findUnique({ where: { id: documentId } });
+    let doc = await this.prisma.document.findUnique({ where: { id: documentId } });
     if (!doc) throw new NotFoundException('Document not found');
     if (!HrmService.DOWNLOADABLE_DOCUMENT_KINDS.has(doc.kind)) {
       throw new ForbiddenException('This document type is not available through this endpoint.');
@@ -299,14 +299,32 @@ export class HrmService {
 
     // An offer letter is only rebuilt when it is (re)sent, so after HR edits
     // the person the stored PDF can be out of date. If the record changed
-    // after this letter was made, serve a freshly built one instead. (10s of
-    // slack: making a letter itself touches the record right afterwards.)
+    // after this letter was made (10s of slack: making a letter itself touches
+    // the record right afterwards), or the letter predates the current letter
+    // design, serve a freshly built one instead.
     if (doc.kind === 'OFFER_LETTER') {
-      const owner = await this.prisma.employee.findFirst({
+      let owner = await this.prisma.employee.findFirst({
         where: { offerLetterDocumentId: doc.id },
         select: { id: true, updatedAt: true },
       });
-      if (owner && owner.updatedAt.getTime() > doc.issuedAt.getTime() + 10_000) {
+      // A link to an older version (e.g. a screen opened before the letter was
+      // rebuilt) is served the person's current letter instead.
+      if (!owner && doc.ownerUserId) {
+        const current = await this.prisma.employee.findFirst({
+          where: { userId: doc.ownerUserId, offerLetterDocumentId: { not: null } },
+          select: { offerLetterDocumentId: true },
+        });
+        const newer = current?.offerLetterDocumentId
+          ? await this.prisma.document.findUnique({ where: { id: current.offerLetterDocumentId } })
+          : null;
+        if (newer) {
+          doc = newer;
+          owner = await this.prisma.employee.findFirst({ where: { offerLetterDocumentId: doc.id }, select: { id: true, updatedAt: true } });
+        }
+      }
+      const recordChanged = !!owner && owner.updatedAt.getTime() > doc.issuedAt.getTime() + 10_000;
+      const olderDesign = doc.issuedAt < OFFER_LETTER_TEMPLATE_UPDATED_AT;
+      if (owner && (recordChanged || olderDesign)) {
         const freshId = await this.refreshOfferLetter(owner.id, viewer);
         const fresh = freshId ? await this.prisma.document.findUnique({ where: { id: freshId } }) : null;
         if (fresh) {

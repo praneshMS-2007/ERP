@@ -9,6 +9,7 @@ import { formatDateDMY } from '../common/date-format';
 import { BRAND_ASSETS_DIR } from '../common/brand-assets';
 import { LetterOutboxService } from './letter-outbox.service';
 import { TeamsService } from './teams.service';
+import { WORK_MODE_LABEL } from './employee-history.service';
 import type { RequestUser } from './hrm.service';
 
 const COMPANY = {
@@ -72,6 +73,14 @@ function payLine(d: LetterData, word: 'Salary' | 'Stipend') {
   return `${word}: Unpaid`;
 }
 
+/**
+ * When the offer letter's wording or layout last changed. A stored letter made
+ * before this is rebuilt the next time it is previewed or downloaded, so a
+ * design change reaches existing letters too. Bump it whenever the templates
+ * below change in a way people should see.
+ */
+export const OFFER_LETTER_TEMPLATE_UPDATED_AT = new Date('2026-10-10T12:21:00Z'); // Mode shown as Remote/Onsite/Hybrid
+
 @Injectable()
 export class OfferLetterService {
   private readonly logger = new Logger(OfferLetterService.name);
@@ -129,7 +138,8 @@ export class OfferLetterService {
       grossMonthly: stipendAmount,
       hasStipend,
       stipendAmount,
-      mode: (employee as any).workMode ?? 'Remote',
+      // 'REMOTE' -> 'Remote', 'ONSITE' -> 'Onsite', 'HYBRID' -> 'Hybrid'
+      mode: WORK_MODE_LABEL[(employee as any).workMode] ?? 'Remote',
       revenueShare: await this.teams.shareTerms(employeeId),
       rehire: !!employee.rehiredAt,
       conversion: employee.convertedFromInternAt && employee.internshipEndDate && employee.empType !== 'INTERN'
