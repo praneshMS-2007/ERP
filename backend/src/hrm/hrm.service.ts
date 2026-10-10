@@ -297,9 +297,64 @@ export class HrmService {
       throw new ForbiddenException('You do not have access to this document.');
     }
 
+    // An offer letter is only rebuilt when it is (re)sent, so after HR edits
+    // the person the stored PDF can be out of date. If the record changed
+    // after this letter was made, serve a freshly built one instead. (10s of
+    // slack: making a letter itself touches the record right afterwards.)
+    if (doc.kind === 'OFFER_LETTER') {
+      const owner = await this.prisma.employee.findFirst({
+        where: { offerLetterDocumentId: doc.id },
+        select: { id: true, updatedAt: true },
+      });
+      if (owner && owner.updatedAt.getTime() > doc.issuedAt.getTime() + 10_000) {
+        const freshId = await this.refreshOfferLetter(owner.id, viewer);
+        const fresh = freshId ? await this.prisma.document.findUnique({ where: { id: freshId } }) : null;
+        if (fresh) {
+          const freshPath = path.join(process.cwd(), 'private-uploads', fresh.storagePath);
+          if (fs.existsSync(freshPath)) return { fullPath: freshPath, fileName: fresh.fileName };
+        }
+      }
+    }
+
     const fullPath = path.join(process.cwd(), 'private-uploads', doc.storagePath);
     if (!fs.existsSync(fullPath)) throw new NotFoundException('The stored file is missing on disk.');
     return { fullPath, fileName: doc.fileName };
+  }
+
+  /**
+   * Rebuilds a person's offer letter from their current record, without
+   * emailing anything. If an unsent copy is waiting in the Letter Outbox, it
+   * is replaced by the new version (still waiting for review), so the Outbox
+   * never offers outdated details. Returns the new document id, or null when
+   * the person has no offer letter yet or it could not be built.
+   */
+  private async refreshOfferLetter(employeeId: string, actor?: RequestUser): Promise<string | null> {
+    const emp = await this.prisma.employee.findUnique({ where: { id: employeeId }, select: { offerLetterDocumentId: true } });
+    if (!emp?.offerLetterDocumentId) return null;
+    const waiting = await this.prisma.outgoingLetter.count({
+      where: { employeeId, kind: 'OFFER_LETTER', status: { in: ['DRAFT', 'FAILED'] } },
+    });
+    const res = await this.offerLetterService
+      .issueAndSend(employeeId, waiting ? { actor, forceDraft: true } : { actor, sendEmail: false })
+      .catch((err) => {
+        this.logger.error(`Could not refresh the offer letter for ${employeeId}: ${err.message}`);
+        return null;
+      });
+    return res?.documentId ?? null;
+  }
+
+  /** The details an offer letter prints, to tell whether an edit affects it. */
+  private async offerLetterFingerprint(employeeId: string): Promise<string> {
+    const e = await this.prisma.employee.findUnique({
+      where: { id: employeeId },
+      select: {
+        firstName: true, lastName: true, designationId: true, departmentId: true, empType: true, workMode: true,
+        joinDate: true, engagementEndDate: true, hasStipend: true, stipendAmount: true, personalEmail: true,
+        convertedFromInternAt: true, internshipEndDate: true, rehiredAt: true,
+        teamMemberships: { select: { teamId: true, revenueSharePct: true }, orderBy: { teamId: 'asc' } },
+      },
+    });
+    return JSON.stringify(e);
   }
 
   // ========== EMPLOYEES ==========
@@ -1400,12 +1455,15 @@ export class HrmService {
     const teamShares = readTeamShares(data);
     if (teamShares) await this.teams.validateEmployeeTeams(id, teamShares);
 
+    const letterBefore = await this.offerLetterFingerprint(id);
     const before = await this.history.snapshot(id);
     const updated = await this.prisma.employee.update({ where: { id }, data: clean });
     const after = await this.history.snapshot(id);
     if (before && after) await this.history.recordEdit(id, this.history.diff(before, after), actor);
     if (teamShares) await this.teams.setEmployeeTeams(id, teamShares, actor);
     else await this.teams.syncPayType(id);
+    // Keep the downloadable offer letter (and any unsent Outbox copy) in step with the record.
+    if ((await this.offerLetterFingerprint(id)) !== letterBefore) await this.refreshOfferLetter(id, actor);
 
     // These hold ciphertext at this point — never echo that back. The
     // frontend re-fetches via getEmployeeById after a save anyway, which is
@@ -1478,6 +1536,7 @@ export class HrmService {
       data: { hasStipend: gross > 0, stipendAmount: gross > 0 ? gross : null },
     });
     await this.teams.syncPayType(employeeId);
+    await this.refreshOfferLetter(employeeId, actorId ? ({ id: actorId } as RequestUser) : undefined);
     const inr = (n: number) => `₹${n.toLocaleString('en-IN')}`;
     await this.history.record({
       employeeId,
