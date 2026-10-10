@@ -24,29 +24,29 @@ const BRAND = {
   grey: '#434343',
 };
 
-// Exact vector trace of the authorized signatory's real signature (natural
-// bounding box 216x169), used in place of any raster crop of it so the mark
-// on the certificate is both a true likeness and sharp at any print size.
-const SIGNATURE_PATH_D =
-  'M 62.269 2.750 C 60.809 7.970, 61.796 25.481, 64.379 40.173 C 67.439 57.578, 71.257 70.094, 78.598 86.780 C 81.569 93.534, 84 99.302, 84 99.598 C 84 100.263, 80.265 99.251, 77.252 97.769 C 74.190 96.264, 73.769 97.016, 74.887 101.991 C 75.856 106.306, 75.488 109, 73.928 109 C 72.169 109, 65.616 102.374, 60.400 95.322 C 55.701 88.967, 54.752 86.865, 52.969 78.860 C 48.135 57.157, 37.875 31.407, 32.323 27.039 C 29.064 24.476, 26.372 24.437, 25.035 26.934 C 22.311 32.024, 25.264 52.938, 31.177 70.431 C 35.401 82.927, 44.344 102.590, 50.156 112.158 C 57.436 124.145, 56.808 124.802, 46.500 115.982 C 42.650 112.688, 36.780 107.776, 33.456 105.067 C 27.459 100.179, 27.329 99.961, 16.522 76.571 C 10.532 63.607, 5.308 53, 4.912 53 C 3.836 53, 7.116 61.105, 15.400 78.917 C 25.098 99.766, 24.863 98.930, 20.779 98.065 C 13.280 96.478, 6.663 100.513, 2.853 108.997 C 1.195 112.688, 0.902 115.033, 1.229 122 C 1.576 129.409, 2.151 131.613, 5.713 139.173 C 11.596 151.662, 23.885 168.988, 26.866 168.996 C 27.652 168.998, 26.744 167.352, 24.729 165.122 C 17.243 156.836, 8.871 143.075, 4.967 132.641 C -2.298 113.225, 9.502 94.009, 24.067 101.536 C 25.754 102.407, 27.078 104.343, 27.928 107.181 C 28.639 109.557, 30.939 115.100, 33.039 119.500 C 39.133 132.270, 45 154.093, 45 163.989 C 45 166.745, 45.450 169, 46 169 C 49.595 169, 44.333 141.586, 37.514 124.799 C 36.917 123.329, 37.312 123.176, 40.412 123.679 C 43.773 124.225, 44 124.094, 44 121.614 L 44 118.966 48.967 121.483 C 51.698 122.867, 54.664 124, 55.556 124 C 56.449 124, 58.006 125.013, 59.015 126.250 C 60.689 128.301, 60.912 128.345, 61.535 126.744 C 61.911 125.778, 61.514 122.178, 60.652 118.744 C 58.734 111.098, 56.554 96.112, 57.258 95.409 C 57.540 95.126, 58.696 96.381, 59.825 98.197 C 63.186 103.602, 70.266 109.903, 73.766 110.603 L 77 111.250 77 106.125 C 77 100.544, 77.461 100.219, 82.755 102.065 C 85.042 102.862, 86.335 104.352, 87.905 108 C 89.057 110.679, 90 113.173, 90 113.542 C 90 115.695, 96.343 127, 97.551 127 C 99.256 127, 99.279 126.863, 98.093 123.744 C 97.594 122.432, 96.077 117.749, 94.723 113.338 C 92.668 106.648, 92.462 104.939, 93.481 103.036 C 94.689 100.778, 94.736 100.801, 97.827 105.127 C 99.546 107.532, 101.722 110.962, 102.662 112.750 C 103.601 114.537, 104.685 116, 105.070 116 C 105.455 116, 105.541 113.149, 105.261 109.665 C 104.941 105.677, 105.200 102.494, 105.961 101.073 C 107.411 98.364, 115.384 94.688, 125.843 91.907 C 133.728 89.810, 144.118 86.938, 160.250 82.395 C 183.482 75.854, 216 62.683, 216 59.815 C 216 59.275, 215.662 58.983, 215.250 59.167 C 214.838 59.350, 211.125 61.148, 207 63.162 C 190.864 71.040, 164.294 79.734, 128.158 88.960 C 111.615 93.183, 102.229 99.529, 103.326 105.750 C 103.943 109.252, 102.328 108.425, 98.650 103.357 C 95.401 98.880, 95.261 98.303, 94.716 87.107 C 94.405 80.723, 93.407 72.354, 92.498 68.509 C 88.771 52.749, 71.072 6.452, 66.785 1.250 C 65.075 -0.825, 63.084 -0.164, 62.269 2.750 M 63.356 3.515 C 62.229 6.452, 63.800 25.990, 66.371 41 C 67.737 48.975, 70.633 60.900, 72.805 67.500 C 77.031 80.338, 87.245 103, 88.805 103 C 89.323 103, 88.278 98.162, 86.482 92.250 C 84.686 86.338, 83.432 81.141, 83.697 80.701 C 84.596 79.209, 87.309 82.483, 90.158 88.500 L 92.998 94.500 92.999 86.838 C 93 78.461, 91.174 67.844, 88.125 58.500 C 77.622 26.309, 68.227 3.242, 65.211 2.237 C 64.546 2.015, 63.711 2.590, 63.356 3.515 M 25.872 29.750 C 25.219 43.779, 29.664 63.196, 38.166 83.462 C 44.308 98.101, 48.064 105.616, 52.842 112.832 C 57.476 119.830, 57.918 118.094, 55.146 103.770 C 54.053 98.122, 52.903 90.670, 52.591 87.210 C 51.094 70.645, 39.384 36.826, 32.695 29.750 C 31.265 28.238, 29.174 27, 28.048 27 C 26.512 27, 25.968 27.687, 25.872 29.750 M 86 85.580 C 86 86.082, 87.196 90.084, 88.658 94.473 C 90.659 100.482, 91.486 101.966, 92.006 100.482 C 92.446 99.228, 91.641 96.157, 89.789 92.030 C 86.792 85.350, 86 84.002, 86 85.580 M 89.501 106.750 C 89.894 107.713, 91.117 111.113, 92.219 114.306 C 93.320 117.499, 94.434 119.899, 94.695 119.638 C 95.447 118.886, 90.706 105, 89.696 105 C 89.196 105, 89.108 105.787, 89.501 106.750 M 31 107.878 C 31 111.953, 37.892 122, 40.687 122 C 42.478 122, 42.349 118.534, 40.500 117 C 39.675 116.315, 39 115.223, 39 114.574 C 39 113.327, 32.903 107, 31.702 107 C 31.316 107, 31 107.395, 31 107.878';
-const SIGNATURE_NATURAL_W = 216;
+// The authorized signature, company (Udyam) seal and MSME mark, as vector
+// traces of the approved INTERNSHIP COMPLETION CERTIFICATE template's own
+// artwork (assets/brand/certificate-marks.json). Vector shapes print sharp at
+// any zoom or DPI, which the small raster crops used before never could.
+// Each mark is stored in its source image's pixel space and scaled into the
+// template's exact image frame (see L.marks below).
+interface CertMark { w: number; h: number; layers: { color: string; d: string }[] }
+let certMarks: Record<string, CertMark> | null | undefined;
+function loadCertMarks(): Record<string, CertMark> | null {
+  if (certMarks !== undefined) return certMarks;
+  try {
+    certMarks = JSON.parse(fs.readFileSync(path.join(BRAND_ASSETS_DIR, 'certificate-marks.json'), 'utf8')).marks;
+  } catch (e: any) {
+    new Logger('InternshipCertificate').warn(`certificate-marks.json could not be read (${e.message}); falling back to the raster seal/MSME images`);
+    certMarks = null;
+  }
+  return certMarks ?? null;
+}
 
 const ASSETS_DIR = BRAND_ASSETS_DIR;
 const FONTS_DIR = FONT_ASSETS_DIR;
-// The original company-seal.png / msme-logo.png / authorized-signature.png in
-// assets/brand are unusable crops: the first two run their artwork off the
-// right edge (the seal off the bottom too) and carry a blue diagonal wedge
-// bled in from whatever page they were captured from, and the signature bakes
-// in its own rule line + "Authorized Signature" caption, which double-printed
-// against the caption this template draws itself.
-//
-// The `*-clean.png` files used here were cut from the approved certificate
-// design instead, so each mark is complete: the full circular seal including
-// its registration arc, the MSME mark with an uncropped Ashoka emblem, and the
-// signature's full stroke including the ascending loops the old file lost.
-// They are cut at the design's own resolution (~172px for the seal), which is
-// fine on screen but soft in print — replace them with vector or high-DPI
-// originals if these are ever sent to a commercial printer.
+// seal / msme PNGs are only a fallback for when certificate-marks.json is
+// missing; the certificate normally draws the vector marks instead.
 const ASSET_PATHS = {
   logo: path.join(ASSETS_DIR, 'shuroq-logo.png'),
   seal: path.join(ASSETS_DIR, 'company-seal-clean.png'),
@@ -399,6 +399,9 @@ export class InternshipCertificateService {
   private async renderCompletionCertificate(d: CertificateData): Promise<Buffer> {
     const W = 841.89; // A4 landscape — matches the reference image's 1.416 aspect
     const H = 595.28;
+    // The template PDF's page is 842.25 x 595.5pt; its positions scale to ours by these.
+    const TX = W / 842.25;
+    const TY = H / 595.5;
 
     // Every constant below is the reference image's own pixel position scaled
     // to points (reference is 1280x904, so x_pt = x_px * 841.89/1280 = x_px * 0.6577).
@@ -419,11 +422,18 @@ export class InternshipCertificateService {
       bodySize: 15.3,
       sentBaseline: 315.7, sentBoxW: 660, sentLineSpacing: 17.1,
       descBaseline: 362.4, descBoxW: 660, descLineSpacing: 19.7,
-      sigRuleY: 488, sigRuleX: 109.8, sigRuleW: 188.8,
+      // Rule under the signature, as in the template (y 492.8, 0.75pt).
+      sigRuleY: 492.79 * TY, sigRuleX: 109.6 * TX, sigRuleW: 189.32 * TX, sigRuleWeight: 0.75,
       authX: 117.1, authBaseline: 507.1, authW: 174.3,
       shuroqBaseline: 527.5, shuroqW: 59.2, shuroqCx: 197,
-      // Image placements: source crop origin x width, all in reference space.
-      sigImg: { x: 164.43, y: 401.21, w: 106.55 },
+      // Vector marks: the template PDF's own image frames (x, y, width), so
+      // each mark keeps the template's exact shape, size and placement.
+      marks: {
+        signature: { x: 116.259 * TX, y: 374.349 * TY, w: 168.063 * TX },
+        seal: { x: 465.693 * TX, y: 402.54 * TY, w: 202.576 * TX },
+        msme: { x: 615.927 * TX, y: 405.926 * TY, w: 166.563 * TX },
+      },
+      // Fallback raster placements (only if the vector marks file is missing).
       sealImg: { x: 509.74, y: 409.76, w: 115.1 },
       msmeImg: { x: 642.6, y: 404.5, w: 112.47 },
     };
@@ -534,14 +544,10 @@ export class InternshipCertificateService {
       );
 
       // --- Footer left: signature over its rule + captions ---
-      // Drawn as a vector stroke, not the old raster crop (authorized-
-      // signature-clean.png, 162x135) — a signature squiggle has no real
-      // "higher-resolution source" to go get, since it was always just a
-      // small raster crop, but a vector path is sharp at any zoom or print
-      // DPI by construction, which a raster image of this size never can be.
-      this.drawSignatureFlourish(doc, L.sigImg.x, L.sigImg.y, L.sigImg.w);
+      const marks = loadCertMarks();
+      if (marks?.signature) this.drawMark(doc, marks.signature, L.marks.signature);
       doc.save().moveTo(L.sigRuleX, L.sigRuleY).lineTo(L.sigRuleX + L.sigRuleW, L.sigRuleY)
-        .lineWidth(1.4).strokeColor('#1f2530').stroke().restore();
+        .lineWidth(L.sigRuleWeight).strokeColor('#000000').stroke().restore();
 
       const authSize = fitSize('AUTHORIZED SIGNATORY', L.authW, bodyBold);
       doc.font(bodyBold).fontSize(authSize).fillColor('#1f2530');
@@ -553,9 +559,14 @@ export class InternshipCertificateService {
         x: L.shuroqCx - L.shuroqW / 2, lineBreak: false,
       });
 
-      // --- Footer right: company seal, then MSME mark ---
-      this.placeAsset(doc, ASSET_PATHS.seal, L.sealImg.x, L.sealImg.y, L.sealImg.w);
-      this.placeAsset(doc, ASSET_PATHS.msme, L.msmeImg.x, L.msmeImg.y, L.msmeImg.w);
+      // --- Footer right: company (Udyam) seal, then MSME mark ---
+      if (marks?.seal && marks?.msme) {
+        this.drawMark(doc, marks.seal, L.marks.seal);
+        this.drawMark(doc, marks.msme, L.marks.msme);
+      } else {
+        this.placeAsset(doc, ASSET_PATHS.seal, L.sealImg.x, L.sealImg.y, L.sealImg.w);
+        this.placeAsset(doc, ASSET_PATHS.msme, L.msmeImg.x, L.msmeImg.y, L.msmeImg.w);
+      }
     }, { size: [W, H], margin: 0 });
   }
 
@@ -657,18 +668,15 @@ export class InternshipCertificateService {
   }
 
   /**
-   * The authorized signatory's actual signature, drawn from an exact vector
-   * trace of the real signature (SIGNATURE_PATH_D) rather than a raster crop
-   * of it — sits in a `width`-wide box starting at (x, y), scaled
-   * proportionally from its natural 216x169 bounding box. A vector trace is
-   * a true likeness of the real signature and, unlike a raster image, stays
-   * sharp at any print size.
+   * Draws one vector mark (signature / seal / MSME) into its frame: scaled
+   * proportionally from its source size so it fills `box.w`, top-left at
+   * (box.x, box.y). Layers are drawn in order (e.g. MSME gold, then black).
    */
-  private drawSignatureFlourish(doc: any, x: number, y: number, width: number) {
-    const s = width / SIGNATURE_NATURAL_W;
+  private drawMark(doc: any, mark: CertMark, box: { x: number; y: number; w: number }) {
+    const s = box.w / mark.w;
     doc.save();
-    doc.translate(x, y).scale(s);
-    doc.path(SIGNATURE_PATH_D).fill('#1f2530');
+    doc.translate(box.x, box.y).scale(s);
+    for (const layer of mark.layers) doc.path(layer.d).fill(layer.color, 'even-odd');
     doc.restore();
   }
 
