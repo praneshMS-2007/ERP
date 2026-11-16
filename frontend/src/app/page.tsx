@@ -20,8 +20,7 @@ import {
 } from 'lucide-react';
 import { BarChart } from '@/components/dashboard/Charts';
 import Link from 'next/link';
-import { analyticsApi, hrmApi, projectApi, inventoryApi, financeApi, exportApi } from '../services/api';
-import ExportButton from '../components/ExportButton';
+import { analyticsApi, hrmApi, projectApi, inventoryApi, financeApi } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { formatDate } from '../lib/date';
 import EmployeeDashboard from '../components/dashboard/EmployeeDashboard';
@@ -185,13 +184,6 @@ function ExecutiveDashboard() {
           <p>Real-time oversight of global operations and key performance metrics.</p>
         </div>
         <div className="page-header-actions">
-          {canHR && <ExportButton onExport={(format) => exportApi.exportEmployees(format)} label="Export Report" />}
-          {canHR && (
-            <Link href="/hrm" className="btn btn-primary" style={{ textDecoration: 'none' }}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-              + New Entry
-            </Link>
-          )}
         </div>
       </div>
 

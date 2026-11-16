@@ -5,6 +5,7 @@ import type { Response } from 'express';
 import { HrmService } from './hrm.service';
 import type { RequestUser, PayrollManualInput } from './hrm.service';
 import { InternshipCertificateService } from './internship-certificate.service';
+import { ExperienceLetterService } from './experience-letter.service';
 import { InternConversionService } from './intern-conversion.service';
 import type { ConversionInput } from './intern-conversion.service';
 import { EmployeeHistoryService } from './employee-history.service';
@@ -17,6 +18,7 @@ export class HrmController {
   constructor(
     private readonly hrmService: HrmService,
     private readonly internshipCertService: InternshipCertificateService,
+    private readonly experienceLetterService: ExperienceLetterService,
     private readonly conversionService: InternConversionService,
     private readonly historyService: EmployeeHistoryService,
     private readonly eraseService: EmployeeEraseService,
@@ -433,6 +435,84 @@ export class HrmController {
     @Res() res: Response,
   ) {
     const documentId = await this.internshipCertService.resolveCertificateForDownload(id, user);
+    const { fullPath, fileName } = await this.hrmService.resolveGeneratedDocumentForDownload(documentId, user);
+    res.download(fullPath, fileName);
+  }
+
+  // ========== EXPERIENCE LETTERS ==========
+  // HR_MANAGER or SUPER_ADMIN only — gated via HR:WRITE.
+  // Lists active non-intern employees, manages project contributions,
+  // and generates branded Experience Letters.
+
+  @Get('experience-letters/employees')
+  @RequirePermission('HR', 'WRITE')
+  getExperienceLetterEmployees() {
+    return this.experienceLetterService.getEligibleEmployees();
+  }
+
+  @Get('experience-letters/employees/:id')
+  @RequirePermission('HR', 'WRITE')
+  getExperienceLetterEmployeeDetail(@Param('id') id: string) {
+    return this.experienceLetterService.getEmployeeDetail(id);
+  }
+
+  @Post('experience-letters/employees/:id/contributions')
+  @RequirePermission('HR', 'WRITE')
+  addExperienceContribution(
+    @Param('id') id: string,
+    @Body() body: { projectName: string; role?: string; description?: string; technologies?: string; startDate?: string; endDate?: string },
+  ) {
+    return this.experienceLetterService.addContribution(id, body);
+  }
+
+  @Put('experience-letters/contributions/:id')
+  @RequirePermission('HR', 'WRITE')
+  updateExperienceContribution(
+    @Param('id') id: string,
+    @Body() body: { projectName?: string; role?: string; description?: string; technologies?: string; startDate?: string; endDate?: string },
+  ) {
+    return this.experienceLetterService.updateContribution(id, body);
+  }
+
+  @Delete('experience-letters/contributions/:id')
+  @RequirePermission('HR', 'WRITE')
+  deleteExperienceContribution(@Param('id') id: string) {
+    return this.experienceLetterService.deleteContribution(id);
+  }
+
+  @Post('experience-letters/employees/:id/auto-fetch')
+  @RequirePermission('HR', 'WRITE')
+  autoFetchExperienceContributions(@Param('id') id: string) {
+    return this.experienceLetterService.autoFetchContributions(id);
+  }
+
+  @Put('experience-letters/employees/:id/content')
+  @RequirePermission('HR', 'WRITE')
+  saveExperienceLetterContent(
+    @Param('id') id: string,
+    @Body('content') content: string | null,
+  ) {
+    return this.experienceLetterService.saveCustomContent(id, content);
+  }
+
+  @Post('experience-letters/employees/:id/generate')
+  @RequirePermission('HR', 'WRITE')
+  generateExperienceLetter(
+    @Param('id') id: string,
+    @Body('customContent') customContent?: string,
+    @CurrentUser() user?: RequestUser,
+  ) {
+    return this.experienceLetterService.generate(id, user, customContent);
+  }
+
+  @Get('experience-letters/employees/:id/download')
+  @RequirePermission('HR', 'READ')
+  async downloadExperienceLetter(
+    @Param('id') id: string,
+    @CurrentUser() user: RequestUser,
+    @Res() res: Response,
+  ) {
+    const documentId = await this.experienceLetterService.resolveLetterForDownload(id);
     const { fullPath, fileName } = await this.hrmService.resolveGeneratedDocumentForDownload(documentId, user);
     res.download(fullPath, fileName);
   }

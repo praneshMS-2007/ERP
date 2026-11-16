@@ -9,11 +9,12 @@ import { normaliseEmail } from '../common/validators';
 import { EmployeeHistoryService } from './employee-history.service';
 import type { RequestUser } from './hrm.service';
 
-export const LETTER_KINDS: LetterKind[] = ['OFFER_LETTER', 'COMPLETION_CERTIFICATE', 'PAYSLIP'];
+export const LETTER_KINDS: LetterKind[] = ['OFFER_LETTER', 'COMPLETION_CERTIFICATE', 'EXPERIENCE_LETTER', 'PAYSLIP'];
 
 export const LETTER_KIND_LABEL: Record<LetterKind, string> = {
   OFFER_LETTER: 'Offer letters',
   COMPLETION_CERTIFICATE: 'Internship certificates',
+  EXPERIENCE_LETTER: 'Experience letters',
   PAYSLIP: 'Payslips',
 };
 
@@ -298,6 +299,13 @@ export class LetterOutboxService {
         await this.history.record({
           employeeId: letter.employeeId, type: 'INTERNSHIP_CERTIFICATE_ISSUED', documentId: letter.documentId, actor,
           title: sent ? `Internship completion certificate issued and emailed to ${letter.toEmail}` : 'Internship completion certificate issued — email failed',
+          note: sent ? null : error,
+        });
+      } else if (letter.kind === 'EXPERIENCE_LETTER' && letter.employeeId) {
+        if (sent) await this.prisma.employee.update({ where: { id: letter.employeeId }, data: { experienceLetterIssuedAt: new Date() } });
+        await this.history.record({
+          employeeId: letter.employeeId, type: 'EXPERIENCE_LETTER_ISSUED', documentId: letter.documentId, actor,
+          title: sent ? `Experience letter issued and emailed to ${letter.toEmail}` : 'Experience letter issued — email failed',
           note: sent ? null : error,
         });
       } else if (letter.kind === 'PAYSLIP' && letter.payrollId) {

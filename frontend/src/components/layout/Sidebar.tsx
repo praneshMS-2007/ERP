@@ -86,6 +86,7 @@ const allNavItems: NavItem[] = [
     { name: 'Payroll', path: '/hrm/payroll', requiredRoles: ['SUPER_ADMIN', 'HR_MANAGER'] },
     { name: 'User Management', path: '/hrm/user-management', requiredAction: 'WRITE' },
     { name: 'Internship Certificates', path: '/hrm/internship-certificates', requiredAction: 'WRITE' },
+    { name: 'Experience Letters', path: '/hrm/experience-letters', requiredAction: 'WRITE' },
     { name: 'Bulk Onboarding', path: '/hrm/onboarding', requiredAction: 'WRITE' },
     // HR/Admin manage teams; Finance comes here to enter each team's monthly revenue.
     { name: 'Teams', path: '/hrm/teams', requiredRoles: ['SUPER_ADMIN', 'HR_MANAGER', 'FINANCE_MANAGER'] },

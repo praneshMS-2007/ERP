@@ -273,6 +273,21 @@ model Employee {
   internshipCertSentAt     DateTime? @map("internship_cert_sent_at")
   internshipCertStatus     String?   @map("internship_cert_status") // "APPROVED" | "REJECTED" | null (pending)
 
+  // Experience letter — generated when HR issues an experience letter to an
+  // active (non-intern) employee. Same pattern as the offer letter and
+  // internship certificate document links above.
+  experienceLetterDocumentId String?   @unique @map("experience_letter_document_id")
+  experienceLetterDocument   Document? @relation(name: "EmployeeExperienceLetter", fields: [experienceLetterDocumentId], references: [id])
+  experienceLetterIssuedAt   DateTime? @map("experience_letter_issued_at")
+  experienceLetterStatus     String?   @map("experience_letter_status") // "ISSUED" | null
+  experienceLetterContent    String?   @map("experience_letter_content") // custom pasted/typed content for the certificate
+
+  // Manual project contributions for the experience letter — HR can add, edit
+  // or delete entries describing what the employee did on each project, beyond
+  // what the auto-fetched Assignment data shows. These feed the body of the
+  // experience letter's project list.
+  experienceContributions ExperienceContribution[]
+
   // Intern → employee conversion. convertedFromInternAt is the date the new
   // part-time/full-time role starts; internshipEndDate keeps the internship's
   // own end date, since engagementEndDate is reused for the new role (null for
@@ -313,9 +328,31 @@ model Employee {
   @@map("employees")
 }
 
+/// Manual project contributions for the experience letter. Each entry describes
+/// what the employee did on a project — HR can add, edit or delete entries.
+/// Auto-fetched project assignments (from the Assignment model) are separate;
+/// these only store the manually curated entries that appear in the letter body.
+model ExperienceContribution {
+  id            String    @id @default(uuid())
+  employeeId    String    @map("employee_id")
+  employee      Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  projectName   String    @map("project_name")
+  role          String?   // e.g. "Frontend Developer", "Team Lead"
+  description   String?   // what they did on this project
+  technologies  String?   // comma-separated, e.g. "React, Node.js, PostgreSQL"
+  startDate     DateTime? @map("start_date")
+  endDate       DateTime? @map("end_date")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  @@index([employeeId])
+  @@map("experience_contributions")
+}
+
 enum LetterKind {
   OFFER_LETTER
   COMPLETION_CERTIFICATE
+  EXPERIENCE_LETTER
   PAYSLIP
 }
 
@@ -400,6 +437,7 @@ enum EmployeeEventType {
   ENGAGEMENT_DATES_CHANGED
   INTERNSHIP_CERTIFICATE_ISSUED
   INTERNSHIP_CERTIFICATE_REJECTED
+  EXPERIENCE_LETTER_ISSUED
   EXITED
   TEAM_CHANGED
   REHIRED
@@ -1114,11 +1152,12 @@ model Document {
   employeeId String?   @map("employee_id")
   employee   Employee? @relation(name: "EmployeeIdentityDocuments", fields: [employeeId], references: [id])
 
-  payroll           Payroll?
-  offerLetterFor    Employee?        @relation(name: "EmployeeOfferLetter")
-  internshipCertFor Employee?        @relation(name: "EmployeeInternshipCert")
-  employeeEvents    EmployeeEvent[]
-  outgoingLetters   OutgoingLetter[]
+  payroll              Payroll?
+  offerLetterFor       Employee?        @relation(name: "EmployeeOfferLetter")
+  internshipCertFor    Employee?        @relation(name: "EmployeeInternshipCert")
+  experienceLetterFor  Employee?        @relation(name: "EmployeeExperienceLetter")
+  employeeEvents       EmployeeEvent[]
+  outgoingLetters      OutgoingLetter[]
 
   @@index([ownerUserId, kind])
   @@map("documents")

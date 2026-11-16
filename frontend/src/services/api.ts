@@ -297,6 +297,40 @@ export const hrmApi = {
     a.click();
     window.URL.revokeObjectURL(url);
   },
+  // Experience letters
+  getExperienceLetterEmployees: () => fetchApi('/hrm/experience-letters/employees'),
+  getExperienceLetterEmployeeDetail: (id: string) => mutateApi(`/hrm/experience-letters/employees/${id}`),
+  addExperienceContribution: (id: string, data: any) =>
+    mutateApi(`/hrm/experience-letters/employees/${id}/contributions`, { method: 'POST', body: JSON.stringify(data) }),
+  updateExperienceContribution: (id: string, data: any) =>
+    mutateApi(`/hrm/experience-letters/contributions/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteExperienceContribution: (id: string) =>
+    mutateApi(`/hrm/experience-letters/contributions/${id}`, { method: 'DELETE' }),
+  autoFetchExperienceContributions: (id: string) =>
+    mutateApi(`/hrm/experience-letters/employees/${id}/auto-fetch`, { method: 'POST' }),
+  saveExperienceLetterContent: (id: string, content: string | null) =>
+    mutateApi(`/hrm/experience-letters/employees/${id}/content`, { method: 'PUT', body: JSON.stringify({ content }) }),
+  generateExperienceLetter: (id: string, customContent?: string) =>
+    mutateApi(`/hrm/experience-letters/employees/${id}/generate`, { method: 'POST', body: JSON.stringify({ customContent }) }),
+  downloadExperienceLetter: async (employeeIdOrDocId: string, fileName?: string) => {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+    let res = await fetch(`${API_BASE}/hrm/experience-letters/employees/${employeeIdOrDocId}/download`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    });
+    if (!res.ok) {
+      res = await fetch(`${API_BASE}/hrm/documents/${employeeIdOrDocId}/download`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      });
+    }
+    if (!res.ok) throw new Error('Failed to download experience letter');
+    const blob = await res.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = fileName || 'Experience_Letter.pdf';
+    a.click();
+    window.URL.revokeObjectURL(url);
+  },
 };
 
 export const announcementApi = {

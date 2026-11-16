@@ -274,7 +274,7 @@ export class HrmService {
   // private-uploads (not mounted by the public static server in main.ts) and
   // can only be fetched through this checked resolver: the document's own
   // owner, or HR/Admin. See the matching comment on PayslipService.outDir.
-  private static readonly DOWNLOADABLE_DOCUMENT_KINDS = new Set(['PAYSLIP', 'OFFER_LETTER', 'CONFIRMATION_LETTER', 'COMPLETION_CERTIFICATE']);
+  private static readonly DOWNLOADABLE_DOCUMENT_KINDS = new Set(['PAYSLIP', 'OFFER_LETTER', 'CONFIRMATION_LETTER', 'COMPLETION_CERTIFICATE', 'EXPERIENCE_LETTER']);
 
   async resolveGeneratedDocumentForDownload(documentId: string, viewer?: RequestUser) {
     let doc = await this.prisma.document.findUnique({ where: { id: documentId } });

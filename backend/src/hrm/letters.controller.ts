@@ -6,6 +6,7 @@ import type { RequestUser } from './hrm.service';
 import { LetterOutboxService } from './letter-outbox.service';
 import { OfferLetterService } from './offer-letter.service';
 import { InternshipCertificateService } from './internship-certificate.service';
+import { ExperienceLetterService } from './experience-letter.service';
 import { PayslipService } from './payslip.service';
 
 const STATUSES = new Set(['DRAFT', 'SENT', 'FAILED', 'DISCARDED']);
@@ -21,6 +22,7 @@ export class LettersController {
     private readonly outbox: LetterOutboxService,
     private readonly offerLetters: OfferLetterService,
     private readonly certificates: InternshipCertificateService,
+    private readonly experienceLetters: ExperienceLetterService,
     private readonly payslips: PayslipService,
   ) {}
 
@@ -108,6 +110,8 @@ export class LettersController {
       result = await this.offerLetters.issueAndSend(letter.employeeId, { actor: user, forceDraft: true });
     } else if (letter.kind === 'COMPLETION_CERTIFICATE' && letter.employeeId) {
       result = await this.certificates.regenerate(letter.employeeId, user);
+    } else if (letter.kind === 'EXPERIENCE_LETTER' && letter.employeeId) {
+      result = await this.experienceLetters.generate(letter.employeeId, user);
     } else if (letter.kind === 'PAYSLIP' && letter.payrollId) {
       result = await this.payslips.issueAndSend(letter.payrollId, { actor: user, forceDraft: true });
     } else {
